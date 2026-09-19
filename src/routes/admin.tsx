@@ -10,7 +10,7 @@ import { loadSettings, computePrice } from '../lib/pricing';
 import { requireRole } from '../lib/auth';
 import { requirePerm, logActivity } from '../lib/perm';
 import { setOrderStatus, markOrderPaid } from '../lib/orders';
-import { Translator, hasCJK } from '../lib/translate';
+import { Translator, hasCJK, retranslatePending } from '../lib/translate';
 
 const admin = new Hono<Env>();
 admin.use('*', requireRole('admin'));
@@ -238,7 +238,7 @@ admin.post('/import/json', async (c) => {
 export async function importProducts(db: D1Database, arr: any[], categoryId: number | null, byUserId: number | null, pageUrl: string, ai?: any) {
   const tr = new Translator(db, ai);
   // ترجمة قيم المتغيرات (ألوان/مقاسات): قاموس فوري ثم الذاكرة ثم الذكاء الاصطناعي
-  const trVariants = async (vs: any[]) => { for (const v of vs ?? []) { if (v.color) v.color = (await tr.t(String(v.color), 'attr')) ?? v.color; if (v.size) v.size = (await tr.t(String(v.size), 'attr')) ?? v.size; } return vs ?? []; };
+  const trVariants = async (vs: any[]) => { for (const v of vs ?? []) { if (v.color) v.color = (await tr.t(String(v.color), 'attr', v.colorEn)) ?? v.color; if (v.size) v.size = (await tr.t(String(v.size), 'attr', v.sizeEn)) ?? v.size; } return vs ?? []; };
   const s = await loadSettings(db);
   const cats = await getCategories(db);
   const cat = cats.find(x => x.id === categoryId) ?? null;
@@ -250,7 +250,7 @@ export async function importProducts(db: D1Database, arr: any[], categoryId: num
     const weight = it.weightG ?? cat?.est_weight_g ?? 300;
     const pr = computePrice(s, price, weight, cat?.markup_percent);
     let titleAr: string = it.titleAr ?? it.title_ar ?? it.title ?? 'منتج';
-    if (hasCJK(titleAr)) titleAr = (await tr.t(titleAr)) ?? titleAr;
+    if (hasCJK(titleAr)) titleAr = (await tr.t(titleAr, 'title', it.titleEn)) ?? titleAr;
     const supplierAr = it.supplier ? ((await tr.t(String(it.supplier))) ?? it.supplier) : null;
     if (Array.isArray(it.variants)) it.variants = await trVariants(it.variants);
     const ex = await db.prepare("SELECT id FROM products WHERE source='1688' AND source_offer_id=?").bind(offerId).first<{ id: number }>();
@@ -318,14 +318,9 @@ admin.get('/products', async (c) => {
 
 admin.post('/products/translate', async (c) => {
   if (!c.env.AI) return c.redirect('/admin/products?noai=1');
-  const db = c.env.DB; const tr = new Translator(db, c.env.AI, 60);
-  const { results } = await db.prepare("SELECT id,title_ar,supplier_name FROM products WHERE title_ar GLOB '*[一-龥]*' OR supplier_name GLOB '*[一-龥]*' ORDER BY sales DESC,id DESC LIMIT 40").all<any>();
-  let n = 0;
-  for (const p of results) { const t = await tr.t(p.title_ar); const sp = await tr.t(p.supplier_name); if ((t && t !== p.title_ar) || (sp && sp !== p.supplier_name)) { await db.prepare('UPDATE products SET title_src=COALESCE(title_src,title_ar),title_ar=?,supplier_name=? WHERE id=?').bind(t ?? p.title_ar, sp ?? p.supplier_name, p.id).run(); n++; } }
-  const vs = await db.prepare("SELECT id,color,size FROM variants WHERE color GLOB '*[一-龥]*' OR size GLOB '*[一-龥]*' LIMIT 300").all<any>();
-  for (const v of vs.results) { const cc = await tr.t(v.color, 'attr'); const sz = await tr.t(v.size, 'attr'); if (cc !== v.color || sz !== v.size) { await db.prepare('UPDATE variants SET color=?,size=? WHERE id=?').bind(cc, sz, v.id).run(); n++; } }
-  await logActivity(c.env.DB, c.get('user')!.id, 'products.translate', String(n));
-  return c.redirect(`/admin/products?translated=${n}`);
+  const r = await retranslatePending(c.env.DB, c.env.AI, 40);
+  await logActivity(c.env.DB, c.get('user')!.id, 'products.translate', String(r.products + r.variants));
+  return c.redirect(`/admin/products?translated=${r.products + r.variants}`);
 });
 
 admin.get('/products/new', async (c) => {

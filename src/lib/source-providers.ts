@@ -2,7 +2,7 @@
 // المدعومان: OTAPI (otapi.net) و TMAPI (tmapi.top). كل رد خام يُعاد مع النتيجة ليُعرض في لوحة الإدارة.
 import type { Settings } from './pricing';
 
-export type NormItem = { offerId: string; url: string; title: string; titleEn?: string; priceCny: number; images: string[]; sales?: number; minQty: number; inStock: boolean; supplier?: string; variants: { skuId?: string; color?: string; size?: string; priceCny?: number; inStock?: boolean; image?: string }[] };
+export type NormItem = { offerId: string; url: string; title: string; titleEn?: string; priceCny: number; images: string[]; sales?: number; minQty: number; inStock: boolean; supplier?: string; variants: { skuId?: string; color?: string; size?: string; colorEn?: string; sizeEn?: string; priceCny?: number; inStock?: boolean; image?: string }[] };
 export type ProviderResult<T> = { ok: boolean; data: T; raw: string; url: string; status: number; error?: string };
 export interface Provider { name: string; search(keyword: string, page: number): Promise<ProviderResult<NormItem[]>>; item(offerId: string): Promise<ProviderResult<NormItem | null>>; }
 
@@ -15,7 +15,7 @@ const fixImg = (u: any) => (typeof u === 'string' ? u : g(u, 'Url', 'url', 'imgU
 async function call(url: string): Promise<{ status: number; text: string; json: any }> {
   const res = await fetch(url, { headers: { accept: 'application/json' } });
   const text = await res.text(); let json: any = null; try { json = JSON.parse(text); } catch {}
-  return { status: res.status, text: text.slice(0, 20000), json };
+  return { status: res.status, text: text.slice(0, 60000), json };
 }
 
 // ---------- OTAPI ----------
@@ -30,16 +30,26 @@ class Otapi implements Provider {
     const pname = (pid: any) => attrs.find(a => String(a.Pid) === String(pid))?.PropertyName ?? '';
     const vname = (pid: any, vid: any) => attrs.find(a => String(a.Pid) === String(pid) && String(a.Vid) === String(vid));
     const variants = arr(g(it, 'ConfigurationItems')).map((c: any) => {
-      let color: string | undefined, size: string | undefined, image: string | undefined;
-      arr(c.Configurators).forEach((cf: any) => { const a = vname(cf.Pid, cf.Vid); const pn = pname(cf.Pid).toLowerCase(); const val = a?.Value ?? a?.OriginalValue; if (/size|尺|码|规格/i.test(pn) || /^(xs|s|m|l|xl|xxl|\d+)$/i.test(String(val))) size = val; else color = val; if (a?.ImageUrl) image = fixImg(a.ImageUrl); });
-      return { skuId: String(c.Id ?? ''), color, size, priceCny: num(g(c, 'Price.OriginalPrice', 'Price.Price', 'Price')), inStock: num(c.Quantity) > 0, image };
+      let color: string | undefined, size: string | undefined, colorEn: string | undefined, sizeEn: string | undefined, image: string | undefined;
+      arr(c.Configurators).forEach((cf: any) => { const a = vname(cf.Pid, cf.Vid); const pn = `${pname(cf.Pid)} ${a?.OriginalPropertyName ?? ''} ${cf.Pid ?? ''}`.toLowerCase(); const orig = a?.OriginalValue ?? cf.Vid; const en = a?.Value; const val = orig ?? en;
+        if (/size|尺|码|规格/i.test(pn) || /^(xs|s|m|l|xl|xxl|xxxl|\d+)$/i.test(String(val))) { size = val; sizeEn = en; } else { color = val; colorEn = en; } if (a?.ImageUrl) image = fixImg(a.ImageUrl); });
+      return { skuId: String(c.Id ?? ''), color, size, colorEn, sizeEn, priceCny: num(g(c, 'Price.OriginalPrice', 'Price.Price', 'Price')), inStock: num(c.Quantity) > 0, image };
     });
+    // لا توجد ConfigurationItems؟ نبني المتغيرات من خصائص IsConfigurator (لون × مقاس)
+    if (!variants.length) {
+      const cfg = attrs.filter(a => a.IsConfigurator);
+      const isSize = (a: any) => /size|尺|码|规格/i.test(`${a.PropertyName ?? ''} ${a.OriginalPropertyName ?? ''} ${a.Pid ?? ''}`) || /^(xs|s|m|l|xl|xxl|xxxl|\d+)$/i.test(String(a.OriginalValue ?? a.Value ?? ''));
+      const sizes = cfg.filter(isSize), colors = cfg.filter(a => !isSize(a));
+      const mk = (c?: any, sz?: any) => ({ skuId: undefined, color: c ? String(c.OriginalValue ?? c.Value) : undefined, colorEn: c?.Value, size: sz ? String(sz.OriginalValue ?? sz.Value) : undefined, sizeEn: sz?.Value, priceCny: undefined, inStock: true, image: c?.ImageUrl ? fixImg(c.ImageUrl) : sz?.ImageUrl ? fixImg(sz.ImageUrl) : undefined });
+      if (colors.length && sizes.length) colors.forEach(c => sizes.forEach(sz => variants.push(mk(c, sz))));
+      else (colors.length ? colors : sizes).forEach(a => variants.push(isSize(a) ? mk(undefined, a) : mk(a)));
+    }
     return {
       offerId: id, url: `https://detail.1688.com/offer/${id}.html`, title: String(g(it, 'OriginalTitle', 'Title') ?? ''), titleEn: g(it, 'Title'),
       priceCny: num(g(it, 'Price.OriginalPrice', 'Price.Price', 'Price', 'PriceOriginal')),
       images: arr(g(it, 'Pictures')).map(fixImg).filter(Boolean).slice(0, 8).concat(g(it, 'MainPictureUrl') ? [fixImg(g(it, 'MainPictureUrl'))] : []).filter((u, i, a) => a.indexOf(u) === i),
       sales: num(g(it, 'SalesInLast30Days', 'Sales', 'BasketCount')), minQty: Math.max(1, num(g(it, 'FirstLotQuantity', 'MinQuantity')) || 1),
-      inStock: num(g(it, 'MasterQuantity')) > 0 || variants.some(v => v.inStock) || !g(it, 'MasterQuantity'), supplier: g(it, 'VendorName', 'VendorDisplayName'), variants,
+      inStock: num(g(it, 'MasterQuantity')) > 0 || variants.some(v => v.inStock) || !g(it, 'MasterQuantity'), supplier: [g(it, 'VendorName', 'VendorDisplayName')].map(v => (v && !/^b2b-/.test(String(v)) ? String(v) : undefined))[0], variants,
     };
   }
   async search(keyword: string, page: number) {

@@ -6,6 +6,7 @@ import { importProducts } from './admin';
 import { loadSettings } from '../lib/pricing';
 import { getProvider } from '../lib/source-providers';
 import { runServerJobs } from '../lib/crawl';
+import { retranslatePending } from '../lib/translate';
 
 const api = new Hono<Env>();
 
@@ -96,12 +97,19 @@ api.post('/source/test', async (c) => {
   const r = b.kw ? await prov.search(String(b.kw), 1) : await prov.item(String(b.id ?? '').replace(/\D/g, ''));
   const url = r.url.replace(/(instanceKey|apiToken)=[^&]+/g, '$1=***');
   await c.env.DB.prepare('INSERT INTO payment_log(payment_id,direction,url,status_code,request,response,ok) VALUES(NULL,?,?,?,?,?,?)').bind('in', 'SRC ' + url, r.status, '', r.raw.slice(0, 60000), r.ok ? 1 : 0).run();
-  return c.json({ ok: r.ok, provider: prov.name, url, status: r.status, error: r.error, data: r.data, raw: r.raw.slice(0, 1500) });
+  let meta: any = null; try { const j = JSON.parse(r.raw); const it = j.OtapiItemFullInfo ?? j.Result?.Item ?? j.data?.item ?? j.data; if (it && typeof it === 'object' && !Array.isArray(it)) meta = { keys: Object.keys(it), cfg: Array.isArray(it.ConfigurationItems) ? it.ConfigurationItems.length : null, attrs: Array.isArray(it.Attributes) ? it.Attributes.length : null, cfgSample: (it.ConfigurationItems ?? [])[0] ?? null }; } catch {}
+  return c.json({ ok: r.ok, provider: prov.name, url, status: r.status, error: r.error, data: r.data, meta, raw: r.raw.slice(0, 1500) });
 });
 api.post('/source/run', async (c) => {
   if (!tokenOk(c)) return c.json({ error: 'رمز غير صحيح' }, 401);
   const b = await c.req.json<{ job_id?: number; limit?: number }>();
   return c.json(await runServerJobs(c.env, { limit: Math.min(3, b.limit ?? 1), jobId: b.job_id, byUserId: c.get('user')?.id ?? null }));
+});
+api.post('/source/translate', async (c) => {
+  if (!tokenOk(c)) return c.json({ error: 'رمز غير صحيح' }, 401);
+  if (!c.env.AI) return c.json({ error: 'لا يوجد Workers AI' }, 400);
+  const b = await c.req.json<{ limit?: number }>().catch(() => ({} as any));
+  return c.json(await retranslatePending(c.env.DB, c.env.AI, Math.min(60, b.limit ?? 30)));
 });
 
 export default api;

@@ -1,4 +1,4 @@
-// ترجمة بيانات 1688 إلى العربية: قاموس فوري للألوان والمقاسات الشائعة + Workers AI (m2m100) للباقي + ذاكرة ترجمة في القاعدة
+// ترجمة بيانات 1688 إلى العربية: قاموس فوري للألوان والمقاسات الشائعة + Workers AI (نموذج لغوي مع فحص جودة، ثم m2m100) للباقي + ذاكرة ترجمة في القاعدة
 export const hasCJK = (s: string | null | undefined) => /[一-鿿]/.test(s ?? '');
 
 // قاموس الألوان والمقاسات والكلمات المتكررة في متغيرات 1688
@@ -24,34 +24,72 @@ export function dictTranslate(s: string): string | null {
   return null;
 }
 
-export async function translateZhAr(ai: any, text: string): Promise<string | null> {
-  if (!ai || !text) return null;
-  try {
-    const r: any = await ai.run('@cf/meta/m2m100-1.2b', { text: text.slice(0, 300), source_lang: 'chinese', target_lang: 'arabic' });
-    const t = (r?.translated_text ?? '').trim();
-    return t && !hasCJK(t) ? t.slice(0, 200) : null;
-  } catch { return null; }
+const degenerate = (t: string) => { const w = t.split(/\s+/).filter(Boolean); if (w.length >= 4 && new Set(w).size / w.length < 0.5) return true; return /(\S{2,})(\s+\1){2,}/.test(t); };
+export const goodArabic = (t: string | null | undefined) => !!t && /[\u0600-\u06FF]/.test(t) && !hasCJK(t) && !degenerate(t) && t.length <= 220;
+
+async function m2m(ai: any, text: string, source: 'chinese' | 'english'): Promise<string | null> {
+  try { const r: any = await ai.run('@cf/meta/m2m100-1.2b', { text: text.slice(0, 300), source_lang: source, target_lang: 'arabic' }); const t = (r?.translated_text ?? '').trim(); return goodArabic(t) ? t.slice(0, 200) : null; } catch { return null; }
+}
+const SYS_TITLE = 'أنت مترجم لمتجر أزياء عربي. حوّل عنوان منتج من موقع 1688 (صيني محشو بكلمات مفتاحية) إلى عنوان منتج عربي قصير وطبيعي من 5 إلى 14 كلمة يصف المنتج للزبون. احذف عبارات مثل "تجارة خارجية"، "عبر الحدود"، "جديد 2025"، "بالجملة"، "موديل جديد". أجب بالعنوان العربي فقط، بلا شرح ولا علامات اقتباس.';
+const SYS_ATTR = 'ترجم قيمة خاصية منتج (لون أو مقاس أو نمط) من الصينية إلى العربية بكلمة أو كلمتين كما تُكتب في متجر ملابس. أجب بالترجمة فقط.';
+const SYS_TEXT = 'ترجم النص التالي من الصينية إلى العربية بشكل طبيعي وقصير. أجب بالترجمة فقط.';
+async function llm(ai: any, sys: string, user: string): Promise<string | null> {
+  for (const model of ['@cf/meta/llama-3.3-70b-instruct-fp8-fast', '@cf/meta/llama-3.1-8b-instruct']) {
+    try {
+      const r: any = await ai.run(model, { messages: [{ role: 'system', content: sys }, { role: 'user', content: user }], max_tokens: 120, temperature: 0.2 });
+      const t = String(r?.response ?? '').trim().split('\n')[0].replace(/^["'«»“”\s]+|["'«»“”\s.]+$/g, '').trim();
+      if (goodArabic(t)) return t.slice(0, 200);
+    } catch {}
+  }
+  return null;
 }
 
-// ترجمة مع ذاكرة: قاموس → ذاكرة القاعدة → الذكاء الاصطناعي
+// ترجمة بالذكاء الاصطناعي: نموذج لغوي (مع العنوان الإنجليزي كمساعد إن وُجد) → m2m100 من الإنجليزية → m2m100 من الصينية
+export async function translateZhAr(ai: any, text: string, kind: 'text' | 'attr' | 'title' = 'text', hintEn?: string | null): Promise<string | null> {
+  if (!ai || !text) return null;
+  const sys = kind === 'attr' ? SYS_ATTR : kind === 'title' ? SYS_TITLE : SYS_TEXT;
+  const user = hintEn && !hasCJK(hintEn) ? `الصينية: ${text.slice(0, 300)}\nالإنجليزية: ${hintEn.slice(0, 300)}` : text.slice(0, 300);
+  return (await llm(ai, sys, user)) ?? (hintEn && !hasCJK(hintEn) ? await m2m(ai, hintEn, 'english') : null) ?? (await m2m(ai, text, 'chinese'));
+}
+
+// ترجمة مع ذاكرة: قاموس → ذاكرة القاعدة → الذكاء الاصطناعي → (العنوان الإنجليزي إن وُجد) → النص الأصلي
 export class Translator {
   private mem = new Map<string, string>();
   public aiCalls = 0;
   constructor(private db: D1Database, private ai: any, private maxAi = 80) {}
-  async t(text: string | null | undefined, kind: 'text' | 'attr' = 'text'): Promise<string | null> {
+  async t(text: string | null | undefined, kind: 'text' | 'attr' | 'title' = 'text', hintEn?: string | null): Promise<string | null> {
     if (!text || !hasCJK(text)) return text ?? null;
     const k = norm(text);
     if (this.mem.has(k)) return this.mem.get(k)!;
     const d = kind === 'attr' ? dictTranslate(k) : null;
     if (d !== null) { this.mem.set(k, d); return d; }
     const row = await this.db.prepare('SELECT dst FROM translations WHERE src=?').bind(k).first<{ dst: string }>().catch(() => null);
-    if (row) { this.mem.set(k, row.dst); return row.dst; }
-    if (this.aiCalls >= this.maxAi) return text;
+    if (row && goodArabic(row.dst)) { this.mem.set(k, row.dst); return row.dst; }
+    const fallback = hintEn && !hasCJK(hintEn) ? hintEn.slice(0, 200) : text;
+    if (this.aiCalls >= this.maxAi) return fallback;
     this.aiCalls++;
-    const out = await translateZhAr(this.ai, k);
-    if (!out) return text;
+    const out = await translateZhAr(this.ai, k, kind, hintEn);
+    if (!out) return fallback;
     this.mem.set(k, out);
-    await this.db.prepare('INSERT OR IGNORE INTO translations(src,dst,kind) VALUES(?,?,?)').bind(k, out, kind).run().catch(() => {});
+    await this.db.prepare('INSERT OR REPLACE INTO translations(src,dst,kind) VALUES(?,?,?)').bind(k, out, kind).run().catch(() => {});
     return out;
   }
+}
+
+// إعادة ترجمة ما بقي صينيًا أو ما تُرجم ترجمة رديئة (تكرار) — تُستخدم من الأدمن ومن /api/source/translate
+export async function retranslatePending(db: D1Database, ai: any, limit = 40): Promise<{ products: number; variants: number }> {
+  const tr = new Translator(db, ai, limit + 60);
+  const { results } = await db.prepare("SELECT id,title_ar,title_src,supplier_name FROM products WHERE title_ar GLOB '*[一-龥]*' OR title_src GLOB '*[一-龥]*' OR supplier_name GLOB '*[一-龥]*' ORDER BY sales DESC,id DESC LIMIT 200").all<any>();
+  let n = 0, nv = 0;
+  for (const p of results) {
+    if (n >= limit) break;
+    const src = hasCJK(p.title_src) ? p.title_src : p.title_ar;
+    const needTitle = hasCJK(p.title_ar) || !goodArabic(p.title_ar);
+    const t = needTitle ? await tr.t(src, 'title') : p.title_ar;
+    const sp = await tr.t(p.supplier_name);
+    if ((t && t !== p.title_ar) || (sp && sp !== p.supplier_name)) { await db.prepare('UPDATE products SET title_src=COALESCE(title_src,title_ar),title_ar=?,supplier_name=? WHERE id=?').bind(t ?? p.title_ar, sp ?? p.supplier_name, p.id).run(); n++; }
+  }
+  const vs = await db.prepare("SELECT id,color,size FROM variants WHERE color GLOB '*[一-龥]*' OR size GLOB '*[一-龥]*' LIMIT 300").all<any>();
+  for (const v of vs.results) { const cc = await tr.t(v.color, 'attr'); const sz = await tr.t(v.size, 'attr'); if (cc !== v.color || sz !== v.size) { await db.prepare('UPDATE variants SET color=?,size=? WHERE id=?').bind(cc, sz, v.id).run(); nv++; } }
+  return { products: n, variants: nv };
 }

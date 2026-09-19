@@ -16,6 +16,10 @@ on:
         description: "crawl job id to run on the server (empty = skip)"
         default: ""
         required: false
+      translate:
+        description: "re-translate N pending products with Workers AI (empty = skip)"
+        default: ""
+        required: false
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -27,12 +31,13 @@ jobs:
           ITEM: ${{ github.event.inputs.item_id }}
           KW: ${{ github.event.inputs.keyword }}
           JOB: ${{ github.event.inputs.job_id }}
+          TR: ${{ github.event.inputs.translate }}
         run: |
           set -e
           post() { curl -s -o out.json -w '%{http_code}' -X POST -H 'content-type: application/json' -H "x-import-token: $TOKEN" -d "$1" "$BASE/api/source/$2"; }
           if [ -n "$ITEM" ]; then
             echo "=== item $ITEM"; code=$(post "{\"id\":\"$ITEM\"}" test); echo "HTTP $code"
-            python3 -c "import json;d=json.load(open('out.json'));print('ok',d.get('ok'),'provider',d.get('provider'),'status',d.get('status'),'error',d.get('error'));print('url',d.get('url'));x=d.get('data') or {};print('title',x.get('title'));print('titleEn',x.get('titleEn'));print('price',x.get('priceCny'),'images',len(x.get('images') or []),'variants',len(x.get('variants') or []),'minQty',x.get('minQty'),'supplier',x.get('supplier'));print('variants sample',(x.get('variants') or [])[:4]);print('raw',d.get('raw','')[:1200])"
+            python3 -c "import json;d=json.load(open('out.json'));print('ok',d.get('ok'),'provider',d.get('provider'),'status',d.get('status'),'error',d.get('error'));print('url',d.get('url'));x=d.get('data') or {};print('title',x.get('title'));print('titleEn',x.get('titleEn'));print('price',x.get('priceCny'),'images',len(x.get('images') or []),'variants',len(x.get('variants') or []),'minQty',x.get('minQty'),'supplier',x.get('supplier'));print('variants sample',(x.get('variants') or [])[:4]);print('meta',json.dumps(d.get('meta'),ensure_ascii=False)[:1500]);print('raw',d.get('raw','')[:600])"
           fi
           if [ -n "$KW" ]; then
             echo "=== search $KW"; code=$(post "$(python3 -c "import json,os;print(json.dumps({'kw':os.environ['KW']}))")" test); echo "HTTP $code"
@@ -40,4 +45,7 @@ jobs:
           fi
           if [ -n "$JOB" ]; then
             echo "=== run job $JOB"; code=$(post "{\"job_id\":$JOB,\"limit\":1}" run); echo "HTTP $code"; cat out.json; echo
+          fi
+          if [ -n "$TR" ]; then
+            echo "=== translate $TR"; code=$(post "{\"limit\":$TR}" translate); echo "HTTP $code"; cat out.json; echo
           fi
