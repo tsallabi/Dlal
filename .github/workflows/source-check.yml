@@ -13,7 +13,7 @@ on:
         default: "连衣裙 女 夏"
         required: false
       job_id:
-        description: "crawl job id to run on the server (empty = skip)"
+        description: "crawl job id to run on the server (empty = skip; use - to skip item/keyword)"
         default: ""
         required: false
       translate:
@@ -35,11 +35,11 @@ jobs:
         run: |
           set -e
           post() { curl -s -o out.json -w '%{http_code}' -X POST -H 'content-type: application/json' -H "x-import-token: $TOKEN" -d "$1" "$BASE/api/source/$2"; }
-          if [ -n "$ITEM" ]; then
+          if [ -n "$ITEM" ] && [ "$ITEM" != "-" ]; then
             echo "=== item $ITEM"; code=$(post "{\"id\":\"$ITEM\"}" test); echo "HTTP $code"
             python3 -c "import json;d=json.load(open('out.json'));print('ok',d.get('ok'),'provider',d.get('provider'),'status',d.get('status'),'error',d.get('error'));print('url',d.get('url'));x=d.get('data') or {};print('title',x.get('title'));print('titleEn',x.get('titleEn'));print('price',x.get('priceCny'),'images',len(x.get('images') or []),'variants',len(x.get('variants') or []),'minQty',x.get('minQty'),'supplier',x.get('supplier'));print('variants sample',(x.get('variants') or [])[:4]);print('meta',json.dumps(d.get('meta'),ensure_ascii=False)[:1500]);print('raw',d.get('raw','')[:600])"
           fi
-          if [ -n "$KW" ]; then
+          if [ -n "$KW" ] && [ "$KW" != "-" ]; then
             echo "=== search $KW"; code=$(post "$(python3 -c "import json,os;print(json.dumps({'kw':os.environ['KW']}))")" test); echo "HTTP $code"
             python3 -c "import json;d=json.load(open('out.json'));print('ok',d.get('ok'),'status',d.get('status'),'error',d.get('error'));print('url',d.get('url'));xs=d.get('data') or [];print('items',len(xs));[print('-',x.get('offerId'),x.get('priceCny'),(x.get('title') or '')[:40],'|',(x.get('titleEn') or '')[:40]) for x in xs[:5]];print('raw',d.get('raw','')[:800])"
           fi
