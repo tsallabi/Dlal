@@ -95,7 +95,7 @@ api.post('/source/test', async (c) => {
   if (!prov) return c.json({ error: 'لا يوجد مزوّد مضبوط' }, 400);
   const r = b.kw ? await prov.search(String(b.kw), 1) : await prov.item(String(b.id ?? '').replace(/\D/g, ''));
   const url = r.url.replace(/(instanceKey|apiToken)=[^&]+/g, '$1=***');
-  await c.env.DB.prepare('INSERT INTO payment_log(payment_id,direction,url,status_code,request,response,ok) VALUES(NULL,?,?,?,?,?,?)').bind('in', 'SRC ' + url, r.status, '', r.raw.slice(0, 4000), r.ok ? 1 : 0).run();
+  await c.env.DB.prepare('INSERT INTO payment_log(payment_id,direction,url,status_code,request,response,ok) VALUES(NULL,?,?,?,?,?,?)').bind('in', 'SRC ' + url, r.status, '', r.raw.slice(0, 60000), r.ok ? 1 : 0).run();
   return c.json({ ok: r.ok, provider: prov.name, url, status: r.status, error: r.error, data: r.data, raw: r.raw.slice(0, 1500) });
 });
 api.post('/source/run', async (c) => {

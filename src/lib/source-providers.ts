@@ -44,14 +44,14 @@ class Otapi implements Provider {
   }
   async search(keyword: string, page: number) {
     const xml = `<SearchItemsParameters><Provider>Alibaba1688</Provider><SearchMethod>Catalog</SearchMethod><ItemTitle>${keyword.replace(/[<&>]/g, '')}</ItemTitle></SearchItemsParameters>`;
-    const url = this.u('BatchSearchItemsFrame', { xmlParameters: xml, framePosition: String((page - 1) * 20), frameSize: '20' });
-    try { const r = await call(url); const ok = r.json && (r.json.ErrorCode === 'Ok' || r.status === 200); const items = arr(g(r.json, 'Result.Items.Items.Content', 'Result.Items.Content', 'Result.Items', 'Items.Content', 'Content')).map(x => this.norm(x)).filter(x => x.offerId && x.priceCny);
+    const url = this.u('BatchSearchItemsFrame', { xmlParameters: xml, framePosition: String((page - 1) * 20), frameSize: '20', blockList: 'Items' });
+    try { const r = await call(url); const ok = !!r.json && r.json.ErrorCode === 'Ok'; const items = arr(g(r.json, 'Result.Items.Items.Content', 'Result.Items.Content', 'OtapiItemInfoSubList.Content', 'Result.Items', 'Items.Content', 'Content')).map(x => this.norm(x)).filter(x => x.offerId && x.priceCny);
       return { ok: !!ok, data: items, raw: r.text, url, status: r.status, error: ok ? undefined : g(r.json, 'ErrorDescription', 'ErrorCode') ?? `HTTP ${r.status}` }; }
     catch (e: any) { return { ok: false, data: [], raw: '', url, status: 0, error: e.message }; }
   }
   async item(offerId: string) {
     const url = this.u('GetItemFullInfo', { itemId: `abb-${offerId}` });
-    try { const r = await call(url); const it = g(r.json, 'Result.Item', 'Result', 'Item'); const ok = !!it && (r.json.ErrorCode === 'Ok' || r.status === 200);
+    try { const r = await call(url); const it = g(r.json, 'OtapiItemFullInfo', 'Result.Item', 'Item'); const ok = !!it && typeof it === 'object' && !!g(it, 'Id') && (r.json.ErrorCode === 'Ok' || r.status === 200) && !it.HasError;
       return { ok, data: ok ? this.norm(it) : null, raw: r.text, url, status: r.status, error: ok ? undefined : g(r.json, 'ErrorDescription', 'ErrorCode') ?? `HTTP ${r.status}` }; }
     catch (e: any) { return { ok: false, data: null, raw: '', url, status: 0, error: e.message }; }
   }

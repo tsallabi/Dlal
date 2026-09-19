@@ -459,7 +459,7 @@ ops.post('/source/test', async (c) => {
   const s = { ...(await loadSettings(db)), src_provider: String(f.src_provider), src_base_url: String(f.src_base_url), src_key: String(f.src_key), src_lang: String(f.src_lang) };
   const prov = getProvider(s); if (!prov) return c.redirect('/admin/source?test=fail&detail=' + encodeURIComponent('اختر مزوّدًا وأدخل المفتاح'));
   const r = f.test_kw ? await prov.search(String(f.test_kw), 1) : await prov.item(String(f.test_id).replace(/\D/g, ''));
-  await db.prepare('INSERT INTO payment_log(payment_id,direction,url,status_code,request,response,ok) VALUES(NULL,?,?,?,?,?,?)').bind('in', 'SRC ' + r.url.replace(/(instanceKey|apiToken)=[^&]+/g, '$1=***'), r.status, '', r.raw.slice(0, 4000), r.ok ? 1 : 0).run();
+  await db.prepare('INSERT INTO payment_log(payment_id,direction,url,status_code,request,response,ok) VALUES(NULL,?,?,?,?,?,?)').bind('in', 'SRC ' + r.url.replace(/(instanceKey|apiToken)=[^&]+/g, '$1=***'), r.status, '', r.raw.slice(0, 60000), r.ok ? 1 : 0).run();
   const d: any = r.data;
   const detail = r.ok ? (Array.isArray(d) ? `نجح البحث: ${d.length} منتج. الأول: ${d[0]?.title?.slice(0, 40)} — ¥${d[0]?.priceCny}` : `نجح: ${d?.title?.slice(0, 50)} — ¥${d?.priceCny} — صور ${d?.images?.length} — متغيرات ${d?.variants?.length} — حد أدنى ${d?.minQty}`) : `فشل: ${r.error} (HTTP ${r.status})`;
   return c.redirect(`/admin/source?test=${r.ok ? 'ok' : 'fail'}&detail=${encodeURIComponent(detail)}`);

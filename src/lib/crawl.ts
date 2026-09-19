@@ -4,7 +4,7 @@ import { getProvider } from './source-providers';
 import { importProducts } from '../routes/admin';
 
 async function logRaw(db: D1Database, direction: 'out' | 'in', url: string, status: number, body: string, ok: boolean) {
-  await db.prepare('INSERT INTO payment_log(payment_id,direction,url,status_code,request,response,ok) VALUES(NULL,?,?,?,?,?,?)').bind(direction, 'SRC ' + url.replace(/(instanceKey|apiToken)=[^&]+/g, '$1=***'), status, '', body.slice(0, 4000), ok ? 1 : 0).run();
+  await db.prepare('INSERT INTO payment_log(payment_id,direction,url,status_code,request,response,ok) VALUES(NULL,?,?,?,?,?,?)').bind(direction, 'SRC ' + url.replace(/(instanceKey|apiToken)=[^&]+/g, '$1=***'), status, '', body.slice(0, 60000), ok ? 1 : 0).run();
 }
 
 export async function runServerJobs(env: { DB: D1Database; AI?: any }, opts: { limit?: number; jobId?: number; byUserId?: number | null } = {}) {
