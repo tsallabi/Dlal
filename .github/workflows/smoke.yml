@@ -1,0 +1,48 @@
+# فحص الموقع الحي بعد النشر: يفتح الصفحات الأساسية ويتأكد من المحتوى
+name: Smoke test live site
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: Base URL
+        default: https://dlal.tsallabi.workers.dev
+        required: true
+  workflow_run:
+    workflows: ["Deploy to Cloudflare"]
+    types: [completed]
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - name: Check pages
+        env:
+          BASE: ${{ github.event.inputs.url || 'https://dlal.tsallabi.workers.dev' }}
+        run: |
+          fail=0
+          for p in / /c/dresses /c/bags /search?q=فستان /login /register /pages/faq /pages/returns /cart /wishlist; do
+            code=$(curl -s -o /tmp/page.html -w '%{http_code}' "$BASE$p")
+            echo "$code  $p"
+            [ "$code" = "200" ] || fail=1
+          done
+          echo "--- home content:"
+          curl -s "$BASE/" > /tmp/home.html
+          cards=$(grep -o 'class="card"' /tmp/home.html | wc -l)
+          echo "product cards on home: $cards"; [ "$cards" -ge 20 ] || fail=1
+          grep -q 'دلال' /tmp/home.html && echo "brand text OK" || fail=1
+          grep -q 'فساتين' /tmp/home.html && echo "categories OK" || fail=1
+          echo "--- product page:"
+          slug=$(grep -oE 'href="/p/[^"]+"' /tmp/home.html | head -1 | sed 's/href="\/p\/\(.*\)"/\1/')
+          code=$(curl -s -o /tmp/p.html -w '%{http_code}' "$BASE/p/$slug"); echo "$code  /p/$slug"; [ "$code" = "200" ] || fail=1
+          grep -q 'variantsJson' /tmp/p.html && echo "variants OK" || fail=1
+          grep -q 'detail.1688.com' /tmp/p.html && { echo "SOURCE LINK LEAKED"; fail=1; } || echo "source hidden OK"
+          echo "--- protected pages redirect:"
+          for p in /admin /account /checkout; do code=$(curl -s -o /dev/null -w '%{http_code}' "$BASE$p"); echo "$code  $p"; [ "$code" = "302" ] || fail=1; done
+          code=$(curl -s -o /dev/null -w '%{http_code}' "$BASE/p/not-exist"); echo "$code  /p/not-exist (expect 404)"; [ "$code" = "404" ] || fail=1
+          echo "--- webhook rejects bad signature:"
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'content-type: application/json' -H 'x-mypay-signature: bad' -d '{"event":"payment.success","trx_ref":"x"}' "$BASE/api/mypay/webhook"); echo "$code  webhook (expect 401)"; [ "$code" = "401" ] || fail=1
+          echo "--- login as admin and open dashboard:"
+          curl -s -c /tmp/cj -o /dev/null -X POST -d "phone=0910000000&password=${{ secrets.SMOKE_ADMIN_PASSWORD }}&next=/admin" "$BASE/login"
+          code=$(curl -s -b /tmp/cj -o /tmp/admin.html -w '%{http_code}' "$BASE/admin"); echo "$code  /admin (logged in)"
+          if [ -n "${{ secrets.SMOKE_ADMIN_PASSWORD }}" ]; then [ "$code" = "200" ] || fail=1; grep -q 'نظرة عامة' /tmp/admin.html && echo "admin dashboard OK" || fail=1; else echo "(SMOKE_ADMIN_PASSWORD not set — skipped)"; fi
+          exit $fail
