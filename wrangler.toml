@@ -1,0 +1,30 @@
+name = "dlal"
+main = "src/index.tsx"
+compatibility_date = "2026-09-01"
+compatibility_flags = ["nodejs_compat"]
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "dlal-db"
+database_id = "REPLACE_WITH_D1_ID"   # wrangler d1 create dlal-db
+
+[[r2_buckets]]
+binding = "IMAGES"
+bucket_name = "dlal-images"
+
+[vars]
+SITE_NAME = "دلال"
+SITE_URL = "https://dlal.ly"
+DEFAULT_CURRENCY = "LYD"
+
+# Secrets (wrangler secret put ...):
+#   ADMIN_PASSWORD   كلمة مرور الأدمن الأولى
+#   SESSION_SECRET   سر توقيع الجلسات
+#   IMPORT_TOKEN     رمز أداة الاستيراد من المتصفح
+
+[triggers]
+crons = ["0 3 * * *"]   # مزامنة المخزون يوميًا 3 صباحًا UTC (تعمل فقط بعد ربط الـ API)
