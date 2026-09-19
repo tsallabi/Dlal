@@ -1,0 +1,38 @@
+# يتحقق أن نقطة /api/import على الموقع الحي تقبل رمز IMPORT_TOKEN وتُدخل منتجًا (نفس ما يرسله زر الاستيراد من المتصفح)
+name: Import API check
+on:
+  workflow_dispatch:
+    inputs:
+      base:
+        default: https://dlal.tsallabi.workers.dev
+        required: true
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post a product like the bookmarklet does
+        env:
+          BASE: ${{ github.event.inputs.base }}
+          TOKEN: ${{ secrets.IMPORT_TOKEN }}
+        run: |
+          set -e
+          echo "--- wrong token must be rejected:"
+          curl -s -o /dev/null -w '%{http_code}\n' -X POST -H 'content-type: application/json' -H 'x-import-token: wrong' -d '{"items":[]}' "$BASE/api/import"
+          echo "--- categories:"
+          curl -s "$BASE/api/categories" | head -c 300; echo
+          echo "--- import with real token:"
+          cat > payload.json <<JSON
+          {"category_id":1,"page_url":"https://detail.1688.com/offer/828554317506.html","items":[{"offerId":"828554317506","url":"https://detail.1688.com/offer/828554317506.html","title":"轻奢御姐西装连衣裙女装时尚口袋双排扣毛毛袖显瘦设计感亮片短裙","titleAr":"فستان بليزر أنيق بجيوب وأزرار مزدوجة وأكمام فرو — اختبار استيراد","priceCny":68,"images":[],"variants":[{"color":"أسود","size":"S"},{"color":"أسود","size":"M"},{"color":"أسود","size":"L"},{"color":"أبيض","size":"M"}],"minQty":1,"inStock":true,"supplier":"台州服饰","sales":120}]}
+          JSON
+          code=$(curl -s -o resp.json -w '%{http_code}' -X POST -H 'content-type: application/json' -H "x-import-token: $TOKEN" --data @payload.json "$BASE/api/import")
+          echo "status $code"; cat resp.json; echo
+          [ "$code" = "200" ]
+          echo "--- appears on live site search:"
+          curl -s -G --data-urlencode 'q=اختبار استيراد' "$BASE/search" > s.html
+          grep -c 'class="card"' s.html
+          grep -o 'href="/p/828554317506-[a-z0-9]*"' s.html | head -1
+          slug=$(grep -o '/p/828554317506-[a-z0-9]*' s.html | head -1)
+          curl -s "$BASE$slug" > p.html
+          grep -q 'variantsJson' p.html && echo "product page renders with variants"
+          grep -o 'class="chip" data-val="[^"]*"' p.html | head -6
+          grep -oE '[0-9]+(,[0-9]+)? د\.ل' p.html | head -1
