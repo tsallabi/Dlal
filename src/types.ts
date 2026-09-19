@@ -1,6 +1,6 @@
 export type Bindings = {
   DB: D1Database;
-  IMAGES: R2Bucket;
+  IMAGES?: R2Bucket;              // اختياري حتى يُفعَّل R2
   ASSETS: Fetcher;
   SITE_NAME: string;
   SITE_URL: string;
