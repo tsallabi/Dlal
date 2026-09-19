@@ -3,6 +3,9 @@ import type { Context } from 'hono';
 import type { Env } from '../types';
 import { getCategories } from '../lib/db';
 import { importProducts } from './admin';
+import { loadSettings } from '../lib/pricing';
+import { getProvider } from '../lib/source-providers';
+import { runServerJobs } from '../lib/crawl';
 
 const api = new Hono<Env>();
 
@@ -82,6 +85,23 @@ api.post('/crawl/report', async (c) => {
       .bind(`${status}: صفحات ${b.pages ?? 0} · وُجد ${b.found ?? 0} · جديد ${b.imported ?? 0} · محدّث ${b.updated ?? 0} · مُثرى ${b.enriched ?? 0} · مفحوص ${b.checked ?? 0}`, status, b.job_id ?? 0),
   ]);
   return c.json({ ok: true });
+});
+
+// اختبار مزوّد API الخارجي (OTAPI/TMAPI) بالرمز نفسه — للفحص الآلي من GitHub Actions
+api.post('/source/test', async (c) => {
+  if (!tokenOk(c)) return c.json({ error: 'رمز غير صحيح' }, 401);
+  const b = await c.req.json<{ id?: string; kw?: string }>();
+  const prov = getProvider(await loadSettings(c.env.DB));
+  if (!prov) return c.json({ error: 'لا يوجد مزوّد مضبوط' }, 400);
+  const r = b.kw ? await prov.search(String(b.kw), 1) : await prov.item(String(b.id ?? '').replace(/\D/g, ''));
+  const url = r.url.replace(/(instanceKey|apiToken)=[^&]+/g, '$1=***');
+  await c.env.DB.prepare('INSERT INTO payment_log(payment_id,direction,url,status_code,request,response,ok) VALUES(NULL,?,?,?,?,?,?)').bind('in', 'SRC ' + url, r.status, '', r.raw.slice(0, 4000), r.ok ? 1 : 0).run();
+  return c.json({ ok: r.ok, provider: prov.name, url, status: r.status, error: r.error, data: r.data, raw: r.raw.slice(0, 1500) });
+});
+api.post('/source/run', async (c) => {
+  if (!tokenOk(c)) return c.json({ error: 'رمز غير صحيح' }, 401);
+  const b = await c.req.json<{ job_id?: number; limit?: number }>();
+  return c.json(await runServerJobs(c.env, { limit: Math.min(3, b.limit ?? 1), jobId: b.job_id, byUserId: c.get('user')?.id ?? null }));
 });
 
 export default api;

@@ -1,0 +1,43 @@
+# فحص حي لمزوّد 1688 API (OTAPI/TMAPI) المضبوط في /admin/source: جلب منتج، بحث، ثم تشغيل مهمة على الخادم
+name: Source API check
+on:
+  workflow_dispatch:
+    inputs:
+      base:
+        default: https://dlal.tsallabi.workers.dev
+        required: true
+      item_id:
+        default: "828554317506"
+        required: false
+      keyword:
+        default: "连衣裙 女 夏"
+        required: false
+      job_id:
+        description: "crawl job id to run on the server (empty = skip)"
+        default: ""
+        required: false
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Item, search, then server job
+        env:
+          BASE: ${{ github.event.inputs.base }}
+          TOKEN: ${{ secrets.IMPORT_TOKEN }}
+          ITEM: ${{ github.event.inputs.item_id }}
+          KW: ${{ github.event.inputs.keyword }}
+          JOB: ${{ github.event.inputs.job_id }}
+        run: |
+          set -e
+          post() { curl -s -o out.json -w '%{http_code}' -X POST -H 'content-type: application/json' -H "x-import-token: $TOKEN" -d "$1" "$BASE/api/source/$2"; }
+          if [ -n "$ITEM" ]; then
+            echo "=== item $ITEM"; code=$(post "{\"id\":\"$ITEM\"}" test); echo "HTTP $code"
+            python3 -c "import json;d=json.load(open('out.json'));print('ok',d.get('ok'),'provider',d.get('provider'),'status',d.get('status'),'error',d.get('error'));print('url',d.get('url'));x=d.get('data') or {};print('title',x.get('title'));print('titleEn',x.get('titleEn'));print('price',x.get('priceCny'),'images',len(x.get('images') or []),'variants',len(x.get('variants') or []),'minQty',x.get('minQty'),'supplier',x.get('supplier'));print('variants sample',(x.get('variants') or [])[:4]);print('raw',d.get('raw','')[:1200])"
+          fi
+          if [ -n "$KW" ]; then
+            echo "=== search $KW"; code=$(post "$(python3 -c "import json,os;print(json.dumps({'kw':os.environ['KW']}))")" test); echo "HTTP $code"
+            python3 -c "import json;d=json.load(open('out.json'));print('ok',d.get('ok'),'status',d.get('status'),'error',d.get('error'));print('url',d.get('url'));xs=d.get('data') or [];print('items',len(xs));[print('-',x.get('offerId'),x.get('priceCny'),(x.get('title') or '')[:40],'|',(x.get('titleEn') or '')[:40]) for x in xs[:5]];print('raw',d.get('raw','')[:800])"
+          fi
+          if [ -n "$JOB" ]; then
+            echo "=== run job $JOB"; code=$(post "{\"job_id\":$JOB,\"limit\":1}" run); echo "HTTP $code"; cat out.json; echo
+          fi
