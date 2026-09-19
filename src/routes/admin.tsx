@@ -4,17 +4,34 @@ import type { Env } from '../types';
 import { ORDER_STATUS, PAYMENT_METHODS } from '../types';
 import { AdminShell } from '../views/dash';
 import { Flash } from '../views/layout';
-import { getCategories, PRODUCT_SELECT, fmt, timeAgo, notify } from '../lib/db';
+import { getCategories, PRODUCT_SELECT, fmt, timeAgo } from '../lib/db';
 import type { ProductRow } from '../lib/db';
 import { loadSettings, computePrice } from '../lib/pricing';
-import { hashPassword, requireRole } from '../lib/auth';
+import { requireRole } from '../lib/auth';
+import { requirePerm, logActivity } from '../lib/perm';
+import { setOrderStatus, markOrderPaid } from '../lib/orders';
 
 const admin = new Hono<Env>();
 admin.use('*', requireRole('admin'));
+// صلاحيات كل قسم
+admin.use('/orders*', requirePerm('orders.view', 'orders.manage'));
+admin.use('/customers', requirePerm('customers.view', 'customers.manage'));
+admin.use('/import*', requirePerm('catalog.manage'));
+admin.use('/products*', requirePerm('catalog.manage'));
+admin.use('/categories*', requirePerm('catalog.manage'));
+admin.use('/stock*', requirePerm('catalog.manage'));
+admin.use('/pricing*', requirePerm('pricing.manage'));
+admin.use('/partners*', requirePerm('partners.manage'));
 
 const shell = async (c: Context<Env>, active: string, title: string, body: any) => {
-  const n = await c.env.DB.prepare("SELECT COUNT(*) n FROM orders WHERE status='pending_payment'").first<{ n: number }>();
-  return c.html(<AdminShell user={c.get('user')!} active={active} title={title} counts={{ orders: n?.n ?? 0 }}>{body}</AdminShell>);
+  const db = c.env.DB;
+  const k = await db.batch([
+    db.prepare("SELECT COUNT(*) n FROM orders WHERE status='pending_payment'"),
+    db.prepare("SELECT COUNT(*) n FROM tickets WHERE status IN ('open','in_progress')"),
+    db.prepare("SELECT COUNT(*) n FROM reviews WHERE status='pending'"),
+  ]);
+  const n = (i: number) => (k[i].results[0] as any).n as number;
+  return c.html(<AdminShell user={c.get('user')!} active={active} title={title} counts={{ orders: n(0), tickets: n(1), reviews: n(2) }}>{body}</AdminShell>);
 };
 
 // ---------- نظرة عامة ----------
@@ -28,6 +45,9 @@ admin.get('/', async (c) => {
     db.prepare("SELECT COUNT(*) n FROM orders WHERE status IN ('paid','purchasing')"),
     db.prepare("SELECT COUNT(*) n FROM users WHERE role='customer'"),
     db.prepare("SELECT COUNT(*) n FROM products WHERE status='active' AND (last_checked_at IS NULL OR last_checked_at < datetime('now','-7 day'))"),
+    db.prepare("SELECT COUNT(*) n FROM tickets WHERE status IN ('open','in_progress')"),
+    db.prepare("SELECT COUNT(*) n FROM reviews WHERE status='pending'"),
+    db.prepare("SELECT COALESCE(SUM(amount_lyd),0) n FROM payments WHERE status='paid' AND created_at > datetime('now','-1 day')"),
   ]);
   const v = k.map(r => (r.results[0] as any).n as number);
   const recent = await db.prepare('SELECT o.code,o.status,o.total_lyd,o.created_at,u.name FROM orders o JOIN users u ON u.id=o.user_id ORDER BY o.id DESC LIMIT 8').all<any>();
@@ -43,7 +63,11 @@ admin.get('/', async (c) => {
         <div class="kpi"><b>{v[5]}</b><span>زبونة مسجلة</span></div>
         <div class="kpi"><b style="color:#d3262b">{v[6]}</b><span>منتج لم يُفحص منذ أسبوع</span></div>
         <div class="kpi"><b>{s.fx_cny_lyd}</b><span>سعر اليوان اليوم (د.ل)</span></div>
+        <div class="kpi"><b style="color:#d68b00">{v[7]}</b><span>تذاكر مفتوحة</span></div>
+        <div class="kpi"><b>{v[8]}</b><span>تقييمات بانتظار المراجعة</span></div>
+        <div class="kpi"><b style="color:#1a9c5b">{fmt(v[9])}</b><span>مدفوعات ماي باي اليوم</span></div>
       </div>
+      <div class="quick"><a href="/admin/orders?status=pending_payment">💳 تأكيد مدفوعات يدوية</a><a href="/admin/tickets">↩️ الرد على التذاكر</a><a href="/admin/reviews">⭐ مراجعة التقييمات</a><a href="/admin/import">⬇️ استيراد منتجات</a><a href="/admin/pricing">💰 تحديث سعر الصرف</a><a href="/admin/reports">📈 التقارير</a></div>
       <div class="card-box"><h3>آخر الطلبات</h3><div class="tbl-wrap"><table class="tbl"><tr><th>الطلب</th><th>الزبونة</th><th>الحالة</th><th>الإجمالي</th><th>التاريخ</th></tr>
         {recent.results.map(o => <tr><td><a href={`/admin/orders/${o.code}`} style="color:#b5124f;font-weight:700">{o.code}</a></td><td>{o.name}</td><td><span class={`status ${ORDER_STATUS[o.status]?.color}`}>{ORDER_STATUS[o.status]?.ar}</span></td><td>{fmt(o.total_lyd)}</td><td>{timeAgo(o.created_at)}</td></tr>)}
       </table></div></div>
@@ -66,7 +90,7 @@ admin.get('/orders', async (c) => {
       <div class="tabs"><a href="/admin/orders" class={!st ? 'on' : ''}>الكل</a>{Object.entries(ORDER_STATUS).map(([k, v]) => <a href={`/admin/orders?status=${k}`} class={st === k ? 'on' : ''}>{v.ar}{cm[k] ? <i>{cm[k]}</i> : null}</a>)}</div>
       <form class="inline" style="margin:8px 0"><input type="text" name="q" placeholder="رقم الطلب / اسم / هاتف" value={q} /><input type="hidden" name="status" value={st} /><button class="btn sm">بحث</button></form>
       <div class="tbl-wrap"><table class="tbl"><tr><th>الطلب</th><th>الزبونة</th><th>الحالة</th><th>الدفع</th><th>الشريك</th><th>الإجمالي</th><th>التاريخ</th></tr>
-        {rows.results.map(o => <tr><td><a href={`/admin/orders/${o.code}`} style="color:#b5124f;font-weight:700">{o.code}</a></td><td>{o.name}<br /><small>{o.phone} · {o.ship_city}</small></td><td><span class={`status ${ORDER_STATUS[o.status]?.color}`}>{ORDER_STATUS[o.status]?.ar}</span></td><td>{PAYMENT_METHODS[o.payment_method]}{o.payment_ref && <><br /><small>{o.payment_ref}</small></>}</td><td>{o.partner ?? '—'}</td><td>{fmt(o.total_lyd)}</td><td>{timeAgo(o.created_at)}</td></tr>)}
+        {rows.results.map(o => <tr><td><a href={`/admin/orders/${o.code}`} style="color:#b5124f;font-weight:700">{o.code}</a></td><td>{o.name}<br /><small>{o.phone} · {o.ship_city}</small></td><td><span class={`status ${ORDER_STATUS[o.status]?.color}`}>{ORDER_STATUS[o.status]?.ar}</span></td><td>{PAYMENT_METHODS[o.payment_method]?.ar ?? o.payment_method}{o.payment_ref && <><br /><small>{o.payment_ref}</small></>}</td><td>{o.partner ?? '—'}</td><td>{fmt(o.total_lyd)}</td><td>{timeAgo(o.created_at)}</td></tr>)}
       </table></div>
     </>
   ));
@@ -76,10 +100,11 @@ admin.get('/orders/:code', async (c) => {
   const db = c.env.DB;
   const o = await db.prepare('SELECT o.*,u.name,u.phone,pa.name AS partner FROM orders o JOIN users u ON u.id=o.user_id LEFT JOIN partners pa ON pa.id=o.partner_id WHERE o.code=?').bind(c.req.param('code')).first<any>();
   if (!o) return c.notFound();
-  const [items, events, partners] = await Promise.all([
+  const [items, events, partners, pays] = await Promise.all([
     db.prepare('SELECT * FROM order_items WHERE order_id=?').bind(o.id).all<any>(),
     db.prepare('SELECT e.*,u.name FROM order_events e LEFT JOIN users u ON u.id=e.by_user_id WHERE order_id=? ORDER BY id').bind(o.id).all<any>(),
     db.prepare('SELECT id,name FROM partners WHERE active=1').all<any>(),
+    db.prepare('SELECT * FROM payments WHERE order_id=? ORDER BY id DESC').bind(o.id).all<any>(),
   ]);
   const s = await loadSettings(db);
   const fx = parseFloat(s.fx_cny_lyd);
@@ -116,8 +141,9 @@ admin.get('/orders/:code', async (c) => {
           <div class="card-box"><h3>سجل الأحداث</h3>{events.results.map(e => <div style="font-size:13px;border-bottom:1px solid #eee;padding:6px 0"><span class={`status ${ORDER_STATUS[e.status]?.color}`}>{ORDER_STATUS[e.status]?.ar ?? e.status}</span> {e.note} <small style="color:#888">— {e.name ?? 'النظام'} · {timeAgo(e.created_at)}</small></div>)}</div>
         </div>
         <div>
-          <div class="card-box"><h3>الزبونة</h3>{o.name}<br />{o.phone}<br />{o.ship_city} — {o.ship_address}{o.note && <><br /><i>{o.note}</i></>}</div>
-          <div class="card-box"><h3>الدفع</h3>{PAYMENT_METHODS[o.payment_method]}<br />المرجع: {o.payment_ref ?? '—'}<br />الإجمالي: <b>{fmt(o.total_lyd)}</b><br /><small>سعر الصرف وقت الطلب: {o.fx_rate_used}</small></div>
+          <div class="card-box"><h3>الزبونة</h3><a href={`/admin/customers/${o.user_id}`} style="color:#b5124f;font-weight:700">{o.name}</a><br />{o.phone}<br />{o.ship_city} — {o.ship_address}{o.note && <><br /><i>{o.note}</i></>}</div>
+          <div class="card-box"><h3>الدفع</h3>{PAYMENT_METHODS[o.payment_method]?.ar ?? o.payment_method}<br />المرجع: {o.payment_ref ?? '—'}<br />الإجمالي: <b>{fmt(o.total_lyd)}</b>{o.discount_lyd > 0 && <><br /><small>خصم {o.coupon_code}: −{fmt(o.discount_lyd)}</small></>}{o.points_used > 0 && <><br /><small>نقاط: {o.points_used} (−{fmt(o.points_lyd)})</small></>}<br /><small>سعر الصرف وقت الطلب: {o.fx_rate_used}</small>
+            {pays.results.length > 0 && <div style="margin-top:8px;font-size:12px">{pays.results.map(p => <div>{p.trx_ref} · {p.gateway} · <span class={`status ${p.status === 'paid' ? 'green' : 'gray'}`}>{p.status}</span></div>)}</div>}</div>
           <div class="card-box"><h3>شريك الشحن</h3>{o.partner ?? 'لم يُعيَّن'}</div>
         </div>
       </div>
@@ -125,36 +151,36 @@ admin.get('/orders/:code', async (c) => {
   ));
 });
 
-admin.post('/orders/:code/confirm-payment', async (c) => {
-  const db = c.env.DB; const f = await c.req.parseBody(); const u = c.get('user')!;
-  const o = await db.prepare('SELECT id,user_id FROM orders WHERE code=?').bind(c.req.param('code')).first<any>();
+admin.post('/orders/:code/confirm-payment', requirePerm('orders.manage', 'payments.manage'), async (c) => {
+  const db = c.env.DB; const f = await c.req.parseBody(); const u = c.get('user')!; const code = String(c.req.param('code'));
+  const o = await db.prepare('SELECT id,user_id FROM orders WHERE code=?').bind(code).first<any>();
   if (!o) return c.notFound();
-  await db.batch([
-    db.prepare("UPDATE orders SET status='paid',payment_ref=?,partner_id=?,updated_at=datetime('now') WHERE id=?").bind(String(f.payment_ref), Number(f.partner_id), o.id),
-    db.prepare("INSERT INTO order_events(order_id,status,note,by_user_id) VALUES(?,'paid','تم تأكيد الدفع وإرسال الطلب لفريق الشراء',?)").bind(o.id, u.id),
-  ]);
-  await notify(db, o.user_id, `تم تأكيد دفع طلبك ${c.req.param('code')} ✓`, 'بدأ فريقنا في الصين شراء منتجاتك.', `/orders/${c.req.param('code')}`);
-  return c.redirect(`/admin/orders/${c.req.param('code')}?ok=1`);
+  await db.prepare('UPDATE orders SET partner_id=? WHERE id=?').bind(Number(f.partner_id), o.id).run();
+  await db.prepare("INSERT INTO payments(order_id,provider,gateway,amount_lyd,status,trx_ref,provider_ref) SELECT id,'manual',payment_method,total_lyd,'paid',code||'-M'||strftime('%s','now'),? FROM orders WHERE id=?").bind(String(f.payment_ref), o.id).run();
+  await markOrderPaid(db, o.id, String(f.payment_ref), u.id, 'تم تأكيد الدفع يدويًا وإرسال الطلب لفريق الشراء');
+  await logActivity(db, u.id, 'order.confirm_payment', code, String(f.payment_ref));
+  return c.redirect(`/admin/orders/${code}?ok=1`);
 });
-admin.post('/orders/:code/status', async (c) => {
-  const db = c.env.DB; const f = await c.req.parseBody(); const u = c.get('user')!;
-  const o = await db.prepare('SELECT id,user_id FROM orders WHERE code=?').bind(c.req.param('code')).first<any>();
-  if (!o || !ORDER_STATUS[String(f.status)]) return c.notFound();
-  await db.batch([
-    db.prepare("UPDATE orders SET status=?,updated_at=datetime('now') WHERE id=?").bind(String(f.status), o.id),
-    db.prepare('INSERT INTO order_events(order_id,status,note,by_user_id) VALUES(?,?,?,?)').bind(o.id, String(f.status), f.note ? String(f.note) : null, u.id),
-  ]);
-  await notify(db, o.user_id, `تحديث طلبك ${c.req.param('code')}`, ORDER_STATUS[String(f.status)].ar, `/orders/${c.req.param('code')}`);
-  return c.redirect(`/admin/orders/${c.req.param('code')}?ok=1`);
+admin.post('/orders/:code/status', requirePerm('orders.manage'), async (c) => {
+  const f = await c.req.parseBody(); const u = c.get('user')!; const code = String(c.req.param('code'));
+  if (!ORDER_STATUS[String(f.status)]) return c.notFound();
+  const o = await setOrderStatus(c.env.DB, code, String(f.status), u.id, f.note ? String(f.note) : undefined);
+  if (!o) return c.notFound();
+  await logActivity(c.env.DB, u.id, 'order.status', code, String(f.status));
+  return c.redirect(`/admin/orders/${code}?ok=1`);
 });
 
 // ---------- الزبائن ----------
 admin.get('/customers', async (c) => {
-  const rows = await c.env.DB.prepare("SELECT u.id,u.name,u.phone,u.city,u.created_at,(SELECT COUNT(*) FROM orders o WHERE o.user_id=u.id) AS n,(SELECT COALESCE(SUM(total_lyd),0) FROM orders o WHERE o.user_id=u.id AND o.status NOT IN ('pending_payment','cancelled','refunded')) AS spent FROM users u WHERE role='customer' ORDER BY u.id DESC LIMIT 300").all<any>();
+  const q = c.req.query('q') ?? '';
+  const rows = await c.env.DB.prepare("SELECT u.id,u.name,u.phone,u.city,u.created_at,u.points,u.active,(SELECT COUNT(*) FROM orders o WHERE o.user_id=u.id) AS n,(SELECT COALESCE(SUM(total_lyd),0) FROM orders o WHERE o.user_id=u.id AND o.status NOT IN ('pending_payment','cancelled','refunded')) AS spent FROM users u WHERE role='customer' AND (u.name LIKE ? OR u.phone LIKE ?) ORDER BY u.id DESC LIMIT 300").bind(`%${q}%`, `%${q}%`).all<any>();
   return shell(c, 'customers', 'الزبائن', (
-    <div class="tbl-wrap"><table class="tbl"><tr><th>الاسم</th><th>الهاتف</th><th>المدينة</th><th>الطلبات</th><th>المشتريات</th><th>التسجيل</th></tr>
-      {rows.results.map(u => <tr><td>{u.name}</td><td>{u.phone}</td><td>{u.city ?? '—'}</td><td>{u.n}</td><td>{fmt(u.spent)}</td><td>{timeAgo(u.created_at)}</td></tr>)}
+    <>
+    <form class="inline" style="margin-bottom:10px"><input type="text" name="q" placeholder="اسم / هاتف" value={c.req.query('q') ?? ''} /><button class="btn sm">بحث</button></form>
+    <div class="tbl-wrap"><table class="tbl"><tr><th>الاسم</th><th>الهاتف</th><th>المدينة</th><th>الطلبات</th><th>المشتريات</th><th>نقاط</th><th>التسجيل</th></tr>
+      {rows.results.map(u => <tr><td><a href={`/admin/customers/${u.id}`} style="color:#b5124f;font-weight:700">{u.name}</a>{!u.active && <span class="status red" style="margin-inline-start:6px">معطّل</span>}</td><td>{u.phone}</td><td>{u.city ?? '—'}</td><td>{u.n}</td><td>{fmt(u.spent)}</td><td>{u.points}</td><td>{timeAgo(u.created_at)}</td></tr>)}
     </table></div>
+    </>
   ));
 });
 
@@ -446,27 +472,5 @@ admin.get('/partners', async (c) => {
 });
 admin.post('/partners/new', async (c) => { const f = await c.req.parseBody(); await c.env.DB.prepare('INSERT INTO partners(name,warehouse_address,contact,share_percent) VALUES(?,?,?,0)').bind(String(f.name), String(f.warehouse_address ?? ''), String(f.contact ?? '')).run(); return c.redirect('/admin/partners?ok=1'); });
 admin.post('/partners/:id', async (c) => { const f = await c.req.parseBody(); await c.env.DB.prepare('UPDATE partners SET name=?,warehouse_address=?,contact=?,ship_rate_per_kg=?,share_percent=?,active=? WHERE id=?').bind(String(f.name), String(f.warehouse_address ?? ''), String(f.contact ?? ''), Number(f.ship_rate_per_kg) || 0, Number(f.share_percent) || 0, Number(f.active), Number(c.req.param('id'))).run(); return c.redirect('/admin/partners?ok=1'); });
-
-// ---------- الموظفون ----------
-admin.get('/staff', async (c) => {
-  const rows = await c.env.DB.prepare("SELECT u.id,u.name,u.phone,u.role,p.name AS partner FROM users u LEFT JOIN partners p ON p.id=u.partner_id WHERE u.role IN ('admin','partner') ORDER BY u.role,u.id").all<any>();
-  const partners = await c.env.DB.prepare('SELECT id,name FROM partners').all<any>();
-  return shell(c, 'staff', 'الموظفون والصلاحيات', (
-    <>
-      <Flash msg={c.req.query('ok') ? 'تم ✓' : undefined} />
-      <div class="tbl-wrap"><table class="tbl"><tr><th>الاسم</th><th>الهاتف</th><th>الدور</th><th>الشريك</th></tr>{rows.results.map(u => <tr><td>{u.name}</td><td>{u.phone}</td><td>{u.role === 'admin' ? 'أدمن' : 'موظف شريك'}</td><td>{u.partner ?? '—'}</td></tr>)}</table></div>
-      <form method="post" action="/admin/staff/new" class="card-box" style="margin-top:14px;max-width:520px"><h3>إضافة موظف</h3>
-        <label>الاسم</label><input type="text" name="name" required /><label>الهاتف (اسم الدخول)</label><input type="tel" name="phone" required /><label>كلمة المرور</label><input type="text" name="password" required minlength={6} />
-        <label>الدور</label><select name="role"><option value="partner">موظف شريك شحن</option><option value="admin">أدمن</option></select>
-        <label>الشريك (لموظف الشريك)</label><select name="partner_id"><option value="">—</option>{partners.results.map(p => <option value={p.id}>{p.name}</option>)}</select>
-        <button class="btn" style="margin-top:10px">إضافة</button></form>
-    </>
-  ));
-});
-admin.post('/staff/new', async (c) => {
-  const f = await c.req.parseBody();
-  await c.env.DB.prepare('INSERT INTO users(phone,name,password_hash,role,partner_id) VALUES(?,?,?,?,?)').bind(String(f.phone).replace(/\D/g, ''), String(f.name), await hashPassword(String(f.password)), String(f.role), f.partner_id ? Number(f.partner_id) : null).run();
-  return c.redirect('/admin/staff?ok=1');
-});
 
 export default admin;

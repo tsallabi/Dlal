@@ -1,12 +1,16 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
+import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 import type { Env } from '../types';
 import { ORDER_STATUS, PAYMENT_METHODS, CITIES } from '../types';
 import { Layout, Flash } from '../views/layout';
 import { Grid } from '../views/product-card';
+import { Stars } from '../views/account';
 import { getCategories, PRODUCT_SELECT, fmt, orderCode, timeAgo, notify } from '../lib/db';
 import type { ProductRow } from '../lib/db';
 import { loadSettings } from '../lib/pricing';
+import { checkCoupon } from '../lib/coupons';
+import { loadMyPay } from '../lib/mypay';
 
 const store = new Hono<Env>();
 
@@ -31,28 +35,41 @@ store.get('/', async (c) => {
     favs(c),
   ]);
   const b = await base(c);
+  const recent = await recentlyViewed(c);
   return c.html(
     <Layout {...b}>
       <section class="hero">
         <div>
+          <span class="eyebrow">توصيل لكل ليبيا · أسعار نهائية بالدينار</span>
           <h1>دلال يجيبلك من الصين لباب البيت 🛍️</h1>
-          <p>آلاف المنتجات بأسعار بالدينار الليبي — شاملة الشحن والجمارك، بدون مفاجآت.</p>
+          <p>آلاف المنتجات بأسعار بالدينار الليبي — شاملة الشحن والجمارك، بدون مفاجآت. ادفعي ببطاقتك أو سداد أو إدفعلي.</p>
+          <div class="inline" style="margin-top:14px"><a class="cta" href="/c/dresses">تسوقي الآن</a><a class="cta ghost" href="/pages/how">كيف نعمل؟</a></div>
         </div>
-        <a class="cta" href="/c/dresses">تسوقي الآن</a>
+        <div class="hero-badges"><div>🚚<b>15–25 يومًا</b><span>للوصول</span></div><div>💳<b>ماي باي</b><span>دفع آمن</span></div><div>🔍<b>فحص وتصوير</b><span>قبل الشحن</span></div><div>💎<b>نقاط</b><span>مع كل طلب</span></div></div>
       </section>
       <div class="flash-sale">
         ⚡ <b>فلاش سيل</b> ينتهي خلال <span class="timer" data-countdown="6h">06:00:00</span>
         <a href="/sale" style="margin-inline-start:auto;color:#ffcf3f">عرض الكل ›</a>
       </div>
+      <div class="cat-tiles">{b.categories.slice(0, 12).map(cat => <a href={`/c/${cat.slug}`}><span>{cat.icon}</span>{cat.name_ar}</a>)}</div>
       <div class="sec-h"><h2>عروض اليوم</h2><a href="/sale">المزيد ›</a></div>
       <Grid items={sale.results} favs={f} />
       <div class="sec-h"><h2>الأكثر رواجًا</h2><a href="/trending">المزيد ›</a></div>
       <Grid items={trend.results} favs={f} />
       <div class="sec-h"><h2>وصل حديثًا</h2><a href="/new">المزيد ›</a></div>
       <Grid items={newest.results} favs={f} />
+      {recent.length > 0 && <><div class="sec-h"><h2>شاهدتِ مؤخرًا</h2></div><Grid items={recent} favs={f} /></>}
     </Layout>,
   );
 });
+
+// المشاهدات الأخيرة: كوكي للزائرة + جدول للمسجلة
+async function recentlyViewed(c: Context<Env>, exclude?: number): Promise<ProductRow[]> {
+  const ids = (getCookie(c, 'rv') ?? '').split(',').map(Number).filter(n => n && n !== exclude).slice(0, 10);
+  if (!ids.length) return [];
+  const { results } = await c.env.DB.prepare(`SELECT ${PRODUCT_SELECT} FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE p.status='active' AND p.id IN (${ids.map(() => '?').join(',')})`).bind(...ids).all<ProductRow>();
+  return ids.map(id => results.find(r => r.id === id)).filter(Boolean) as ProductRow[];
+}
 
 // ---------- قسم / بحث / قوائم ----------
 async function listPage(c: Context<Env>, opts: { title: string; where: string; binds: any[]; active?: string; q?: string; catId?: number }) {
@@ -71,7 +88,7 @@ async function listPage(c: Context<Env>, opts: { title: string; where: string; b
   if (max) { where += ' AND p.price_lyd<=?'; binds.push(max); }
   if (size) { where += ' AND EXISTS(SELECT 1 FROM variants v WHERE v.product_id=p.id AND v.size=?)'; binds.push(size); }
   if (color) { where += ' AND EXISTS(SELECT 1 FROM variants v WHERE v.product_id=p.id AND v.color=?)'; binds.push(color); }
-  const order = { popular: 'p.sales DESC,p.views DESC', new: 'p.id DESC', price_asc: 'p.price_lyd ASC', price_desc: 'p.price_lyd DESC' }[sort] ?? 'p.sales DESC';
+  const order = { popular: 'p.sales DESC,p.views DESC', new: 'p.id DESC', price_asc: 'p.price_lyd ASC', price_desc: 'p.price_lyd DESC', rating: 'p.rating DESC,p.review_count DESC' }[sort] ?? 'p.sales DESC';
   const [rows, cnt, sizes, colors, f] = await Promise.all([
     db.prepare(`SELECT ${PRODUCT_SELECT} FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE ${where} ORDER BY ${order} LIMIT ? OFFSET ?`).bind(...binds, per, (page - 1) * per).all<ProductRow>(),
     db.prepare(`SELECT COUNT(*) n FROM products p WHERE ${where}`).bind(...binds).first<{ n: number }>(),
@@ -87,10 +104,10 @@ async function listPage(c: Context<Env>, opts: { title: string; where: string; b
     <Layout {...b} title={opts.title} active={opts.active} q={opts.q}>
       <div class="sec-h"><h2>{opts.title} <small style="color:#888;font-weight:400">({total})</small></h2></div>
       <div class="tabs">
-        {[['popular', 'الأكثر رواجًا'], ['new', 'الأحدث'], ['price_asc', 'السعر ↑'], ['price_desc', 'السعر ↓']].map(([k, l]) =>
+        {[['popular', 'الأكثر رواجًا'], ['new', 'الأحدث'], ['rating', 'الأعلى تقييمًا'], ['price_asc', 'السعر ↑'], ['price_desc', 'السعر ↓']].map(([k, l]) =>
           <a href={link('sort', k)} class={sort === k ? 'on' : ''}>{l}</a>)}
       </div>
-      <form class="inline" method="get" style="margin:6px 0 14px;font-size:13px">
+      <form class="inline filters" method="get">
         {[...url.searchParams].filter(([k]) => !['min', 'max', 'page'].includes(k)).map(([k, v]) => <input type="hidden" name={k} value={v} />)}
         السعر: <input type="number" name="min" placeholder="من" value={min ?? ''} style="width:80px" /> — <input type="number" name="max" placeholder="إلى" value={max ?? ''} style="width:80px" />
         <button class="btn sm ghost" type="submit">تطبيق</button>
@@ -139,34 +156,43 @@ store.get('/new', (c) => listPage(c, { title: 'وصل حديثًا', where: "p.s
 // ---------- صفحة المنتج ----------
 store.get('/p/:slug', async (c) => {
   const db = c.env.DB;
-  const p = await db.prepare(`SELECT ${PRODUCT_SELECT} FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE p.slug=? AND p.status IN ('active','unavailable')`).bind(c.req.param('slug')).first<ProductRow>();
+  const p = await db.prepare(`SELECT ${PRODUCT_SELECT},p.review_count FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE p.slug=? AND p.status IN ('active','unavailable')`).bind(c.req.param('slug')).first<ProductRow & { review_count: number }>();
   if (!p) return c.notFound();
-  const [imgs, vars, related, f] = await Promise.all([
+  const [imgs, vars, related, f, reviews, fit] = await Promise.all([
     db.prepare('SELECT url FROM product_images WHERE product_id=? ORDER BY sort').bind(p.id).all<{ url: string }>(),
     db.prepare('SELECT id,color,size,price_delta_lyd,in_stock,image_url FROM variants WHERE product_id=?').bind(p.id).all<any>(),
     db.prepare(`SELECT ${PRODUCT_SELECT} FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE p.status='active' AND p.category_id=? AND p.id<>? ORDER BY p.sales DESC LIMIT 10`).bind(p.category_id, p.id).all<ProductRow>(),
     favs(c),
+    db.prepare("SELECT r.*,u.name FROM reviews r JOIN users u ON u.id=r.user_id WHERE r.product_id=? AND r.status='approved' ORDER BY r.id DESC LIMIT 20").bind(p.id).all<any>(),
+    db.prepare("SELECT size_fit,COUNT(*) n FROM reviews WHERE product_id=? AND status='approved' AND size_fit IS NOT NULL GROUP BY size_fit").bind(p.id).all<any>(),
   ]);
   c.executionCtx.waitUntil(db.prepare('UPDATE products SET views=views+1 WHERE id=?').bind(p.id).run());
+  // المشاهدات الأخيرة
+  const rv = [p.id, ...(getCookie(c, 'rv') ?? '').split(',').map(Number).filter(n => n && n !== p.id)].slice(0, 12);
+  setCookie(c, 'rv', rv.join(','), { path: '/', maxAge: 30 * 86400, sameSite: 'Lax' });
+  const recent = await recentlyViewed(c, p.id);
   const colors = [...new Set(vars.results.map(v => v.color).filter(Boolean))] as string[];
   const sizes = [...new Set(vars.results.map(v => v.size).filter(Boolean))] as string[];
   const images = imgs.results.length ? imgs.results.map(i => i.url) : ['/placeholder.svg'];
   const off = p.compare_price_lyd && p.compare_price_lyd > p.price_lyd ? Math.round((1 - p.price_lyd / p.compare_price_lyd) * 100) : 0;
   const isClothing = ['dresses', 'abayas', 'tops', 'kids'].includes(p.cat_slug ?? '');
+  const fitTotal = fit.results.reduce((a, r) => a + r.n, 0);
+  const fitPct = (k: string) => fitTotal ? Math.round((fit.results.find(r => r.size_fit === k)?.n ?? 0) / fitTotal * 100) : 0;
+  const s = await loadSettings(db);
   const b = await base(c);
   return c.html(
     <Layout {...b} title={p.title_ar} active={p.cat_slug}>
+      <div class="crumbs"><a href="/">الرئيسية</a> › <a href={`/c/${p.cat_slug}`}>{p.cat_name}</a> › <span>{p.title_ar.slice(0, 40)}</span></div>
       <div class="pd" data-product={p.id}>
         <div class="gallery">
-          <div class="main"><img id="mainImg" src={images[0]} alt={p.title_ar} /></div>
+          <div class="main"><img id="mainImg" src={images[0]} alt={p.title_ar} />{off > 0 && <span class="tag">-{off}%</span>}</div>
           <div class="thumbs">{images.map((u, i) => <img src={u} class={i === 0 ? 'on' : ''} data-thumb loading="lazy" />)}</div>
         </div>
         <div>
-          <div style="font-size:12px;color:#888"><a href={`/c/${p.cat_slug}`}>{p.cat_name}</a></div>
           <h1>{p.title_ar}</h1>
-          <div class="meta" style="font-size:13px;color:#666">★ {p.rating.toFixed(1)} · {p.sales}+ بيعت · {p.views} مشاهدة</div>
+          <div class="meta" style="font-size:13px;color:#666"><a href="#reviews"><Stars n={p.rating} /> {p.rating.toFixed(1)} ({p.review_count} تقييم)</a> · {p.sales}+ بيعت · {p.views} مشاهدة</div>
           <div class="price" style="margin-top:8px">{fmt(p.price_lyd)}{off > 0 && <s>{fmt(p.compare_price_lyd!)}</s>}{off > 0 && <span class="tag" style="position:static;margin-inline-start:8px;font-size:13px;background:#b5124f;color:#fff;padding:2px 8px;border-radius:4px">-{off}%</span>}</div>
-          <div class="price-note">السعر شامل الشحن من الصين والجمارك. التوصيل داخل ليبيا {fmt(15)} (مجاني فوق {fmt(500)}).</div>
+          <div class="price-note">السعر شامل الشحن من الصين والجمارك. التوصيل داخل ليبيا {fmt(parseFloat(s.delivery_lyd))} (مجاني فوق {fmt(parseFloat(s.free_ship_over_lyd))}). تكسبين <b>{Math.floor(p.price_lyd * parseFloat(s.points_per_lyd || '1'))} نقطة</b> عند التسليم.</div>
           {!p.in_stock && <Flash type="err" msg="هذا المنتج غير متوفر حاليًا عند المورد. أضيفيه للمفضلة وسنخبرك عند توفره." />}
           <form method="post" action="/cart/add" id="addForm">
             <input type="hidden" name="product_id" value={p.id} />
@@ -177,7 +203,9 @@ store.get('/p/:slug', async (c) => {
             )}
             {sizes.length > 0 && (
               <div class="opts"><h4>المقاس: <span id="sizeLbl"></span> <a href="#sizeGuide" style="font-weight:400;font-size:12px;color:#b5124f;margin-inline-start:8px">دليل المقاسات</a></h4>
-                <div class="chips" data-opt="size">{sizes.map(s => <span class="chip" data-val={s}>{s}</span>)}</div></div>
+                <div class="chips" data-opt="size">{sizes.map(sz => <span class="chip" data-val={sz}>{sz}</span>)}</div>
+                {fitTotal > 0 && <div class="fit"><span>رأي الزبونات في المقاس:</span> <b>{fitPct('true')}%</b> مطابق · <b>{fitPct('small')}%</b> أصغر · <b>{fitPct('large')}%</b> أكبر</div>}
+              </div>
             )}
             <script type="application/json" id="variantsJson" dangerouslySetInnerHTML={{ __html: JSON.stringify(vars.results).replace(/</g, '\\u003c') }}></script>
             <div class="opts"><h4>الكمية</h4>
@@ -185,15 +213,15 @@ store.get('/p/:slug', async (c) => {
               {p.min_qty > 1 && <span style="font-size:12px;color:#888;margin-inline-start:8px">الحد الأدنى {p.min_qty} قطع</span>}
             </div>
             <div class="inline" style="margin:16px 0">
-              <button class="btn" type="submit" disabled={!p.in_stock} style="flex:1">أضيفي إلى السلة</button>
+              <button class="btn brand" type="submit" disabled={!p.in_stock} style="flex:1">أضيفي إلى السلة</button>
               <button class="btn ghost" type="button" data-fav={p.id}>{f.has(p.id) ? '♥ في المفضلة' : '♡ المفضلة'}</button>
             </div>
           </form>
           <div class="trust">
             <div>🚚 <b>الوصول خلال 15–25 يومًا</b><br />شحن جوي مجمّع من الصين</div>
-            <div>💳 <b>ادفعي بالدينار</b><br />سداد · معاملات · موبي كاش · عربون</div>
+            <div>💳 <b>ادفعي بالدينار</b><br />بطاقة مصرفية · سداد · إدفعلي · موبي كاش</div>
             <div>🔍 <b>فحص قبل الشحن</b><br />صور للبضاعة من مخزننا في الصين</div>
-            <div>↩️ <b>ضمان الوصول</b><br />استرجاع كامل إن لم تصل</div>
+            <div>↩️ <b>ضمان الوصول</b><br />تعويض كامل لأي تالف أو مختلف</div>
           </div>
           <details open><summary>الوصف</summary><div style="font-size:14px;white-space:pre-line">{p.description_ar ?? 'لا يوجد وصف.'}</div></details>
           {isClothing && (
@@ -209,12 +237,19 @@ store.get('/p/:slug', async (c) => {
             </details>
           )}
           <details><summary>الشحن والإرجاع</summary>
-            <div style="font-size:14px">نشتري المنتج من المورد بعد تأكيد طلبك، ثم يُجمع مع طلبات أخرى في مخزننا بالصين ويُشحن جوًّا إلى ليبيا. لا يمكن إرجاع البضاعة إلى الصين، لكن نعوّض أي منتج تالف أو مختلف عن الوصف بصور الفحص.</div>
+            <div style="font-size:14px">نشتري المنتج من المورد بعد تأكيد طلبك، ثم يُجمع مع طلبات أخرى في مخزننا بالصين ويُشحن جوًّا إلى ليبيا. لا يمكن إرجاع البضاعة إلى الصين، لكن نعوّض أي منتج تالف أو مختلف عن الوصف بصور الفحص. <a href="/pages/returns" style="color:#b5124f">سياسة الإرجاع الكاملة</a></div>
           </details>
         </div>
       </div>
+      <section id="reviews" class="card-box" style="margin-top:20px">
+        <div class="sec-h" style="margin:0 0 10px"><h2>التقييمات ({p.review_count})</h2><span><Stars n={p.rating} size={18} /> <b>{p.rating.toFixed(1)}</b> / 5</span></div>
+        {reviews.results.length === 0 ? <p style="color:#888">لا تقييمات منشورة بعد. كوني أول من يقيّم بعد استلام طلبك.</p> : reviews.results.map(r => (
+          <div class="review"><div class="rv-h"><b>{r.name.split(' ')[0]} {r.name.split(' ')[1]?.slice(0, 1) ?? ''}.</b><Stars n={r.rating} /><small style="color:#888">{timeAgo(r.created_at)}</small>{r.size_fit && <span class="status">{{ small: 'المقاس أصغر', true: 'المقاس مطابق', large: 'المقاس أكبر' }[r.size_fit as string]}</span>}</div><p>{r.body}</p>{r.image_url && <a href={r.image_url} target="_blank"><img src={r.image_url} class="rv-img" alt="" /></a>}</div>
+        ))}
+      </section>
       <div class="sec-h"><h2>قد يعجبك أيضًا</h2></div>
       <Grid items={related.results} favs={f} />
+      {recent.length > 0 && <><div class="sec-h"><h2>شاهدتِ مؤخرًا</h2></div><Grid items={recent} favs={f} /></>}
     </Layout>,
   );
 });
@@ -259,6 +294,17 @@ store.post('/cart/update', async (c) => {
   else await c.env.DB.prepare('UPDATE cart_items SET qty=? WHERE id=? AND user_id=?').bind(qty, id, u.id).run();
   return c.redirect('/cart');
 });
+store.post('/cart/coupon', async (c) => {
+  const u = c.get('user'); if (!u) return c.redirect('/login');
+  const f = await c.req.parseBody();
+  const back = String(f.back ?? '/cart');
+  if (f.action === 'remove' || !f.code) { deleteCookie(c, 'coupon', { path: '/' }); return c.redirect(back); }
+  const rows = await cartRows(c.env.DB, u.id);
+  const r = await checkCoupon(c.env.DB, String(f.code), u.id, rows.reduce((a, x) => a + x.line, 0));
+  if (!r.ok) { deleteCookie(c, 'coupon', { path: '/' }); return c.redirect(`${back}?cerr=${encodeURIComponent(r.error)}`); }
+  setCookie(c, 'coupon', r.coupon.code, { path: '/', maxAge: 86400, sameSite: 'Lax' });
+  return c.redirect(`${back}?cok=1`);
+});
 
 async function cartRows(db: D1Database, uid: number) {
   const { results } = await db.prepare(
@@ -270,18 +316,60 @@ async function cartRows(db: D1Database, uid: number) {
   return results.map(r => ({ ...r, unit: r.price_lyd + r.delta, line: (r.price_lyd + r.delta) * r.qty }));
 }
 
+// حساب ملخص السلة: خصم كوبون + نقاط + توصيل
+async function cartTotals(c: Context<Env>, rows: any[], usePoints: boolean) {
+  const db = c.env.DB; const u = c.get('user')!;
+  const s = await loadSettings(db);
+  const subtotal = rows.reduce((a, r) => a + r.line, 0);
+  let discount = 0, freeShip = false, couponErr: string | null = null, coupon: any = null;
+  const code = getCookie(c, 'coupon');
+  if (code) {
+    const r = await checkCoupon(db, code, u.id, subtotal);
+    if (r.ok) { discount = r.discount; freeShip = r.freeShip; coupon = r.coupon; } else { couponErr = r.error; }
+  }
+  const afterCoupon = Math.max(0, subtotal - discount);
+  const ptsValue = parseFloat(s.points_value_per_100 || '1') / 100;   // قيمة النقطة الواحدة بالدينار
+  const maxPts = Math.floor(afterCoupon * parseInt(s.points_max_percent || '50') / 100 / ptsValue);
+  const pointsUsed = usePoints ? Math.min(u.points, maxPts) : 0;
+  const pointsLyd = Math.round(pointsUsed * ptsValue * 100) / 100;
+  const delivery = freeShip || subtotal >= parseFloat(s.free_ship_over_lyd) ? 0 : parseFloat(s.delivery_lyd);
+  const total = Math.round((afterCoupon - pointsLyd + delivery) * 100) / 100;
+  return { s, subtotal, discount, freeShip, coupon, couponErr, pointsUsed, pointsLyd, maxPts, ptsValue, delivery, total };
+}
+
+const Summary = ({ t, u, rows, showItems, usePointsToggle }: any) => (
+  <div class="summary">
+    <h3 style="margin:0 0 10px">ملخص الطلب</h3>
+    {showItems && rows.map((r: any) => <div class="row" style="font-size:13px"><span>{r.title_ar.slice(0, 30)}… × {r.qty}</span><span>{fmt(r.line)}</span></div>)}
+    <div class="row"><span>المجموع</span><span>{fmt(t.subtotal)}</span></div>
+    {t.discount > 0 && <div class="row" style="color:#1a9c5b"><span>خصم الكوبون {t.coupon?.code}</span><span>−{fmt(t.discount)}</span></div>}
+    {usePointsToggle && u.points > 0 && <label class="row" style="cursor:pointer"><span><input type="checkbox" name="use_points" value="1" checked={t.pointsUsed > 0} onchange="location.href='/checkout?use_points='+(this.checked?1:0)" /> استخدام نقاطي ({u.points} نقطة)</span><span style="color:#1a9c5b">{t.pointsUsed > 0 ? `−${fmt(t.pointsLyd)}` : `حتى ${fmt(t.maxPts * t.ptsValue)}`}</span></label>}
+    {!usePointsToggle && t.pointsUsed > 0 && <div class="row" style="color:#1a9c5b"><span>نقاط ({t.pointsUsed})</span><span>−{fmt(t.pointsLyd)}</span></div>}
+    <div class="row"><span>التوصيل داخل ليبيا</span><span>{t.delivery ? fmt(t.delivery) : 'مجاني'}</span></div>
+    <div class="row tot"><span>الإجمالي</span><span>{fmt(t.total)}</span></div>
+  </div>
+);
+
+const CouponBox = ({ c, t, back }: { c: Context<Env>; t: any; back: string }) => (
+  <form method="post" action="/cart/coupon" class="coupon-box">
+    <input type="hidden" name="back" value={back} />
+    {t.coupon ? <><span>🎟️ الكوبون <b>{t.coupon.code}</b> مُطبَّق</span><button class="btn sm ghost" name="action" value="remove">إزالة</button></>
+      : <><input type="text" name="code" placeholder="كود الكوبون" value={c.req.query('cerr') ? '' : ''} /><button class="btn sm">تطبيق</button><a href="/account/coupons" style="font-size:12px;color:#b5124f">كوبوناتي</a></>}
+    {c.req.query('cerr') && <div class="flash err" style="margin:6px 0 0;padding:6px 10px">{c.req.query('cerr')}</div>}
+    {t.couponErr && <div class="flash err" style="margin:6px 0 0;padding:6px 10px">{t.couponErr}</div>}
+  </form>
+);
+
 store.get('/cart', async (c) => {
   const u = c.get('user');
   const b = await base(c);
   if (!u) return c.html(<Layout {...b} title="السلة"><div class="empty"><div class="big">🛒</div><a class="btn" href="/login?next=/cart">سجّلي الدخول لعرض السلة</a></div></Layout>);
   const rows = await cartRows(c.env.DB, u.id);
-  const s = await loadSettings(c.env.DB);
-  const subtotal = rows.reduce((a, r) => a + r.line, 0);
-  const delivery = subtotal >= parseFloat(s.free_ship_over_lyd) ? 0 : parseFloat(s.delivery_lyd);
+  const t = await cartTotals(c, rows, false);
   const unavailable = rows.some(r => !r.in_stock || r.status !== 'active');
   return c.html(
     <Layout {...b} title="السلة">
-      <Flash msg={c.req.query('added') ? 'أُضيف المنتج إلى السلة ✓' : undefined} />
+      <Flash msg={c.req.query('added') ? 'أُضيف المنتج إلى السلة ✓' : c.req.query('cok') ? 'طُبّق الكوبون ✓' : undefined} />
       <div class="sec-h"><h2>سلة التسوق ({rows.length})</h2></div>
       {rows.length === 0 ? <div class="empty"><div class="big">🛒</div>سلتك فارغة<br /><br /><a class="btn" href="/">ابدئي التسوق</a></div> : (
         <div class="two">
@@ -303,11 +391,10 @@ store.get('/cart', async (c) => {
               </div>
             ))}
           </div>
-          <div class="summary">
-            <div class="row"><span>المجموع</span><span>{fmt(subtotal)}</span></div>
-            <div class="row"><span>التوصيل داخل ليبيا</span><span>{delivery ? fmt(delivery) : 'مجاني'}</span></div>
-            <div class="row tot"><span>الإجمالي</span><span>{fmt(subtotal + delivery)}</span></div>
-            <a class={`btn ${unavailable ? 'disabled' : ''}`} href={unavailable ? '#' : '/checkout'} style="display:block;text-align:center;margin-top:12px" aria-disabled={unavailable}>إتمام الطلب</a>
+          <div>
+            <CouponBox c={c} t={t} back="/cart" />
+            <Summary t={t} u={u} rows={rows} />
+            <a class={`btn brand ${unavailable ? 'disabled' : ''}`} href={unavailable ? '#' : '/checkout'} style="display:block;text-align:center;margin-top:12px" aria-disabled={unavailable}>إتمام الطلب</a>
             <p style="font-size:12px;color:#888;margin:10px 0 0">الأسعار شاملة الشحن الدولي والجمارك. لن تُطالبي بأي مبلغ إضافي عند الاستلام.</p>
           </div>
         </div>
@@ -321,33 +408,42 @@ store.get('/checkout', async (c) => {
   const u = c.get('user'); if (!u) return c.redirect('/login?next=/checkout');
   const rows = await cartRows(c.env.DB, u.id);
   if (!rows.length) return c.redirect('/cart');
-  const s = await loadSettings(c.env.DB);
-  const subtotal = rows.reduce((a, r) => a + r.line, 0);
-  const delivery = subtotal >= parseFloat(s.free_ship_over_lyd) ? 0 : parseFloat(s.delivery_lyd);
+  const t = await cartTotals(c, rows, c.req.query('use_points') === '1');
+  const addrs = await c.env.DB.prepare('SELECT * FROM addresses WHERE user_id=? ORDER BY is_default DESC,id DESC').bind(u.id).all<any>();
+  const mp = loadMyPay(t.s, c.env);
   const b = await base(c);
+  const pm = c.req.query('pm') ?? Object.keys(PAYMENT_METHODS)[0];
   return c.html(
     <Layout {...b} title="إتمام الطلب">
-      <div class="sec-h"><h2>إتمام الطلب</h2></div>
-      <form method="post" action="/checkout" class="two">
+      <div class="sec-h"><h2>إتمام الطلب</h2><a href="/cart">← العودة للسلة</a></div>
+      <form method="post" action="/checkout" class="two" id="checkoutForm">
         <div>
-          <div class="card-box"><h3>عنوان التوصيل</h3>
-            <label>الاسم الكامل</label><input type="text" name="name" value={u.name} required />
-            <label>رقم الهاتف</label><input type="tel" name="phone" value={u.phone} required />
-            <label>المدينة</label><select name="city" required>{CITIES.map(ct => <option selected={ct === u.city}>{ct}</option>)}</select>
-            <label>العنوان بالتفصيل</label><textarea name="address" rows={2} required>{u.address ?? ''}</textarea>
+          <div class="card-box"><h3>📍 عنوان التوصيل</h3>
+            {addrs.results.length > 0 && <div class="addr-pick">{addrs.results.map((a, i) => <label class="radio"><input type="radio" name="address_id" value={a.id} checked={i === 0} /> <span><b>{a.label || a.name}</b> — {a.name} · {a.phone}<br /><small>{a.city} — {a.address}</small></span></label>)}
+              <label class="radio"><input type="radio" name="address_id" value="" /> <span>عنوان جديد</span></label></div>}
+            <div id="newAddr" class={addrs.results.length ? 'collapsed' : ''}>
+              <label>الاسم الكامل</label><input type="text" name="name" value={u.name} />
+              <label>رقم الهاتف</label><input type="tel" name="phone" value={u.phone} />
+              <label>المدينة</label><select name="city">{CITIES.map(ct => <option selected={ct === u.city}>{ct}</option>)}</select>
+              <label>العنوان بالتفصيل</label><textarea name="address" rows={2}>{u.address ?? ''}</textarea>
+              <label class="radio" style="border:0;padding:4px 0"><input type="checkbox" name="save_address" value="1" checked /> احفظي هذا العنوان في دفتر عناويني</label>
+            </div>
             <label>ملاحظات (اختياري)</label><input type="text" name="note" />
           </div>
-          <div class="card-box"><h3>طريقة الدفع</h3>
-            {Object.entries(PAYMENT_METHODS).map(([k, v], i) => <label class="radio"><input type="radio" name="payment_method" value={k} checked={i === 0} required /> {v}</label>)}
-            <p style="font-size:12px;color:#888">بعد تأكيد الطلب ستظهر لك تعليمات الدفع ورقم المرجع.</p>
+          <div class="card-box"><h3>💳 طريقة الدفع</h3>
+            <div class="pm-list">
+              {Object.entries(PAYMENT_METHODS).filter(([, v]) => !v.online || mp.gateways.includes(v.gateway!)).map(([k, v]) => (
+                <label class={`radio pm ${v.online ? 'online' : ''}`}><input type="radio" name="payment_method" value={k} checked={k === pm} required /> <span class="pm-i">{v.icon}</span><span><b>{v.ar}</b>{v.online && <i class="pm-tag">فوري عبر MyPay</i>}<br /><small>{v.desc}</small></span></label>
+              ))}
+            </div>
+            {mp.mode === 'mock' && <p style="font-size:12px;color:#d68b00">⚠️ بوابة الدفع في وضع المحاكاة (اختبار) — لا يُخصم أي مبلغ حقيقي.</p>}
           </div>
         </div>
-        <div class="summary">
-          <h3 style="margin:0 0 10px">ملخص الطلب</h3>
-          {rows.map(r => <div class="row" style="font-size:13px"><span>{r.title_ar.slice(0, 30)}… × {r.qty}</span><span>{fmt(r.line)}</span></div>)}
-          <div class="row" style="margin-top:8px"><span>التوصيل</span><span>{delivery ? fmt(delivery) : 'مجاني'}</span></div>
-          <div class="row tot"><span>الإجمالي</span><span>{fmt(subtotal + delivery)}</span></div>
-          <button class="btn" type="submit" style="width:100%;margin-top:12px">تأكيد الطلب</button>
+        <div>
+          <CouponBox c={c} t={t} back="/checkout" />
+          <Summary t={t} u={u} rows={rows} showItems usePointsToggle />
+          <button class="btn brand" type="submit" style="width:100%;margin-top:12px;font-size:16px">تأكيد الطلب {t.total > 0 ? `· ${fmt(t.total)}` : ''}</button>
+          <p style="font-size:12px;color:#888;margin:10px 0 0">بتأكيد الطلب توافقين على <a href="/pages/terms" style="color:#b5124f">الشروط</a> و<a href="/pages/returns" style="color:#b5124f">سياسة الإرجاع</a>.</p>
         </div>
       </form>
     </Layout>,
@@ -361,19 +457,32 @@ store.post('/checkout', async (c) => {
   const rows = await cartRows(db, u.id);
   if (!rows.length) return c.redirect('/cart');
   if (rows.some(r => !r.in_stock || r.status !== 'active')) return c.redirect('/cart');
-  const s = await loadSettings(db);
-  const subtotal = rows.reduce((a, r) => a + r.line, 0);
-  const delivery = subtotal >= parseFloat(s.free_ship_over_lyd) ? 0 : parseFloat(s.delivery_lyd);
-  // توزيع الطلب على شريك شحن نشط حسب نسبة التوزيع (أبسط صورة: الأعلى نسبة ثم الأقل حملًا)
+  const t = await cartTotals(c, rows, f.use_points === '1');
+  const method = PAYMENT_METHODS[String(f.payment_method)] ? String(f.payment_method) : 'transfer';
+  // العنوان
+  let ship: { name: string; phone: string; city: string; address: string };
+  if (f.address_id) {
+    const a = await db.prepare('SELECT * FROM addresses WHERE id=? AND user_id=?').bind(Number(f.address_id), u.id).first<any>();
+    if (!a) return c.redirect('/checkout');
+    ship = { name: a.name, phone: a.phone, city: a.city, address: a.address };
+  } else {
+    ship = { name: String(f.name ?? '').trim(), phone: String(f.phone ?? '').trim(), city: String(f.city ?? ''), address: String(f.address ?? '').trim() };
+    if (!ship.name || !ship.phone || !ship.address) return c.redirect('/checkout?err=addr');
+    if (f.save_address) {
+      const n = await db.prepare('SELECT COUNT(*) n FROM addresses WHERE user_id=?').bind(u.id).first<any>();
+      await db.prepare('INSERT INTO addresses(user_id,name,phone,city,address,is_default) VALUES(?,?,?,?,?,?)').bind(u.id, ship.name, ship.phone, ship.city, ship.address, n.n === 0 ? 1 : 0).run();
+    }
+  }
+  // توزيع الطلب على شريك شحن نشط حسب نسبة التوزيع
   const partner = await db.prepare(
     `SELECT p.id FROM partners p WHERE p.active=1 ORDER BY p.share_percent DESC,
      (SELECT COUNT(*) FROM orders o WHERE o.partner_id=p.id AND o.status IN ('paid','purchasing')) ASC LIMIT 1`,
   ).first<{ id: number }>();
   const ins = await db.prepare(
-    `INSERT INTO orders(code,user_id,partner_id,status,payment_method,subtotal_lyd,shipping_lyd,total_lyd,fx_rate_used,ship_name,ship_phone,ship_city,ship_address,note)
-     VALUES('tmp',?,?,'pending_payment',?,?,?,?,?,?,?,?,?,?)`,
-  ).bind(u.id, partner?.id ?? null, String(f.payment_method), subtotal, delivery, subtotal + delivery, parseFloat(s.fx_cny_lyd),
-    String(f.name), String(f.phone), String(f.city), String(f.address), f.note ? String(f.note) : null).run();
+    `INSERT INTO orders(code,user_id,partner_id,status,payment_method,subtotal_lyd,shipping_lyd,total_lyd,fx_rate_used,ship_name,ship_phone,ship_city,ship_address,note,coupon_code,discount_lyd,points_used,points_lyd)
+     VALUES('tmp',?,?,'pending_payment',?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+  ).bind(u.id, partner?.id ?? null, method, t.subtotal, t.delivery, t.total, parseFloat(t.s.fx_cny_lyd),
+    ship.name, ship.phone, ship.city, ship.address, f.note ? String(f.note) : null, t.coupon?.code ?? null, t.discount, t.pointsUsed, t.pointsLyd).run();
   const oid = ins.meta.last_row_id as number;
   const code = orderCode(oid);
   const stmts = [
@@ -383,70 +492,73 @@ store.post('/checkout', async (c) => {
     ).bind(oid, r.product_id, r.variant_id, r.title_ar, r.color, r.size, r.qty, r.unit, r.source_offer_id, r.source_url)),
     db.prepare("INSERT INTO order_events(order_id,status,note,by_user_id) VALUES(?,'pending_payment','تم إنشاء الطلب',?)").bind(oid, u.id),
     db.prepare('DELETE FROM cart_items WHERE user_id=?').bind(u.id),
-    db.prepare('UPDATE users SET city=?,address=? WHERE id=?').bind(String(f.city), String(f.address), u.id),
+    db.prepare('UPDATE users SET city=?,address=? WHERE id=?').bind(ship.city, ship.address, u.id),
   ];
+  if (t.coupon) {
+    stmts.push(db.prepare('INSERT INTO coupon_uses(coupon_id,user_id,order_id,discount_lyd) VALUES(?,?,?,?)').bind(t.coupon.id, u.id, oid, t.discount));
+    stmts.push(db.prepare('UPDATE coupons SET used_count=used_count+1 WHERE id=?').bind(t.coupon.id));
+  }
+  if (t.pointsUsed > 0) {
+    stmts.push(db.prepare('UPDATE users SET points=points-? WHERE id=?').bind(t.pointsUsed, u.id));
+    stmts.push(db.prepare("INSERT INTO points_ledger(user_id,delta,reason,order_id) VALUES(?,?,'استخدام نقاط في طلب',?)").bind(u.id, -t.pointsUsed, oid));
+  }
   await db.batch(stmts);
+  deleteCookie(c, 'coupon', { path: '/' });
   await notify(db, u.id, `طلبك ${code} بانتظار الدفع`, 'أكملي الدفع ليبدأ فريقنا بالشراء.', `/orders/${code}`);
+  if (PAYMENT_METHODS[method].online) return c.redirect(`/pay/start/${code}`);
   return c.redirect(`/orders/${code}?new=1`);
 });
 
-// ---------- الطلبات ----------
-store.get('/account', async (c) => {
-  const u = c.get('user'); if (!u) return c.redirect('/login?next=/account');
-  const { results } = await c.env.DB.prepare('SELECT id,code,status,total_lyd,created_at FROM orders WHERE user_id=? ORDER BY id DESC').bind(u.id).all<any>();
-  const notifs = await c.env.DB.prepare('SELECT * FROM notifications WHERE user_id=? ORDER BY id DESC LIMIT 10').bind(u.id).all<any>();
-  const b = await base(c);
-  return c.html(
-    <Layout {...b} title="حسابي">
-      <div class="sec-h"><h2>مرحبًا {u.name} 👋</h2><a href="/logout">تسجيل الخروج</a></div>
-      <div class="two">
-        <div class="card-box"><h3>طلباتي</h3>
-          {results.length === 0 ? <p style="color:#888">لا توجد طلبات بعد.</p> : (
-            <div class="tbl-wrap"><table class="tbl"><tr><th>رقم الطلب</th><th>الحالة</th><th>الإجمالي</th><th>التاريخ</th></tr>
-              {results.map(o => <tr><td><a href={`/orders/${o.code}`} style="color:#b5124f;font-weight:700">{o.code}</a></td><td><span class={`status ${ORDER_STATUS[o.status]?.color}`}>{ORDER_STATUS[o.status]?.ar}</span></td><td>{fmt(o.total_lyd)}</td><td>{timeAgo(o.created_at)}</td></tr>)}
-            </table></div>
-          )}
-        </div>
-        <div class="card-box"><h3>الإشعارات</h3>
-          {notifs.results.length === 0 ? <p style="color:#888">لا إشعارات.</p> : notifs.results.map(n => (
-            <div style="border-bottom:1px solid #eee;padding:8px 0;font-size:14px"><a href={n.link ?? '#'}><b>{n.title}</b></a><br /><span style="color:#666">{n.body}</span><div style="font-size:11px;color:#999">{timeAgo(n.created_at)}</div></div>
-          ))}
-        </div>
-      </div>
-    </Layout>,
-  );
-});
-
+// ---------- الطلب (يوجّه /account إلى المنطقة الجديدة) ----------
 store.get('/orders/:code', async (c) => {
-  const u = c.get('user'); if (!u) return c.redirect('/login');
+  const u = c.get('user'); if (!u) return c.redirect('/login?next=' + encodeURIComponent(c.req.path));
   const db = c.env.DB;
   const o = await db.prepare('SELECT * FROM orders WHERE code=? AND (user_id=? OR ?=1)').bind(c.req.param('code'), u.id, u.role === 'admin' ? 1 : 0).first<any>();
   if (!o) return c.notFound();
-  const [items, events] = await Promise.all([
+  const [items, events, pays] = await Promise.all([
     db.prepare(`SELECT oi.*,p.slug,(SELECT url FROM product_images i WHERE i.product_id=p.id ORDER BY sort LIMIT 1) AS image FROM order_items oi JOIN products p ON p.id=oi.product_id WHERE order_id=?`).bind(o.id).all<any>(),
     db.prepare('SELECT * FROM order_events WHERE order_id=? ORDER BY id').bind(o.id).all<any>(),
+    db.prepare('SELECT * FROM payments WHERE order_id=? ORDER BY id DESC').bind(o.id).all<any>(),
   ]);
+  const s = await loadSettings(db);
   const steps = ['paid', 'purchased', 'at_warehouse', 'shipped', 'arrived', 'ready', 'delivered'];
   const cur = ORDER_STATUS[o.status]?.step ?? 0;
   const done = new Map(events.results.map(e => [e.status, e.created_at]));
+  const pm = PAYMENT_METHODS[o.payment_method];
   const b = await base(c);
+  const paid = pays.results.find(p => p.status === 'paid');
   return c.html(
     <Layout {...b} title={`الطلب ${o.code}`}>
-      <Flash msg={c.req.query('new') ? '🎉 تم استلام طلبك! أكملي الدفع بالطريقة المختارة ليبدأ الشراء.' : undefined} />
+      <Flash msg={c.req.query('new') ? '🎉 تم استلام طلبك! أكملي الدفع بالطريقة المختارة ليبدأ الشراء.' : c.req.query('paid') ? '✅ تم الدفع بنجاح! بدأ فريقنا في الصين شراء منتجاتك.' : undefined} />
+      <Flash type="err" msg={c.req.query('pay') === 'cancelled' ? 'أُلغيت عملية الدفع. يمكنك المحاولة مرة أخرى.' : c.req.query('pay') === 'failed' ? 'فشلت عملية الدفع. تحققي من الرصيد وحاولي مجددًا أو اختاري طريقة أخرى.' : c.req.query('err') === 'cancel' ? 'لا يمكن إلغاء الطلب بعد الدفع — افتحي تذكرة إلغاء.' : undefined} />
+      <div class="crumbs"><a href="/account">حسابي</a> › <a href="/account/orders">طلباتي</a> › {o.code}</div>
       <div class="sec-h"><h2>الطلب {o.code}</h2><span class={`status ${ORDER_STATUS[o.status]?.color}`}>{ORDER_STATUS[o.status]?.ar}</span></div>
       <div class="two">
         <div>
           {o.status === 'pending_payment' && (
-            <div class="card-box" style="border-color:#b5124f"><h3>تعليمات الدفع — {PAYMENT_METHODS[o.payment_method]}</h3>
+            <div class="card-box pay-box"><h3>{pm?.icon} الدفع — {pm?.ar}</h3>
               <p style="font-size:14px">المبلغ: <b>{fmt(o.total_lyd)}</b> · المرجع: <b class="mono" style="display:inline;padding:2px 6px">{o.code}</b></p>
-              <p style="font-size:13px;color:#666">{o.payment_method === 'cod_deposit' ? 'ادفعي عربون 30% الآن والباقي عند الاستلام. سيتواصل معك فريقنا لتأكيد العربون.' : 'حوّلي المبلغ واكتبي رقم الطلب في الملاحظة، ثم أرسلي صورة الإيصال. يُفعَّل الطلب خلال ساعات العمل.'}</p>
-              <p style="font-size:13px">واتساب التأكيد: <a href="https://wa.me/218910000000" style="color:#b5124f;direction:ltr">+218 91 000 0000</a></p>
+              {pm?.online ? (
+                <>
+                  <a class="btn brand" href={`/pay/start/${o.code}`} style="width:100%;text-align:center;display:block">ادفعي الآن عبر MyPay {pm.icon}</a>
+                  <details style="margin-top:8px"><summary style="font-size:13px;font-weight:400;color:#666">اختيار وسيلة أخرى</summary>
+                    <div class="inline">{Object.entries(PAYMENT_METHODS).filter(([k, v]) => v.online && k !== o.payment_method).map(([k, v]) => <a class="btn sm ghost" href={`/pay/start/${o.code}?method=${k}`}>{v.icon} {v.ar}</a>)}</div></details>
+                  {pays.results.length > 0 && <p style="font-size:12px;color:#888;margin-top:8px">آخر محاولة: {pays.results[0].trx_ref} — {{ created: 'أُنشئت', pending: 'بانتظار البوابة', paid: 'مدفوعة', failed: 'فشلت', cancelled: 'أُلغيت', refunded: 'مسترجعة' }[pays.results[0].status as string]}</p>}
+                </>
+              ) : (
+                <>
+                  <p style="font-size:13px;color:#666">{pm?.desc}</p>
+                  <p style="font-size:13px">واتساب التأكيد: <a href={`https://wa.me/${s.whatsapp_number}?text=${encodeURIComponent(`طلب ${o.code} — المبلغ ${o.total_lyd} د.ل`)}`} style="color:#b5124f;direction:ltr">+{s.whatsapp_number}</a></p>
+                </>
+              )}
+              <form method="post" action={`/account/orders/${o.code}/cancel`} style="margin-top:10px" onsubmit="return confirm('إلغاء الطلب؟')"><button class="btn sm ghost" style="color:#d3262b">إلغاء الطلب</button></form>
             </div>
           )}
+          {paid && <div class="card-box" style="border-color:#1a9c5b"><h3>✅ مدفوع عبر {pm?.ar}</h3><p style="font-size:13px;color:#666">المرجع: {paid.provider_ref ?? paid.trx_ref} · {timeAgo(paid.updated_at)}</p></div>}
           <div class="card-box"><h3>تتبع الطلب</h3>
             <div class="track">
-              {steps.map(st => { const s = ORDER_STATUS[st]; const isDone = cur >= s.step; const isNow = o.status === st || (st === 'paid' && ['purchasing'].includes(o.status)) || (st === 'at_warehouse' && o.status === 'consolidated') || (st === 'arrived' && o.status === 'customs'); return (
-                <div class={`st ${isDone ? 'done' : ''} ${isNow ? 'now' : ''}`}><div class="dotl"></div><div><div class="lbl">{s.ar}</div>{done.get(st) && <div class="when">{timeAgo(done.get(st))}</div>}</div></div>); })}
+              {steps.map(st => { const sd = ORDER_STATUS[st]; const isDone = cur >= sd.step; const isNow = o.status === st || (st === 'paid' && ['purchasing'].includes(o.status)) || (st === 'at_warehouse' && o.status === 'consolidated') || (st === 'arrived' && o.status === 'customs'); return (
+                <div class={`st ${isDone ? 'done' : ''} ${isNow ? 'now' : ''}`}><div class="dotl"></div><div><div class="lbl">{sd.ar}</div>{done.get(st) && <div class="when">{timeAgo(done.get(st))}</div>}</div></div>); })}
             </div>
           </div>
           <div class="card-box"><h3>المنتجات</h3>
@@ -456,11 +568,13 @@ store.get('/orders/:code', async (c) => {
                 {it.proof_image_url && <a href={it.proof_image_url} target="_blank" style="font-size:12px;color:#1c47b3">📷 صورة الفحص من المخزن</a>}
               </div><div style="font-weight:800">{fmt(it.unit_price_lyd * it.qty)}</div></div>
             ))}
+            {o.status === 'delivered' && <div class="inline" style="margin-top:10px"><a class="btn sm brand" href={`/account/reviews?order=${o.code}`}>⭐ قيّمي المنتجات واكسبي نقاطًا</a><a class="btn sm ghost" href={`/account/tickets/new?order=${o.code}&type=return`}>↩️ إرجاع / مشكلة</a></div>}
           </div>
         </div>
         <div>
-          <div class="summary"><div class="row"><span>المنتجات</span><span>{fmt(o.subtotal_lyd)}</span></div><div class="row"><span>التوصيل</span><span>{o.shipping_lyd ? fmt(o.shipping_lyd) : 'مجاني'}</span></div><div class="row tot"><span>الإجمالي</span><span>{fmt(o.total_lyd)}</span></div></div>
+          <div class="summary"><div class="row"><span>المنتجات</span><span>{fmt(o.subtotal_lyd)}</span></div>{o.discount_lyd > 0 && <div class="row" style="color:#1a9c5b"><span>خصم {o.coupon_code}</span><span>−{fmt(o.discount_lyd)}</span></div>}{o.points_used > 0 && <div class="row" style="color:#1a9c5b"><span>نقاط ({o.points_used})</span><span>−{fmt(o.points_lyd)}</span></div>}<div class="row"><span>التوصيل</span><span>{o.shipping_lyd ? fmt(o.shipping_lyd) : 'مجاني'}</span></div><div class="row tot"><span>الإجمالي</span><span>{fmt(o.total_lyd)}</span></div>{o.points_earned > 0 && <div class="row" style="color:#b5124f"><span>نقاط مكتسبة</span><span>+{o.points_earned} ⭐</span></div>}</div>
           <div class="card-box" style="margin-top:14px"><h3>التوصيل إلى</h3><div style="font-size:14px">{o.ship_name}<br />{o.ship_phone}<br />{o.ship_city} — {o.ship_address}</div></div>
+          <div class="card-box"><h3>تحتاجين مساعدة؟</h3><a class="btn sm ghost" href={`/account/tickets/new?order=${o.code}&type=question`}>افتحي تذكرة</a> <a class="btn sm ghost" href={`https://wa.me/${s.whatsapp_number}`}>واتساب</a></div>
         </div>
       </div>
     </Layout>,
@@ -469,15 +583,18 @@ store.get('/orders/:code', async (c) => {
 
 // ---------- صفحات ثابتة ----------
 const PAGES: Record<string, [string, string]> = {
-  how: ['كيف نعمل؟', '1) تختارين المنتج وتدفعين بالدينار.\n2) فريقنا في الصين يشتريه من المورد خلال 48 ساعة.\n3) يصل إلى مخزننا في الصين، نفحصه ونصوّره لك.\n4) يُشحن جوًّا مع طلبات أخرى إلى ليبيا.\n5) يُخلّص جمركيًا ويُوصَّل إلى بابك.\nالمدة الإجمالية 15–25 يومًا.'],
-  shipping: ['الشحن والتوصيل', 'السعر المعروض شامل الشحن الدولي والجمارك. التوصيل داخل المدن الرئيسية 15 د.ل ومجاني للطلبات فوق 500 د.ل. المدة 15–25 يومًا من تأكيد الدفع.'],
-  returns: ['سياسة الإرجاع', 'لا يمكن إرجاع البضاعة إلى الصين. لذلك نفحص كل قطعة ونصوّرها قبل الشحن. أي منتج تالف أو مختلف جوهريًا عن الوصف نعوّضه كاملًا أو نستبدله. المقاسات مسؤولية الزبونة، راجعي دليل المقاسات.'],
-  contact: ['تواصل معنا', 'واتساب: +218 91 000 0000\nبريد: hello@dlal.ly\nساعات العمل: السبت–الخميس 10ص–8م'],
+  how: ['كيف نعمل؟', '1) تختارين المنتج وتدفعين بالدينار (بطاقة، سداد، إدفعلي، موبي كاش أو تحويل).\n2) فريقنا في الصين يشتريه من المورد خلال 48 ساعة.\n3) يصل إلى مخزننا في الصين، نفحصه ونصوّره لك.\n4) يُشحن جوًّا مع طلبات أخرى إلى ليبيا.\n5) يُخلّص جمركيًا ويُوصَّل إلى بابك.\nالمدة الإجمالية 15–25 يومًا. تتابعين كل مرحلة من صفحة الطلب وتصلك إشعارات.'],
+  shipping: ['الشحن والتوصيل', 'السعر المعروض شامل الشحن الدولي والجمارك. التوصيل داخل المدن الرئيسية 15 د.ل ومجاني للطلبات فوق 500 د.ل. المدة 15–25 يومًا من تأكيد الدفع. المندوب يتصل بك قبل التسليم.'],
+  returns: ['سياسة الإرجاع والتعويض', 'لا يمكن إرجاع البضاعة إلى الصين. لذلك نفحص كل قطعة ونصوّرها قبل الشحن.\n\n• منتج تالف أو مختلف جوهريًا عن الوصف: تعويض كامل (استرجاع للمحفظة أو نقاط أو بديل) — افتحي تذكرة خلال 7 أيام من التسليم مع صورة.\n• منتج نفد عند المورد: تُعاد قيمته كاملة تلقائيًا.\n• المقاسات مسؤولية الزبونة — راجعي دليل المقاسات ورأي الزبونات في المقاس على صفحة المنتج.\n• إلغاء الطلب مجاني قبل الدفع، وبعد الدفع وقبل الشراء عبر تذكرة إلغاء.'],
+  contact: ['تواصل معنا', 'واتساب: +218 91 000 0000\nبريد: hello@dlal.ly\nساعات العمل: السبت–الخميس 10ص–8م\nأو افتحي تذكرة من حسابك ويرد فريق الدعم خلال 24 ساعة.'],
+  faq: ['الأسئلة الشائعة', 'هل السعر نهائي؟ نعم، شامل الشحن والجمارك، تدفعين التوصيل المحلي فقط.\n\nكيف أدفع؟ بطاقة مصرفية محلية عبر معاملات، سداد، إدفعلي، موبي كاش (فوري عبر ماي باي)، أو تحويل مصرفي، أو عربون 30%.\n\nمتى يصل طلبي؟ 15–25 يومًا من تأكيد الدفع.\n\nماذا لو نفد المنتج؟ يُخبرك فريقنا فورًا وتختارين بديلًا أو استرجاعًا كاملًا.\n\nكيف أكسب النقاط؟ نقطة لكل دينار عند التسليم، ونقاط إضافية للتقييمات. كل 100 نقطة = دينار.\n\nهل أستطيع الإلغاء؟ نعم قبل الدفع مباشرة، وبعده عبر تذكرة قبل بدء الشراء.'],
+  terms: ['الشروط والأحكام', 'بإتمام الطلب توافقين على: أن دلال وسيط شراء يشتري المنتج نيابة عنك من المورد؛ أن الصور والمواصفات من المورد وقد تختلف الألوان قليلًا؛ أن مدة التوصيل تقديرية؛ أن الطلب يبدأ شراؤه بعد تأكيد الدفع؛ وأن سياسة الإرجاع والتعويض المنشورة هي المرجع لأي خلاف.'],
+  privacy: ['الخصوصية', 'نستخدم رقم هاتفك وعنوانك لتنفيذ الطلب والتواصل بشأنه فقط. بيانات الدفع تُعالج لدى بوابة ماي باي ولا نخزّن أرقام البطاقات. لا نبيع بياناتك لأي طرف.'],
 };
 store.get('/pages/:key', async (c) => {
   const pg = PAGES[c.req.param('key')]; if (!pg) return c.notFound();
   const b = await base(c);
-  return c.html(<Layout {...b} title={pg[0]}><div class="form" style="max-width:700px"><h1>{pg[0]}</h1><p style="white-space:pre-line;font-size:15px">{pg[1]}</p></div></Layout>);
+  return c.html(<Layout {...b} title={pg[0]}><div class="form" style="max-width:720px"><h1>{pg[0]}</h1><p style="white-space:pre-line;font-size:15px;line-height:1.9">{pg[1]}</p></div></Layout>);
 });
 
 export default store;

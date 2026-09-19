@@ -71,3 +71,30 @@
   // "?err=unavailable"
   if (location.search.includes('err=unavailable')) say('هذا المنتج غير متوفر حاليًا');
 })();
+
+// ===== الإصدار 2 =====
+(function () {
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+  // عنوان جديد في الدفع
+  const na = $('#newAddr');
+  if (na) {
+    const sync = () => { const sel = $('input[name=address_id]:checked'); na.classList.toggle('collapsed', !!(sel && sel.value)); };
+    $$('input[name=address_id]').forEach(r => r.addEventListener('change', sync)); sync();
+  }
+  // انتظار تأكيد الدفع
+  const pw = $('#payWait');
+  if (pw) {
+    let tries = 0;
+    const poll = async () => {
+      tries++;
+      try { const j = await (await fetch('/pay/status?ref=' + encodeURIComponent(pw.dataset.ref))).json();
+        if (j.status === 'paid' || j.order_status === 'paid') { location.href = '/orders/' + pw.dataset.order + '?paid=1'; return; }
+        if (j.status === 'failed' || j.status === 'cancelled') { location.href = '/orders/' + pw.dataset.order + '?pay=' + j.status; return; }
+      } catch {}
+      $('#payMsg').textContent = tries > 20 ? 'لم يصل التأكيد بعد. إن خُصم المبلغ فسيُحدَّث الطلب تلقائيًا عند وصول التأكيد.' : 'جارٍ التحقق… (' + tries + ')';
+      if (tries < 60) setTimeout(poll, 2000);
+    };
+    setTimeout(poll, 800);
+  }
+})();

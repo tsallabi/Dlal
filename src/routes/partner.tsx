@@ -5,6 +5,7 @@ import { ORDER_STATUS } from '../types';
 import { PartnerShell } from '../views/dash';
 import { Flash } from '../views/layout';
 import { fmt, timeAgo, notify } from '../lib/db';
+import { setOrderStatus } from '../lib/orders';
 import { requireRole } from '../lib/auth';
 
 const partner = new Hono<Env>();
@@ -167,20 +168,7 @@ partner.get('/all', async (c) => {
 });
 
 // ---------- الإجراءات ----------
-async function setStatus(db: D1Database, code: string, status: string, byUserId: number, note?: string) {
-  const o = await db.prepare('SELECT id,user_id FROM orders WHERE code=?').bind(code).first<any>();
-  if (!o) return null;
-  await db.batch([
-    db.prepare("UPDATE orders SET status=?,updated_at=datetime('now') WHERE id=?").bind(status, o.id),
-    db.prepare('INSERT INTO order_events(order_id,status,note,by_user_id) VALUES(?,?,?,?)').bind(o.id, status, note ?? null, byUserId),
-  ]);
-  const msgs: Record<string, string> = {
-    purchasing: 'بدأ فريقنا شراء منتجاتك من الموردين.', purchased: 'تم شراء كل منتجاتك وهي في طريقها إلى مخزننا.', at_warehouse: 'وصلت منتجاتك إلى مخزننا في الصين وجارٍ فحصها.',
-    consolidated: 'ضُمّت منتجاتك إلى شحنة متجهة إلى ليبيا.', shipped: 'شُحن طلبك إلى ليبيا ✈️', arrived: 'وصل طلبك إلى ليبيا 🇱🇾', customs: 'طلبك في الجمارك.', ready: 'طلبك جاهز — سيتواصل معك المندوب للتسليم.', delivered: 'تم تسليم طلبك. شكرًا لتسوقك مع دلال 💕',
-  };
-  if (msgs[status]) await notify(db, o.user_id, `تحديث طلبك ${code}`, msgs[status], `/orders/${code}`);
-  return o;
-}
+const setStatus = (db: D1Database, code: string, status: string, byUserId: number, note?: string) => setOrderStatus(db, code, status, byUserId, note);
 
 partner.post('/order/:code/status', async (c) => {
   const f = await c.req.parseBody(); const st = String(f.status);

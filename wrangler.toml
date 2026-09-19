@@ -25,6 +25,8 @@ DEFAULT_CURRENCY = "LYD"
 #   ADMIN_PASSWORD   كلمة مرور الأدمن الأولى
 #   SESSION_SECRET   سر توقيع الجلسات
 #   IMPORT_TOKEN     رمز أداة الاستيراد من المتصفح
+#   MYPAY_API_KEY         مفتاح API لماي باي (اختياري — يتقدم على قيمة لوحة الإدارة)
+#   MYPAY_WEBHOOK_SECRET  سر توقيع ويبهوك ماي باي (اختياري — يتقدم على قيمة لوحة الإدارة)
 
 [triggers]
 crons = ["0 3 * * *"]   # مزامنة المخزون يوميًا 3 صباحًا UTC (تعمل فقط بعد ربط الـ API)

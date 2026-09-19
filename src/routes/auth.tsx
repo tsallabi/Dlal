@@ -14,7 +14,7 @@ auth.get('/login', async (c) => {
     <Layout {...b} title="تسجيل الدخول">
       <form class="form" method="post">
         <h1>تسجيل الدخول</h1>
-        <Flash type="err" msg={c.req.query('err') ? 'رقم الهاتف أو كلمة المرور غير صحيحة' : undefined} />
+        <Flash type="err" msg={c.req.query('err') === 'disabled' ? 'هذا الحساب معطّل. تواصلي مع الدعم.' : c.req.query('err') ? 'رقم الهاتف أو كلمة المرور غير صحيحة' : undefined} />
         <input type="hidden" name="next" value={c.req.query('next') ?? '/'} />
         <label>رقم الهاتف</label><input type="tel" name="phone" placeholder="09xxxxxxxx" required autofocus />
         <label>كلمة المرور</label><input type="password" name="password" required />
@@ -28,9 +28,10 @@ auth.get('/login', async (c) => {
 auth.post('/login', async (c) => {
   const f = await c.req.parseBody();
   const phone = normPhone(String(f.phone ?? ''));
-  const u = await c.env.DB.prepare('SELECT id,password_hash FROM users WHERE phone=?').bind(phone).first<{ id: number; password_hash: string }>();
-  if (!u || !(await verifyPassword(String(f.password), u.password_hash))) return c.redirect(`/login?err=1&next=${encodeURIComponent(String(f.next ?? '/'))}`);
+  const u = await c.env.DB.prepare('SELECT id,password_hash,active FROM users WHERE phone=?').bind(phone).first<{ id: number; password_hash: string; active: number }>();
+  if (!u || !u.active || !(await verifyPassword(String(f.password), u.password_hash))) return c.redirect(`/login?err=${u && !u.active ? 'disabled' : 1}&next=${encodeURIComponent(String(f.next ?? '/'))}`);
   await createSession(c, u.id);
+  c.executionCtx.waitUntil(c.env.DB.prepare("UPDATE users SET last_login_at=datetime('now') WHERE id=?").bind(u.id).run());
   const next = String(f.next ?? '/');
   return c.redirect(next.startsWith('/') ? next : '/');
 });

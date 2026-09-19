@@ -7,6 +7,9 @@ import auth from './routes/auth';
 import admin from './routes/admin';
 import partner from './routes/partner';
 import api from './routes/api';
+import pay from './routes/pay';
+import account from './routes/account';
+import adminOps from './routes/admin-ops';
 import api1688Admin, { getClient, syncStock } from './routes/api1688-admin';
 import { loadSettings } from './lib/pricing';
 import { Client1688, type Tokens } from './lib/api1688';
@@ -22,7 +25,10 @@ app.use('*', async (c, next) => {
 
 app.route('/api', api);
 app.route('/admin/api1688', api1688Admin);
+app.route('/admin', adminOps);
 app.route('/admin', admin);
+app.route('/account', account);
+app.route('/', pay);
 app.route('/partner', partner);
 app.route('/', auth);
 app.route('/', store);

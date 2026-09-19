@@ -46,10 +46,11 @@ export async function loadUser(c: Context<Env>): Promise<User | null> {
   const sid = getCookie(c, 'sid');
   if (!sid) return null;
   const row = await c.env.DB.prepare(
-    `SELECT u.id,u.phone,u.name,u.email,u.role,u.partner_id,u.city,u.address
+    `SELECT u.id,u.phone,u.name,u.email,u.role,u.staff_role,u.partner_id,u.city,u.address,u.points,u.active
      FROM sessions s JOIN users u ON u.id=s.user_id
      WHERE s.id=? AND s.expires_at > datetime('now')`,
   ).bind(sid).first<User>();
+  if (row && !row.active) return null;   // حساب معطّل
   return row ?? null;
 }
 
