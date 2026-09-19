@@ -309,3 +309,36 @@ body{background:#fff}
 
 .tbl select{min-width:140px}
 .staff-grid{grid-template-columns:1fr 340px}
+
+/* ===== الرئيسية بنمط 1688 ===== */
+.home-top{display:grid;grid-template-columns:220px 1fr 260px;gap:14px;margin:14px 0;align-items:stretch}
+.cat-menu{background:#fff;border:1px solid var(--line);border-radius:12px;padding:8px 0;box-shadow:var(--shadow);max-height:420px;overflow:auto}
+.cat-menu h4{margin:4px 14px 6px;font-size:13px;color:var(--mut)}
+.cat-menu a{display:flex;align-items:center;gap:8px;padding:8px 14px;font-size:14px}
+.cat-menu a span{width:22px;text-align:center}.cat-menu a i{margin-inline-start:auto;color:#bbb;font-style:normal}
+.cat-menu a:hover{background:var(--brand-soft);color:var(--brand)}
+.cat-menu a.hot{color:var(--brand);font-weight:700}
+.carousel{position:relative;border-radius:14px;overflow:hidden;box-shadow:var(--shadow);min-height:420px}
+.carousel .slides{display:flex;height:100%;transition:transform .5s ease}
+.carousel .slide{flex:0 0 100%;padding:40px 36px;display:flex;flex-direction:column;justify-content:center;min-height:420px}
+.slide h1{font-size:30px;margin:8px 0;line-height:1.3}.slide p{font-size:15px;color:#333;max-width:520px;margin:0 0 16px}
+.slide .cta{align-self:flex-start;background:var(--brand);color:#fff;padding:10px 24px;border-radius:999px;font-weight:700}
+.slide .eyebrow{display:inline-block;background:#fff;color:var(--brand);font-weight:700;font-size:12px;padding:3px 10px;border-radius:999px;align-self:flex-start}
+.sl-a{background:linear-gradient(115deg,#fde7f0,#fff6e3)}.sl-b{background:linear-gradient(115deg,#e5f0ff,#f3e8ff)}.sl-c{background:linear-gradient(115deg,#fff2c9,#ffe3ee)}
+.carousel .dots{position:absolute;bottom:12px;inset-inline:0;display:flex;justify-content:center;gap:6px}
+.carousel .dots button{width:9px;height:9px;border-radius:50%;border:0;background:rgba(0,0,0,.2);cursor:pointer;padding:0}.carousel .dots button.on{background:var(--brand);width:22px;border-radius:99px}
+.user-card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:10px}
+.uc-h{display:flex;gap:10px;align-items:center}.uc-h .av{width:44px;height:44px;border-radius:50%;background:var(--brand);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:18px}
+.uc-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}.uc-grid a{position:relative;background:var(--soft);border-radius:10px;padding:10px 6px;display:flex;flex-direction:column;align-items:center;font-size:12px;gap:2px}
+.uc-grid a i{position:absolute;top:6px;inset-inline-end:8px;background:var(--brand);color:#fff;font-size:10px;border-radius:99px;padding:0 5px;font-style:normal}
+.uc-list{list-style:none;padding:0;margin:0;font-size:12px;color:#444;display:flex;flex-direction:column;gap:4px}
+.uc-stats{display:flex;justify-content:space-between;font-size:11px;color:var(--mut);border-top:1px solid var(--line);padding-top:8px;margin-top:auto}.uc-stats b{color:var(--ink);font-size:14px;display:block}
+.mobile-only{display:none}
+.floor{margin:26px 0 10px;border-radius:14px;padding:14px;background:#fff;border:1px solid var(--line);box-shadow:var(--shadow)}
+.floor-h{display:flex;align-items:center;gap:10px;margin-bottom:12px;padding-bottom:10px;border-bottom:2px solid var(--brand)}
+.floor-h .ic{font-size:22px}.floor-h h2{margin:0;font-size:18px}.floor-h nav{display:flex;gap:4px;margin-inline-start:10px}.floor-h nav a{font-size:12px;padding:3px 10px;border-radius:999px;background:var(--soft)}.floor-h nav a:hover{background:var(--brand);color:#fff}
+.floor-h .more{margin-inline-start:auto;font-size:13px;color:var(--brand)}
+.floor.f1 .floor-h{border-color:#1c47b3}.floor.f2 .floor-h{border-color:#0b6b66}.floor.f3 .floor-h{border-color:#d68b00}
+.why{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:26px 0 10px}
+.why div{background:var(--soft);border-radius:12px;padding:14px;font-size:13px;display:flex;flex-direction:column;gap:4px}.why span{color:var(--mut)}
+@media(max-width:980px){.home-top{grid-template-columns:1fr}.cat-menu,.user-card{display:none}.mobile-only{display:grid}.carousel,.carousel .slide{min-height:260px}.slide{padding:24px 18px}.slide h1{font-size:22px}.why{grid-template-columns:1fr 1fr}.floor-h nav{display:none}}

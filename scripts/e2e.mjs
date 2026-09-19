@@ -31,7 +31,7 @@ expect(page.url().includes('/c/dresses'), 'الضغط على قسم فساتين
 await Promise.all([page.waitForURL(/size=M/), page.selectOption('select[name=size]', 'M')]);
 expect(page.url().includes('size=M'), 'فلتر المقاس يعمل');
 await page.click('.tabs a:has-text("السعر ↑")'); await page.waitForLoadState('networkidle');
-const prices = await page.$$eval('.card .p', els => els.map(e => parseFloat(e.textContent.replace(/[^\d.]/g, ''))));
+const prices = await page.$$eval('.card .p', els => els.map(e => parseFloat((e.firstChild?.textContent || '').replace(/[^\d.]/g, ''))));
 expect(prices.every((v, i) => i === 0 || v >= prices[i - 1]), 'الترتيب بالسعر تصاعدي صحيح');
 await page.fill('.search input', 'حقيبة'); await page.press('.search input', 'Enter'); await page.waitForLoadState('networkidle');
 expect((await page.locator('.card').count()) >= 3, 'البحث عن "حقيبة" يعيد نتائج');

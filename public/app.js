@@ -98,3 +98,13 @@
     setTimeout(poll, 800);
   }
 })();
+
+// ===== بانر الرئيسية (تدوير تلقائي) =====
+(function () {
+  const c = document.querySelector('[data-carousel]'); if (!c) return;
+  const slides = c.querySelector('.slides'), dots = [...c.querySelectorAll('[data-dot]')]; let i = 0, t;
+  const go = (n) => { i = (n + dots.length) % dots.length; slides.style.transform = `translateX(${(document.dir === 'rtl' ? 1 : -1) * i * 100}%)`; dots.forEach((d, k) => d.classList.toggle('on', k === i)); };
+  const auto = () => { clearInterval(t); t = setInterval(() => go(i + 1), 5000); };
+  dots.forEach(d => d.addEventListener('click', () => { go(+d.dataset.dot); auto(); }));
+  auto();
+})();

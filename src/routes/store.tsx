@@ -25,40 +25,74 @@ const base = async (c: Context<Env>) => ({
   user: c.get('user'), cartCount: c.get('cartCount'), categories: await getCategories(c.env.DB),
 });
 
-// ---------- الرئيسية ----------
+// ---------- الرئيسية (تخطيط 1688 بهوية دلال: قائمة أقسام جانبية + بانر + بطاقة الحساب + طوابق أقسام) ----------
 store.get('/', async (c) => {
-  const db = c.env.DB;
-  const [trend, newest, sale, f] = await Promise.all([
+  const db = c.env.DB; const u = c.get('user');
+  const b = await base(c);
+  const floorCats = b.categories.slice(0, 8);
+  const [trend, newest, sale, f, floors, stats] = await Promise.all([
     db.prepare(`SELECT ${PRODUCT_SELECT} FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE p.status='active' ORDER BY p.sales DESC, p.views DESC LIMIT 10`).all<ProductRow>(),
-    db.prepare(`SELECT ${PRODUCT_SELECT} FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE p.status='active' ORDER BY p.id DESC LIMIT 15`).all<ProductRow>(),
+    db.prepare(`SELECT ${PRODUCT_SELECT} FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE p.status='active' ORDER BY p.id DESC LIMIT 10`).all<ProductRow>(),
     db.prepare(`SELECT ${PRODUCT_SELECT} FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE p.status='active' AND p.compare_price_lyd > p.price_lyd ORDER BY (p.compare_price_lyd-p.price_lyd)/p.compare_price_lyd DESC LIMIT 10`).all<ProductRow>(),
     favs(c),
+    floorCats.length ? db.prepare(`SELECT * FROM (SELECT ${PRODUCT_SELECT}, ROW_NUMBER() OVER (PARTITION BY p.category_id ORDER BY p.sales DESC, p.views DESC) rn FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE p.status='active' AND p.category_id IN (${floorCats.map(() => '?').join(',')})) WHERE rn<=5`).bind(...floorCats.map(x => x.id)).all<ProductRow & { rn: number }>() : Promise.resolve({ results: [] as any[] }),
+    db.prepare("SELECT (SELECT COUNT(*) FROM products WHERE status='active') p,(SELECT COUNT(*) FROM orders WHERE status='delivered') d,(SELECT COUNT(*) FROM users WHERE role='customer') u").first<any>(),
   ]);
-  const b = await base(c);
   const recent = await recentlyViewed(c);
+  const s = await loadSettings(db);
+  const myOrders = u ? await db.prepare("SELECT COUNT(*) n FROM orders WHERE user_id=? AND status NOT IN ('delivered','cancelled','refunded')").bind(u.id).first<any>() : null;
+  const slides = [
+    { cls: 'sl-a', k: 'دلال يجيبلك من الصين لباب البيت', t: 'آلاف المنتجات بأسعار نهائية بالدينار الليبي، شاملة الشحن والجمارك.', a: '/c/dresses', l: 'تسوقي الآن' },
+    { cls: 'sl-b', k: 'ادفعي ببطاقتك أو سداد أو إدفعلي', t: 'دفع فوري وآمن عبر ماي باي، أو تحويل، أو عربون 30% والباقي عند الاستلام.', a: '/pages/faq', l: 'طرق الدفع' },
+    { cls: 'sl-c', k: 'نقاط مع كل طلب + كوبون ترحيبي WELCOME10', t: 'نقطة لكل دينار عند التسليم، وكل 100 نقطة = دينار تُخصم من طلبك التالي.', a: u ? '/account/points' : '/register', l: u ? 'نقاطي' : 'أنشئي حسابًا' },
+  ];
   return c.html(
     <Layout {...b}>
-      <section class="hero">
-        <div>
-          <span class="eyebrow">توصيل لكل ليبيا · أسعار نهائية بالدينار</span>
-          <h1>دلال يجيبلك من الصين لباب البيت 🛍️</h1>
-          <p>آلاف المنتجات بأسعار بالدينار الليبي — شاملة الشحن والجمارك، بدون مفاجآت. ادفعي ببطاقتك أو سداد أو إدفعلي.</p>
-          <div class="inline" style="margin-top:14px"><a class="cta" href="/c/dresses">تسوقي الآن</a><a class="cta ghost" href="/pages/how">كيف نعمل؟</a></div>
+      <section class="home-top">
+        <aside class="cat-menu">
+          <h4>كل الأقسام</h4>
+          {b.categories.map(cat => <a href={`/c/${cat.slug}`}><span>{cat.icon}</span>{cat.name_ar}<i>›</i></a>)}
+          <a href="/sale" class="hot"><span>⚡</span>عروض وتخفيضات<i>›</i></a>
+        </aside>
+        <div class="carousel" data-carousel>
+          <div class="slides">{slides.map(sl => <div class={`slide ${sl.cls}`}><span class="eyebrow">توصيل لكل ليبيا · أسعار نهائية</span><h1>{sl.k}</h1><p>{sl.t}</p><a class="cta" href={sl.a}>{sl.l}</a></div>)}</div>
+          <div class="dots">{slides.map((_, i) => <button type="button" data-dot={i} class={i === 0 ? 'on' : ''} aria-label={`شريحة ${i + 1}`}></button>)}</div>
         </div>
-        <div class="hero-badges"><div>🚚<b>15–25 يومًا</b><span>للوصول</span></div><div>💳<b>ماي باي</b><span>دفع آمن</span></div><div>🔍<b>فحص وتصوير</b><span>قبل الشحن</span></div><div>💎<b>نقاط</b><span>مع كل طلب</span></div></div>
+        <div class="user-card">
+          {u ? <>
+            <div class="uc-h"><div class="av">{u.name.slice(0, 1)}</div><div><b>أهلًا {u.name.split(' ')[0]}</b><br /><small>⭐ {u.points} نقطة</small></div></div>
+            <div class="uc-grid"><a href="/account/orders">📦<span>طلباتي</span>{myOrders?.n ? <i>{myOrders.n}</i> : null}</a><a href="/account/coupons">🎟️<span>كوبوناتي</span></a><a href="/wishlist">♡<span>المفضلة</span></a><a href="/account/tickets">↩️<span>الدعم</span></a></div>
+          </> : <>
+            <div class="uc-h"><div class="av">👋</div><div><b>أهلًا بك في دلال</b><br /><small>سجّلي واكسبي نقاطًا مع كل طلب</small></div></div>
+            <a class="btn brand" href="/register" style="display:block;text-align:center">إنشاء حساب</a><a class="btn ghost" href="/login" style="display:block;text-align:center;margin-top:6px">تسجيل الدخول</a>
+          </>}
+          <ul class="uc-list"><li>🚚 الوصول خلال 15–25 يومًا</li><li>🔍 فحص وتصوير قبل الشحن</li><li>↩️ تعويض كامل لأي تالف</li></ul>
+          <div class="uc-stats"><span><b>{stats?.p ?? 0}</b> منتج</span><span><b>{stats?.d ?? 0}</b> طلب مُسلَّم</span><span><b>{stats?.u ?? 0}</b> زبونة</span></div>
+        </div>
       </section>
+      <div class="cat-tiles mobile-only">{b.categories.slice(0, 12).map(cat => <a href={`/c/${cat.slug}`}><span>{cat.icon}</span>{cat.name_ar}</a>)}</div>
       <div class="flash-sale">
         ⚡ <b>فلاش سيل</b> ينتهي خلال <span class="timer" data-countdown="6h">06:00:00</span>
         <a href="/sale" style="margin-inline-start:auto;color:#ffcf3f">عرض الكل ›</a>
       </div>
-      <div class="cat-tiles">{b.categories.slice(0, 12).map(cat => <a href={`/c/${cat.slug}`}><span>{cat.icon}</span>{cat.name_ar}</a>)}</div>
       <div class="sec-h"><h2>عروض اليوم</h2><a href="/sale">المزيد ›</a></div>
       <Grid items={sale.results} favs={f} />
       <div class="sec-h"><h2>الأكثر رواجًا</h2><a href="/trending">المزيد ›</a></div>
       <Grid items={trend.results} favs={f} />
+      {floorCats.map((cat, i) => { const items = floors.results.filter((r: any) => r.category_id === cat.id); return items.length ? (
+        <section class={`floor f${i % 4}`}>
+          <div class="floor-h"><span class="ic">{cat.icon}</span><h2>{cat.name_ar}</h2><nav><a href={`/c/${cat.slug}?sort=popular`}>الأكثر مبيعًا</a><a href={`/c/${cat.slug}?sort=new`}>الأحدث</a><a href={`/c/${cat.slug}?sort=price_asc`}>الأرخص</a></nav><a class="more" href={`/c/${cat.slug}`}>عرض الكل ›</a></div>
+          <Grid items={items} favs={f} />
+        </section>) : null; })}
       <div class="sec-h"><h2>وصل حديثًا</h2><a href="/new">المزيد ›</a></div>
       <Grid items={newest.results} favs={f} />
       {recent.length > 0 && <><div class="sec-h"><h2>شاهدتِ مؤخرًا</h2></div><Grid items={recent} favs={f} /></>}
+      <section class="why">
+        <div><b>🏭 مباشرة من مصانع الصين</b><span>نشتري من 1688 بأسعار الجملة ونبيع بالقطعة.</span></div>
+        <div><b>💳 ادفعي بالدينار</b><span>ماي باي: بطاقة، سداد، إدفعلي، موبي كاش.</span></div>
+        <div><b>📦 تتبّع كل مرحلة</b><span>من الشراء إلى الجمارك إلى بابك، بإشعارات.</span></div>
+        <div><b>🤝 واتساب {s.whatsapp_number ? '+' + s.whatsapp_number : ''}</b><span>فريق دعم يرد خلال ساعات العمل.</span></div>
+      </section>
     </Layout>,
   );
 });
