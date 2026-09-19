@@ -29,6 +29,9 @@ export function dictTranslate(s: string): string | null {
 
 const degenerate = (t: string) => { const w = t.split(/\s+/).filter(Boolean); if (w.length >= 4 && new Set(w).size / w.length < 0.5) return true; return /(\S{2,})(\s+\1){2,}/.test(t); };
 export const goodArabic = (t: string | null | undefined) => !!t && /[\u0600-\u06FF]/.test(t) && !hasCJK(t) && !degenerate(t) && t.length <= 220;
+// عنوان منتج مقبول: عربي سليم وخالٍ من حشو 1688 المترجم حرفيًا
+const JUNK = /عبر الحدود|تجارة (أجنبية|خارجية)|الأسهم الحقيقية|أمازون|علي إكسبريس|بالجملة|مصدر البضائع|موسم (الخريف|الربيع|الصيف|الشتاء) الجديد|^\(?\s*20\d\d/;
+export const goodTitle = (t: string | null | undefined) => goodArabic(t) && !JUNK.test(t!);
 
 async function m2m(ai: any, text: string, source: 'chinese' | 'english'): Promise<string | null> {
   try { const r: any = await ai.run('@cf/meta/m2m100-1.2b', { text: text.slice(0, 300), source_lang: source, target_lang: 'arabic' }); const t = (r?.translated_text ?? '').trim(); return goodArabic(t) ? t.slice(0, 200) : null; } catch { return null; }
@@ -41,7 +44,7 @@ async function llm(ai: any, sys: string, user: string, models: string[]): Promis
     try {
       const r: any = await ai.run(model, { messages: [{ role: 'system', content: sys }, { role: 'user', content: user }], max_tokens: 120, temperature: 0.2 });
       const t = String(r?.response ?? '').trim().split('\n')[0].replace(/^["'«»“”\s]+|["'«»“”\s.]+$/g, '').trim();
-      if (goodArabic(t)) return t.slice(0, 200);
+      if (goodArabic(t) && (sys !== SYS_TITLE || goodTitle(t))) return t.slice(0, 200);
     } catch {}
   }
   return null;
@@ -86,13 +89,13 @@ export async function retranslatePending(db: D1Database, ai: any, limit = 40): P
   const tr = new Translator(db, ai, limit + 60);
   const { results } = await db.prepare("SELECT id,title_ar,title_src,supplier_name FROM products WHERE title_ar GLOB '*[一-龥]*' OR title_src GLOB '*[一-龥]*' OR supplier_name GLOB '*[一-龥]*' ORDER BY sales DESC,id DESC LIMIT 400").all<any>();
   // العناوين الصينية أو الرديئة أولًا، ثم ما تبقى (موردون)
-  const needs = (p: any) => hasCJK(p.title_ar) || !goodArabic(p.title_ar);
+  const needs = (p: any) => hasCJK(p.title_ar) || !goodTitle(p.title_ar);
   results.sort((a, b) => Number(needs(b)) - Number(needs(a)));
   let n = 0, nv = 0;
   for (const p of results) {
     if (n >= limit) break;
     const src = hasCJK(p.title_src) ? p.title_src : p.title_ar;
-    const needTitle = hasCJK(p.title_ar) || !goodArabic(p.title_ar);
+    const needTitle = hasCJK(p.title_ar) || !goodTitle(p.title_ar);
     const t = needTitle ? await tr.t(src, 'title') : p.title_ar;
     const sp = await tr.t(p.supplier_name);
     if ((t && t !== p.title_ar) || (sp && sp !== p.supplier_name)) { await db.prepare('UPDATE products SET title_src=COALESCE(title_src,title_ar),title_ar=?,supplier_name=? WHERE id=?').bind(t ?? p.title_ar, sp ?? p.supplier_name, p.id).run(); n++; }
