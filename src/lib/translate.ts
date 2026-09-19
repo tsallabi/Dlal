@@ -37,7 +37,7 @@ async function m2m(ai: any, text: string, source: 'chinese' | 'english'): Promis
   try { const r: any = await ai.run('@cf/meta/m2m100-1.2b', { text: text.slice(0, 300), source_lang: source, target_lang: 'arabic' }); const t = (r?.translated_text ?? '').trim(); return goodArabic(t) ? t.slice(0, 200) : null; } catch { return null; }
 }
 const SYS_TITLE = 'أنت مترجم لمتجر أزياء عربي. حوّل عنوان منتج من موقع 1688 (صيني محشو بكلمات مفتاحية) إلى عنوان منتج عربي قصير وطبيعي من 5 إلى 14 كلمة يصف المنتج للزبون. احذف عبارات مثل "تجارة خارجية"، "عبر الحدود"، "جديد 2025"، "بالجملة"، "موديل جديد". أجب بالعنوان العربي فقط، بلا شرح ولا علامات اقتباس.';
-const SYS_ATTR = 'ترجم قيمة خاصية منتج (لون أو مقاس أو نمط) من الصينية إلى العربية بكلمة أو كلمتين كما تُكتب في متجر ملابس. أجب بالترجمة فقط.';
+const SYS_ATTR = 'ترجم قيمة خاصية منتج (لون أو مقاس أو نمط) من الصينية إلى العربية بكلمة أو كلمتين كما تُكتب في متجر ملابس. احتفظ برموز المقاسات اللاتينية (S, M, L, XL, 2XL) والأرقام كما هي بلا تعريب. 均码 تعني "مقاس واحد". أجب بالترجمة فقط.';
 const SYS_TEXT = 'ترجم النص التالي من الصينية إلى العربية بشكل طبيعي وقصير. أجب بالترجمة فقط.';
 async function llm(ai: any, sys: string, user: string, models: string[]): Promise<string | null> {
   for (const model of models) {
@@ -76,8 +76,10 @@ export class Translator {
     const fallback = hintEn && !hasCJK(hintEn) ? hintEn.slice(0, 200) : text;
     if (this.aiCalls >= this.maxAi) return fallback;
     this.aiCalls++;
-    const out = await translateZhAr(this.ai, k, kind, hintEn);
+    let out = await translateZhAr(this.ai, k, kind, hintEn);
     if (!out) return fallback;
+    // مقاس لاتيني داخل القيمة (مثل "加大码XL") يبقى كما هو حتى لو عرّبه النموذج
+    if (kind === 'attr') { const sz = k.match(/(XXS|XS|S|M|L|XL|XXL|XXXL|[2-6]XL)(?![A-Za-z])/i); if (sz && !new RegExp(`\\b${sz[1]}\\b`, 'i').test(out)) { const rest = dictTranslate(k.replace(sz[1], '').replace(/码/g, '').trim()); out = rest ? `${rest} ${sz[1].toUpperCase()}` : sz[1].toUpperCase(); } }
     this.mem.set(k, out);
     await this.db.prepare('INSERT OR REPLACE INTO translations(src,dst,kind) VALUES(?,?,?)').bind(k, out, kind).run().catch(() => {});
     return out;
