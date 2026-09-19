@@ -38,8 +38,8 @@ scripts/e2e.mjs        تجربة على الشاشة (Playwright) لكل الت
 ## تشغيل محلي
 ```bash
 npm i
-npx wrangler d1 migrations apply dlal-db --local
-npx wrangler dev
+npx wrangler d1 migrations apply dlal-db --local -c wrangler.local.toml
+npx wrangler dev -c wrangler.local.toml     # النسخة المحلية بلا ربط Workers AI
 ```
 حسابات تجريبية: أدمن `0910000000/admin123` — موظف شاهين `0920000000/partner123` — زبونة `0930000000/customer123`
 

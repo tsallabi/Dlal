@@ -6,7 +6,7 @@ import { ORDER_STATUS, PAYMENT_METHODS, TICKET_TYPES, TICKET_STATUS } from '../t
 import { AdminShell } from '../views/dash';
 import { Flash } from '../views/layout';
 import { Stars } from '../views/account';
-import { fmt, timeAgo, notify } from '../lib/db';
+import { getCategories, fmt, timeAgo, notify } from '../lib/db';
 import { hashPassword, requireRole } from '../lib/auth';
 import { requirePerm, STAFF_ROLES, ROLE_PERMS, PERM_LABELS, logActivity, permsOf } from '../lib/perm';
 import { loadSettings } from '../lib/pricing';
@@ -334,6 +334,82 @@ ops.post('/staff/:id', async (c) => {
   else if (f.staff_role && STAFF_ROLES[String(f.staff_role) as StaffRole]) await db.prepare("UPDATE users SET staff_role=? WHERE id=? AND role='admin'").bind(String(f.staff_role), id).run();
   await logActivity(db, me.id, `staff.${f.action ?? 'save'}`, String(id), f.staff_role ? String(f.staff_role) : undefined);
   return c.redirect('/admin/staff?ok=1');
+});
+
+// ---------- الزاحف: إضافة المتصفح ----------
+ops.use('/crawler*', requirePerm('catalog.manage'));
+ops.get('/crawler', async (c) => {
+  const db = c.env.DB; const s = await loadSettings(db);
+  const [jobs, runs, cats] = await Promise.all([
+    db.prepare('SELECT j.*,c.name_ar AS cat FROM crawl_jobs j LEFT JOIN categories c ON c.id=j.category_id ORDER BY j.id').all<any>(),
+    db.prepare('SELECT r.*,j.name FROM crawl_runs r LEFT JOIN crawl_jobs j ON j.id=r.job_id ORDER BY r.id DESC LIMIT 30').all<any>(),
+    getCategories(db),
+  ]);
+  const origin = new URL(c.req.url).origin;
+  const seen = s.crawler_last_seen ? timeAgo(s.crawler_last_seen) : 'لم تتصل بعد';
+  const online = s.crawler_last_seen && (Date.now() - new Date(s.crawler_last_seen + 'Z').getTime()) < 40 * 60000;
+  const T: Record<string, string> = { search: 'بحث بكلمة', url: 'رابط قائمة', stock: 'فحص مخزون' };
+  return shell(c, 'crawler', 'الزاحف — إضافة المتصفح', (
+    <>
+      <Flash msg={c.req.query('ok') ? 'تم ✓' : undefined} />
+      <div class="kpis">
+        <div class="kpi"><b class={online ? 'ok' : ''} style={online ? 'color:#1a9c5b' : 'color:#d3262b'}>{online ? 'متصلة' : 'غير متصلة'}</b><span>آخر اتصال: {seen} {s.crawler_version ? `· v${s.crawler_version}` : ''}</span></div>
+        <div class="kpi"><b>{jobs.results.filter(j => j.active).length}</b><span>مهمة نشطة</span></div>
+        <div class="kpi"><b>{runs.results.reduce((a, r) => a + r.imported, 0)}</b><span>منتج جديد في آخر 30 تشغيلًا</span></div>
+        <div class="kpi"><b>{runs.results.filter(r => r.status === 'blocked').length}</b><span>حجب/كابتشا مؤخرًا</span></div>
+      </div>
+      <div class="two" style="grid-template-columns:1fr 360px">
+        <div>
+          <div class="card-box"><h3>المهام</h3>
+            <div class="tbl-wrap"><table class="tbl"><tr><th>المهمة</th><th>النوع</th><th>القسم</th><th>صفحات</th><th>كل</th><th>آخر تشغيل</th><th>الحالة</th><th></th></tr>
+              {jobs.results.map(j => <tr><td><b>{j.name}</b><br /><small class="mono" style="display:inline">{(j.query ?? '').slice(0, 40)}</small></td><td>{T[j.type]}</td><td>{j.cat ?? '—'}</td><td>{j.type === 'stock' ? `${j.max_new} منتج` : j.max_pages}</td><td>{j.interval_hours} س</td><td><small>{j.last_run_at ? timeAgo(j.last_run_at) : '—'}<br />{j.last_summary ?? ''}</small></td><td><span class={`status ${j.cooldown_until && j.cooldown_until > new Date().toISOString().slice(0, 19).replace('T', ' ') ? 'red' : j.run_now ? 'blue' : j.active ? 'green' : 'gray'}`}>{j.run_now ? 'في الطابور' : j.active ? 'نشطة' : 'موقوفة'}</span></td>
+                <td><form method="post" action={`/admin/crawler/${j.id}`} class="inline"><button class="btn sm ok" name="action" value="run">شغّل الآن</button><button class="btn sm ghost" name="action" value="toggle">{j.active ? 'إيقاف' : 'تفعيل'}</button><button class="btn sm ghost" name="action" value="delete" style="color:#d3262b">حذف</button></form></td></tr>)}
+            </table></div>
+          </div>
+          <div class="card-box"><h3>سجل التشغيل</h3>
+            {runs.results.length === 0 ? <p style="color:#888">لا تشغيلات بعد. ثبّت الإضافة وستظهر هنا.</p> : <div class="tbl-wrap"><table class="tbl"><tr><th>الوقت</th><th>المهمة</th><th>الحالة</th><th>صفحات</th><th>وُجد</th><th>جديد</th><th>محدّث</th><th>مُثرى</th><th>مفحوص</th><th>ملاحظة</th></tr>
+              {runs.results.map(r => <tr><td><small>{timeAgo(r.finished_at)}</small></td><td>{r.name ?? '—'}</td><td><span class={`status ${r.status === 'ok' ? 'green' : r.status === 'blocked' ? 'red' : 'gray'}`}>{r.status}</span></td><td>{r.pages}</td><td>{r.found}</td><td><b>{r.imported}</b></td><td>{r.updated}</td><td>{r.enriched}</td><td>{r.checked}</td><td><small>{r.note}</small></td></tr>)}
+            </table></div>}
+          </div>
+        </div>
+        <div>
+          <form method="post" action="/admin/crawler/new" class="card-box"><h3>+ مهمة جديدة</h3>
+            <label>الاسم</label><input type="text" name="name" required placeholder="عبايات سوداء" />
+            <label>النوع</label><select name="type"><option value="search">بحث بكلمة صينية في 1688</option><option value="url">رابط صفحة قائمة/قسم في 1688</option><option value="stock">فحص المخزون والأسعار للمنتجات الحالية</option></select>
+            <label>الكلمة أو الرابط</label><input type="text" name="query" placeholder="黑色 长袍 女 或 https://s.1688.com/..." dir="ltr" />
+            <label>القسم في دلال</label><select name="category_id">{cats.map(ct => <option value={ct.id}>{ct.icon} {ct.name_ar}</option>)}</select>
+            <div class="inline"><div><label>عدد الصفحات</label><input type="number" name="max_pages" value="2" min="1" max="20" /></div><div><label>كل (ساعات)</label><input type="number" name="interval_hours" value="24" min="1" /></div></div>
+            <div class="inline"><div><label>أقصى منتجات تُثرى/تُفحص</label><input type="number" name="max_new" value="40" min="1" /></div><div><label>جلب التفاصيل</label><select name="enrich"><option value="1">نعم (صور+مقاسات)</option><option value="0">لا (سريع)</option></select></div></div>
+            <button class="btn sm" style="margin-top:10px">إضافة</button></form>
+          <div class="card-box"><h3>تثبيت الإضافة (مرة واحدة)</h3>
+            <ol style="font-size:13px;line-height:1.9;padding-inline-start:18px">
+              <li><a class="btn sm brand" href="/dlal-extension.zip">⬇️ تنزيل dlal-extension.zip</a> وفكّ الضغط في مجلد على حاسوب Chrome.</li>
+              <li>افتح <span class="mono" style="display:inline">chrome://extensions</span> → فعّل "وضع المطوّر" → "تحميل غير مضغوط" → اختر المجلد.</li>
+              <li>اضغط أيقونة الإضافة وأدخل: العنوان <span class="mono" style="display:inline">{origin}</span> والرمز <span class="mono" style="display:inline">{c.env.IMPORT_TOKEN ?? '(IMPORT_TOKEN غير مضبوط)'}</span> ثم "حفظ" و"شغّل الآن".</li>
+              <li>سجّل الدخول في 1688 مرة واحدة في نفس المتصفح، واتركه مفتوحًا. الإضافة تفحص المهام كل 15 دقيقة وتعمل في تبويب خلفي.</li>
+            </ol>
+            <p style="font-size:12px;color:#666">عند ظهور كابتشا من 1688 تتوقف الإضافة ساعتين وتُعلمك بإشعار؛ حلّ الكابتشا في التبويب ثم اضغط "شغّل الآن". لا تفتح أكثر من مهمة بحث كل ساعة في الأيام الأولى حتى لا يُقيَّد حساب 1688.</p>
+          </div>
+        </div>
+      </div>
+    </>
+  ));
+});
+ops.post('/crawler/new', async (c) => {
+  const f = await c.req.parseBody(); const db = c.env.DB;
+  const type = ['search', 'url', 'stock'].includes(String(f.type)) ? String(f.type) : 'search';
+  await db.prepare('INSERT INTO crawl_jobs(name,type,query,category_id,max_pages,enrich,max_new,interval_hours,run_now) VALUES(?,?,?,?,?,?,?,?,1)')
+    .bind(String(f.name).slice(0, 80), type, f.query ? String(f.query).trim() : null, type === 'stock' ? null : Number(f.category_id) || null, Math.min(20, Number(f.max_pages) || 2), Number(f.enrich) ? 1 : 0, Number(f.max_new) || 40, Number(f.interval_hours) || 24).run();
+  await logActivity(db, c.get('user')!.id, 'crawler.job.create', String(f.name));
+  return c.redirect('/admin/crawler?ok=1');
+});
+ops.post('/crawler/:id', async (c) => {
+  const f = await c.req.parseBody(); const db = c.env.DB; const id = Number(c.req.param('id'));
+  if (f.action === 'delete') await db.prepare('DELETE FROM crawl_jobs WHERE id=?').bind(id).run();
+  else if (f.action === 'toggle') await db.prepare('UPDATE crawl_jobs SET active=1-active WHERE id=?').bind(id).run();
+  else if (f.action === 'run') await db.prepare('UPDATE crawl_jobs SET run_now=1,cooldown_until=NULL,active=1 WHERE id=?').bind(id).run();
+  await logActivity(db, c.get('user')!.id, `crawler.job.${f.action}`, String(id));
+  return c.redirect('/admin/crawler?ok=1');
 });
 
 export default ops;

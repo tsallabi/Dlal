@@ -1,3 +1,5 @@
+# نسخة التشغيل المحلي: بلا ربط Workers AI (يحتاج اتصالًا بحساب Cloudflare)
+# npx wrangler dev -c wrangler.local.toml
 name = "dlal"
 main = "src/index.tsx"
 compatibility_date = "2026-09-01"
@@ -16,10 +18,6 @@ database_id = "b45c2ed9-976b-4c4f-a9ae-162b8664fdaf"
 # [[r2_buckets]]
 # binding = "IMAGES"
 # bucket_name = "dlal-images"
-
-# Workers AI — ترجمة عناوين المنتجات من الصينية إلى العربية عند الاستيراد
-[ai]
-binding = "AI"
 
 [vars]
 SITE_NAME = "دلال"

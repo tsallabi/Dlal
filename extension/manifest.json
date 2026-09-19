@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "دلال — زاحف 1688",
+  "version": "1.0.0",
+  "description": "يستورد منتجات 1688 إلى متجر دلال تلقائيًا ويفحص المخزون والأسعار، من متصفحك المسجّل في 1688.",
+  "permissions": ["alarms", "storage", "tabs", "scripting", "notifications"],
+  "host_permissions": ["*://*.1688.com/*", "*://*.alicdn.com/*", "http://localhost/*", "http://127.0.0.1/*", "https://*/*"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [{ "matches": ["*://*.1688.com/*"], "js": ["content.js"], "run_at": "document_idle" }],
+  "action": { "default_popup": "popup.html", "default_title": "دلال — زاحف 1688" },
+  "icons": { "128": "icon.png" }
+}

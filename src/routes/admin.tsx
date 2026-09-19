@@ -10,6 +10,7 @@ import { loadSettings, computePrice } from '../lib/pricing';
 import { requireRole } from '../lib/auth';
 import { requirePerm, logActivity } from '../lib/perm';
 import { setOrderStatus, markOrderPaid } from '../lib/orders';
+import { translateZhAr, hasCJK } from '../lib/translate';
 
 const admin = new Hono<Env>();
 admin.use('*', requireRole('admin'));
@@ -229,27 +230,47 @@ admin.post('/import/json', async (c) => {
   const f = await c.req.parseBody();
   let arr: any[];
   try { arr = JSON.parse(String(f.json)); } catch { return c.text('JSON غير صالح', 400); }
-  const r = await importProducts(c.env.DB, arr, Number(f.category_id), c.get('user')!.id, 'manual-json');
+  const r = await importProducts(c.env.DB, arr, Number(f.category_id), c.get('user')!.id, 'manual-json', c.env.AI);
   return c.redirect(`/admin/products?imported=${r.imported}&updated=${r.updated}`);
 });
 
 // دالة الاستيراد المشتركة — تُستخدم من الأدمن ومن /api/import
-export async function importProducts(db: D1Database, arr: any[], categoryId: number | null, byUserId: number | null, pageUrl: string) {
+export async function importProducts(db: D1Database, arr: any[], categoryId: number | null, byUserId: number | null, pageUrl: string, ai?: any) {
+  let translations = 0;
   const s = await loadSettings(db);
   const cats = await getCategories(db);
   const cat = cats.find(x => x.id === categoryId) ?? null;
-  let imported = 0, updated = 0, skipped = 0;
+  let imported = 0, updated = 0, skipped = 0, enriched = 0; const newIds: string[] = [];
   for (const it of arr) {
     const offerId = String(it.offerId ?? it.offer_id ?? '').trim();
     const price = parseFloat(it.priceCny ?? it.price_cny ?? it.price);
     if (!offerId || !price) { skipped++; continue; }
     const weight = it.weightG ?? cat?.est_weight_g ?? 300;
     const pr = computePrice(s, price, weight, cat?.markup_percent);
-    const titleAr = it.titleAr ?? it.title_ar ?? it.title ?? 'منتج';
+    let titleAr: string = it.titleAr ?? it.title_ar ?? it.title ?? 'منتج';
+    if (hasCJK(titleAr) && ai && translations < 60) { const t = await translateZhAr(ai, titleAr); translations++; if (t) titleAr = t; }
     const ex = await db.prepare("SELECT id FROM products WHERE source='1688' AND source_offer_id=?").bind(offerId).first<{ id: number }>();
     if (ex) {
       await db.prepare("UPDATE products SET source_price_cny=?,price_lyd=?,in_stock=?,last_checked_at=datetime('now'),updated_at=datetime('now') WHERE id=?")
         .bind(price, pr.total_lyd, it.inStock === false ? 0 : 1, ex.id).run();
+      // إثراء: منتج استُورد من صفحة قائمة (صورة واحدة، بلا مقاسات) ثم وصلت تفاصيله من صفحة المنتج
+      const enrich: D1PreparedStatement[] = [];
+      const cur = await db.prepare('SELECT (SELECT COUNT(*) FROM product_images WHERE product_id=?) imgs,(SELECT COUNT(*) FROM variants WHERE product_id=?) vars,title_ar,min_qty,supplier_name FROM products WHERE id=?').bind(ex.id, ex.id, ex.id).first<any>();
+      if (Array.isArray(it.images) && it.images.length > 1 && (cur?.imgs ?? 0) <= 1) {
+        enrich.push(db.prepare('DELETE FROM product_images WHERE product_id=?').bind(ex.id));
+        it.images.slice(0, 8).forEach((u: string, i: number) => enrich.push(db.prepare('INSERT INTO product_images(product_id,url,sort) VALUES(?,?,?)').bind(ex.id, u, i)));
+      }
+      if (Array.isArray(it.variants) && it.variants.length && (cur?.vars ?? 0) === 0) {
+        it.variants.forEach((v: any) => enrich.push(db.prepare('INSERT INTO variants(product_id,source_sku_id,color,size,price_delta_lyd,in_stock,image_url) VALUES(?,?,?,?,?,?,?)')
+          .bind(ex.id, v.skuId ?? null, v.color ?? null, v.size ?? null, v.priceCny ? Math.round((v.priceCny - price) * parseFloat(s.fx_cny_lyd) * 1.4 * 2) / 2 : 0, v.inStock === false ? 0 : 1, v.image ?? null)));
+      }
+      const upd: string[] = []; const binds: any[] = [];
+      if (hasCJK(cur?.title_ar) && !hasCJK(titleAr)) { upd.push('title_ar=?'); binds.push(titleAr.slice(0, 200)); }
+      if (it.minQty && Number(it.minQty) > 1 && (cur?.min_qty ?? 1) === 1) { upd.push('min_qty=?'); binds.push(Number(it.minQty)); }
+      if (it.supplier && !cur?.supplier_name) { upd.push('supplier_name=?'); binds.push(String(it.supplier)); }
+      if (it.title) { upd.push('title_src=COALESCE(title_src,?)'); binds.push(String(it.title)); }
+      if (upd.length) enrich.push(db.prepare(`UPDATE products SET ${upd.join(',')} WHERE id=?`).bind(...binds, ex.id));
+      if (enrich.length) { await db.batch(enrich); enriched++; }
       updated++; continue;
     }
     const slug = `${offerId}-${Math.random().toString(36).slice(2, 6)}`;
@@ -265,10 +286,10 @@ export async function importProducts(db: D1Database, arr: any[], categoryId: num
     (it.variants ?? []).forEach((v: any) => stmts.push(db.prepare('INSERT INTO variants(product_id,source_sku_id,color,size,price_delta_lyd,in_stock,image_url) VALUES(?,?,?,?,?,?,?)')
       .bind(pid, v.skuId ?? null, v.color ?? null, v.size ?? null, v.priceCny ? Math.round((v.priceCny - price) * parseFloat(s.fx_cny_lyd) * 1.4 * 2) / 2 : 0, v.inStock === false ? 0 : 1, v.image ?? null)));
     if (stmts.length) await db.batch(stmts);
-    imported++;
+    imported++; newIds.push(offerId);
   }
   await db.prepare('INSERT INTO import_log(by_user_id,source,page_url,imported,updated,skipped) VALUES(?,?,?,?,?,?)').bind(byUserId, '1688', pageUrl, imported, updated, skipped).run();
-  return { imported, updated, skipped };
+  return { imported, updated, skipped, enriched, newIds };
 }
 
 // ---------- المنتجات ----------
@@ -279,15 +300,25 @@ admin.get('/products', async (c) => {
   if (st) { where += ' AND p.status=?'; binds.push(st); }
   const rows = await c.env.DB.prepare(`SELECT ${PRODUCT_SELECT} FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE ${where} ORDER BY p.id DESC LIMIT 200`).bind(...binds).all<ProductRow>();
   const s = await loadSettings(c.env.DB);
+  const untranslated = (await c.env.DB.prepare("SELECT COUNT(*) n FROM products WHERE title_ar GLOB '*[一-龥]*'").first<any>())?.n ?? 0;
   return shell(c, 'products', 'المنتجات', (
     <>
-      <Flash msg={c.req.query('imported') ? `تم استيراد ${c.req.query('imported')} منتج وتحديث ${c.req.query('updated')}` : c.req.query('ok') ? 'تم الحفظ ✓' : undefined} />
-      <form class="inline" style="margin-bottom:10px"><input type="text" name="q" placeholder="بحث بالاسم أو offerId" value={q} /><select name="status"><option value="">كل الحالات</option>{['active', 'draft', 'hidden', 'unavailable'].map(x => <option value={x} selected={st === x}>{x}</option>)}</select><button class="btn sm">بحث</button><a class="btn sm ghost" href="/admin/products/new">+ منتج يدوي</a></form>
+      <Flash msg={c.req.query('imported') ? `تم استيراد ${c.req.query('imported')} منتج وتحديث ${c.req.query('updated')}` : c.req.query('translated') ? `تُرجم ${c.req.query('translated')} عنوانًا` : c.req.query('ok') ? 'تم الحفظ ✓' : undefined} /><Flash type="err" msg={c.req.query('noai') ? 'الترجمة تعمل على Cloudflare فقط (ربط Workers AI غير متاح هنا)' : undefined} />
+      <form class="inline" style="margin-bottom:10px"><input type="text" name="q" placeholder="بحث بالاسم أو offerId" value={q} /><select name="status"><option value="">كل الحالات</option>{['active', 'draft', 'hidden', 'unavailable'].map(x => <option value={x} selected={st === x}>{x}</option>)}</select><button class="btn sm">بحث</button><a class="btn sm ghost" href="/admin/products/new">+ منتج يدوي</a><button class="btn sm ghost" formaction="/admin/products/translate" formmethod="post">🈶 ترجمة العناوين الصينية ({untranslated})</button></form>
       <div class="tbl-wrap"><table class="tbl"><tr><th></th><th>المنتج</th><th>القسم</th><th>سعر المصدر</th><th>سعر البيع</th><th>الحالة</th><th>مبيعات</th><th>آخر فحص</th><th></th></tr>
         {rows.results.map(p => <tr><td><img src={p.image ?? '/placeholder.svg'} /></td><td><a href={`/admin/products/${p.id}`}>{p.title_ar}</a><br /><a class="src-link" href={p.source_url ?? '#'} target="_blank">{p.source_offer_id}</a></td><td>{p.cat_name ?? '—'}</td><td>{p.source_price_cny} ¥</td><td><b>{fmt(p.price_lyd)}</b><br /><small style="color:#888">هامش ≈ {Math.round((1 - (p.source_price_cny * parseFloat(s.fx_cny_lyd)) / p.price_lyd) * 100)}%</small></td><td><span class={`status ${p.status === 'active' ? 'green' : p.status === 'unavailable' ? 'red' : 'gray'}`}>{p.status}</span>{!p.in_stock && <><br /><small style="color:#d3262b">نفد</small></>}</td><td>{p.sales}</td><td><small>{p.last_checked_at ? timeAgo(p.last_checked_at) : '—'}</small></td><td><a href={`/p/${p.slug}`} target="_blank">👁</a></td></tr>)}
       </table></div>
     </>
   ));
+});
+
+admin.post('/products/translate', async (c) => {
+  if (!c.env.AI) return c.redirect('/admin/products?noai=1');
+  const { results } = await c.env.DB.prepare("SELECT id,title_ar FROM products WHERE title_ar GLOB '*[一-龥]*' ORDER BY sales DESC,id DESC LIMIT 40").all<any>();
+  let n = 0;
+  for (const p of results) { const t = await translateZhAr(c.env.AI, p.title_ar); if (t) { await c.env.DB.prepare('UPDATE products SET title_src=COALESCE(title_src,title_ar),title_ar=? WHERE id=?').bind(t, p.id).run(); n++; } }
+  await logActivity(c.env.DB, c.get('user')!.id, 'products.translate', String(n));
+  return c.redirect(`/admin/products?translated=${n}`);
 });
 
 admin.get('/products/new', async (c) => {

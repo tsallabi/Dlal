@@ -23,7 +23,7 @@ api.post('/import', async (c) => {
   if (!tokenOk(c)) return c.json({ error: 'رمز غير صحيح' }, 401);
   const body = await c.req.json<{ category_id: number; page_url: string; items: any[] }>();
   if (!Array.isArray(body.items)) return c.json({ error: 'items مطلوبة' }, 400);
-  const r = await importProducts(c.env.DB, body.items.slice(0, 200), body.category_id ?? null, c.get('user')?.id ?? null, body.page_url ?? 'bookmarklet');
+  const r = await importProducts(c.env.DB, body.items.slice(0, 200), body.category_id ?? null, c.get('user')?.id ?? null, body.page_url ?? 'bookmarklet', c.env.AI);
   return c.json(r);
 });
 
@@ -51,6 +51,37 @@ api.get('/cart/verify', async (c) => {
   const u = c.get('user'); if (!u) return c.json({ ok: false }, 401);
   const { results } = await c.env.DB.prepare("SELECT p.title_ar FROM cart_items ci JOIN products p ON p.id=ci.product_id WHERE ci.user_id=? AND (p.in_stock=0 OR p.status<>'active')").bind(u.id).all<any>();
   return c.json({ ok: results.length === 0, unavailable: results.map(r => r.title_ar) });
+});
+
+// ---------- إضافة المتصفح (الزاحف) ----------
+const touch = (db: D1Database, ver: string | undefined) => db.batch([
+  db.prepare("INSERT INTO settings(key,value,updated_at) VALUES('crawler_last_seen',datetime('now'),datetime('now')) ON CONFLICT(key) DO UPDATE SET value=datetime('now'),updated_at=datetime('now')"),
+  db.prepare("INSERT INTO settings(key,value,updated_at) VALUES('crawler_version',?,datetime('now')) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=datetime('now')").bind(ver ?? ''),
+]);
+
+// المهام المستحقة الآن (الخادم يقرر الاستحقاق)
+api.get('/crawl/jobs', async (c) => {
+  if (!tokenOk(c)) return c.json({ error: 'رمز غير صحيح' }, 401);
+  await touch(c.env.DB, c.req.query('v'));
+  const { results } = await c.env.DB.prepare(`SELECT j.*,c.name_ar AS category_name FROM crawl_jobs j LEFT JOIN categories c ON c.id=j.category_id
+    WHERE j.active=1 AND (j.cooldown_until IS NULL OR j.cooldown_until < datetime('now'))
+      AND (j.run_now=1 OR j.last_run_at IS NULL OR j.last_run_at < datetime('now', '-' || j.interval_hours || ' hours'))
+    ORDER BY j.run_now DESC, j.last_run_at ASC LIMIT 5`).all<any>();
+  return c.json({ jobs: results, all: (await c.env.DB.prepare('SELECT id,name,type,active,last_run_at FROM crawl_jobs ORDER BY id').all<any>()).results });
+});
+// تقرير تشغيل
+api.post('/crawl/report', async (c) => {
+  if (!tokenOk(c)) return c.json({ error: 'رمز غير صحيح' }, 401);
+  const b = await c.req.json<any>();
+  const db = c.env.DB;
+  const status = ['ok', 'blocked', 'error', 'partial'].includes(b.status) ? b.status : 'ok';
+  await db.batch([
+    db.prepare('INSERT INTO crawl_runs(job_id,started_at,status,pages,found,imported,updated,enriched,checked,note) VALUES(?,?,?,?,?,?,?,?,?,?)')
+      .bind(b.job_id ?? null, b.started_at ?? new Date().toISOString(), status, b.pages ?? 0, b.found ?? 0, b.imported ?? 0, b.updated ?? 0, b.enriched ?? 0, b.checked ?? 0, b.note ? String(b.note).slice(0, 500) : null),
+    db.prepare("UPDATE crawl_jobs SET run_now=0,last_run_at=datetime('now'),last_summary=?,cooldown_until=CASE WHEN ?='blocked' THEN datetime('now','+2 hours') ELSE NULL END WHERE id=?")
+      .bind(`${status}: صفحات ${b.pages ?? 0} · وُجد ${b.found ?? 0} · جديد ${b.imported ?? 0} · محدّث ${b.updated ?? 0} · مُثرى ${b.enriched ?? 0} · مفحوص ${b.checked ?? 0}`, status, b.job_id ?? 0),
+  ]);
+  return c.json({ ok: true });
 });
 
 export default api;

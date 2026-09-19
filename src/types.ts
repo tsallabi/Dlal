@@ -10,6 +10,7 @@ export type Bindings = {
   IMPORT_TOKEN: string;
   MYPAY_API_KEY?: string;          // اختياري: يتقدم على قيمة الإعدادات في القاعدة
   MYPAY_WEBHOOK_SECRET?: string;
+  AI?: any;                        // Workers AI للترجمة (اختياري)
 };
 
 export type StaffRole = 'owner' | 'admin' | 'ops' | 'support' | 'finance' | 'catalog';

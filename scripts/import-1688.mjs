@@ -6,7 +6,7 @@ const BASE = process.env.BASE, TOKEN = process.env.IMPORT_TOKEN;
 const target = process.argv[2] || '连衣裙';
 const catSlug = process.argv[3] || 'dresses';
 if (!BASE || !TOKEN) { console.error('BASE و IMPORT_TOKEN مطلوبان'); process.exit(2); }
-const num = (s) => parseFloat(String(s || '').replace(/[^\d.]/g, '')) || 0;
+const num = (s) => parseFloat((String(s || '').match(/\d+(?:\.\d+)?/) || ['0'])[0]) || 0;
 const offerIdFrom = (u) => (String(u || '').match(/offer\/(\d+)/) || [])[1] || (String(u || '').match(/[?&]offerId=(\d+)/) || [])[1] || '';
 const log = (...a) => console.log(...a);
 
@@ -29,7 +29,7 @@ if (!offerUrl) { log('❌ لم أصل إلى صفحة منتج (غالبًا ص�
 
 const extract = () => page.evaluate(() => {
   const $ = (s, r = document) => r.querySelector(s); const $$ = (s, r = document) => [...r.querySelectorAll(s)];
-  const txt = (el) => (el ? el.textContent.trim() : ''); const num = (s) => parseFloat(String(s || '').replace(/[^\d.]/g, '')) || 0;
+  const txt = (el) => (el ? el.textContent.trim() : ''); const num = (s) => parseFloat((String(s || '').match(/\d+(?:\.\d+)?/) || ['0'])[0]) || 0;
   const id = (location.href.match(/offer\/(\d+)/) || [])[1] || '';
   let data = null; try { data = (window.__INIT_DATA__ && window.__INIT_DATA__.globalData) || window.iDetailData || null; } catch (e) {}
   const title = txt($('h1,[class*="title-text"],[class*="offer-title"]')) || document.title;

@@ -7,7 +7,7 @@
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const txt = (el) => (el ? el.textContent.trim() : '');
-  const num = (s) => parseFloat(String(s || '').replace(/[^\d.]/g, '')) || 0;
+  const num = (s) => parseFloat((String(s || '').match(/\d+(?:\.\d+)?/) || ['0'])[0]) || 0;
   const offerIdFrom = (u) => (String(u || '').match(/offer\/(\d+)/) || [])[1] || (String(u || '').match(/[?&]offerId=(\d+)/) || [])[1] || '';
 
   // ---------- استخراج بيانات من صفحة قائمة ----------
