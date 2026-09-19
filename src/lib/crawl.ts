@@ -18,13 +18,16 @@ export async function runServerJobs(env: { DB: D1Database; AI?: any }, opts: { l
     const rep = { status: 'ok', pages: 0, found: 0, imported: 0, updated: 0, enriched: 0, checked: 0, note: '' };
     try {
       if (job.type === 'stock') {
-        const { results } = await db.prepare("SELECT source_offer_id,source_price_cny FROM products WHERE status='active' AND source='1688' ORDER BY (sales*10+views) DESC, last_checked_at ASC LIMIT ?").bind(job.max_new || 100).all<any>();
+        // الأقدم فحصًا أولًا؛ فقط منتجات لها معرف 1688 حقيقي (رقمي)
+        const { results } = await db.prepare("SELECT source_offer_id,source_price_cny,category_id FROM products WHERE status='active' AND source='1688' AND source_offer_id GLOB '[0-9]*' AND length(source_offer_id)>=9 ORDER BY last_checked_at ASC, (sales*10+views) DESC LIMIT ?").bind(job.max_new || 100).all<any>();
         for (const p of results) {
           const r = await prov.item(p.source_offer_id); await logRaw(db, 'in', r.url, r.status, r.raw, r.ok);
-          if (!r.ok) { rep.note += ` ${p.source_offer_id}: ${r.error}`; continue; }
+          if (!r.ok) { rep.note += ` ${p.source_offer_id}: ${r.error}`; if (/NotFound/i.test(r.error ?? '')) await db.prepare("UPDATE products SET in_stock=0,last_checked_at=datetime('now') WHERE source='1688' AND source_offer_id=?").bind(p.source_offer_id).run(); continue; }
           const it = r.data!; const big = it.priceCny && Math.abs(it.priceCny - p.source_price_cny) / p.source_price_cny > 0.15;
           await db.prepare("UPDATE products SET in_stock=?,status=CASE WHEN ?=1 THEN 'hidden' ELSE status END,source_price_cny=COALESCE(?,source_price_cny),last_checked_at=datetime('now') WHERE source='1688' AND source_offer_id=?").bind(it.inStock ? 1 : 0, big ? 1 : 0, it.priceCny || null, p.source_offer_id).run();
           rep.checked++;
+          // إثراء بالتفاصيل الكاملة (صور، مقاسات/ألوان، عنوان عربي، حد أدنى) إن كانت ناقصة
+          if (it.priceCny && (it.variants.length || it.images.length > 1)) { const res = await importProducts(db, [it], p.category_id ?? null, opts.byUserId ?? null, `api:${prov.name}:stock`, env.AI); rep.enriched += res.enriched; }
         }
       } else {
         const newIds: string[] = [];
