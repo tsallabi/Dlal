@@ -27,14 +27,7 @@ if (!offerUrl) {
 }
 if (!offerUrl) { log('❌ لم أصل إلى صفحة منتج (غالبًا صفحة تحقق/دخول من 1688). لقطة: shot-search.png'); await browser.close(); process.exit(3); }
 
-log('📄 فتح المنتج:', offerUrl);
-await page.goto(offerUrl, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(e => log('detail goto:', e.message));
-await page.waitForTimeout(5000);
-await page.screenshot({ path: 'shot-detail.png', fullPage: false });
-log('عنوان الصفحة:', await page.title(), '| URL:', page.url());
-
-// نفس منطق extractDetail في public/importer.js
-const detail = await page.evaluate(() => {
+const extract = () => page.evaluate(() => {
   const $ = (s, r = document) => r.querySelector(s); const $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const txt = (el) => (el ? el.textContent.trim() : ''); const num = (s) => parseFloat(String(s || '').replace(/[^\d.]/g, '')) || 0;
   const id = (location.href.match(/offer\/(\d+)/) || [])[1] || '';
@@ -59,10 +52,23 @@ const detail = await page.evaluate(() => {
   const blocked = /验证|滑动|login\.1688|passport|security/i.test(location.href + ' ' + document.title);
   return { offerId: id, url: `https://detail.1688.com/offer/${id}.html`, title: title.slice(0, 200), priceCny, images, variants, minQty, inStock: priceCny > 0, supplier: txt($('[class*="company-name"],[class*="supplier-name"]')), blocked, htmlLen: html.length };
 });
+// محاولة 1: صفحة سطح المكتب — محاولة 2: صفحة الجوال (أقل حجبًا)
+const id0 = offerIdFrom(offerUrl);
+let detail = null;
+for (const [label, u] of [['desktop', `https://detail.1688.com/offer/${id0}.html`], ['mobile', `https://m.1688.com/offer/${id0}.html`]]) {
+  log(`📄 فتح المنتج (${label}):`, u);
+  await page.goto(u, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(e => log('goto:', e.message));
+  await page.waitForTimeout(6000);
+  await page.screenshot({ path: `shot-${label}.png`, fullPage: false });
+  log('   عنوان الصفحة:', await page.title(), '| URL:', page.url());
+  const d = await extract();
+  log('   استخراج:', JSON.stringify({ offerId: d.offerId, price: d.priceCny, images: d.images.length, variants: d.variants.length, blocked: d.blocked, title: d.title.slice(0, 60) }));
+  if (d.offerId && d.priceCny && !d.blocked) { detail = d; break; }
+}
 await browser.close();
+if (!detail) { log('❌ 1688 لم يعرض بيانات المنتج في أي من الصفحتين (تحقق/دخول مطلوب من عنوان خادم أجنبي). اللقطات مرفقة.'); process.exit(4); }
 log('📦 المستخرج:', JSON.stringify({ ...detail, images: detail.images.length, variants: detail.variants.length }, null, 0));
 detail.images.slice(0, 3).forEach(u => log('   صورة:', u));
-if (detail.blocked || !detail.offerId || !detail.priceCny) { log('❌ 1688 لم يعرض بيانات المنتج (تحقق/دخول مطلوب أو بنية مختلفة). لقطة: shot-detail.png'); process.exit(4); }
 
 // إرسال إلى دلال كما يفعل زر الاستيراد
 const cats = await (await fetch(BASE + '/api/categories')).json();
