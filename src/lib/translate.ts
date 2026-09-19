@@ -33,8 +33,8 @@ async function m2m(ai: any, text: string, source: 'chinese' | 'english'): Promis
 const SYS_TITLE = 'أنت مترجم لمتجر أزياء عربي. حوّل عنوان منتج من موقع 1688 (صيني محشو بكلمات مفتاحية) إلى عنوان منتج عربي قصير وطبيعي من 5 إلى 14 كلمة يصف المنتج للزبون. احذف عبارات مثل "تجارة خارجية"، "عبر الحدود"، "جديد 2025"، "بالجملة"، "موديل جديد". أجب بالعنوان العربي فقط، بلا شرح ولا علامات اقتباس.';
 const SYS_ATTR = 'ترجم قيمة خاصية منتج (لون أو مقاس أو نمط) من الصينية إلى العربية بكلمة أو كلمتين كما تُكتب في متجر ملابس. أجب بالترجمة فقط.';
 const SYS_TEXT = 'ترجم النص التالي من الصينية إلى العربية بشكل طبيعي وقصير. أجب بالترجمة فقط.';
-async function llm(ai: any, sys: string, user: string): Promise<string | null> {
-  for (const model of ['@cf/meta/llama-3.3-70b-instruct-fp8-fast', '@cf/meta/llama-3.1-8b-instruct']) {
+async function llm(ai: any, sys: string, user: string, models: string[]): Promise<string | null> {
+  for (const model of models) {
     try {
       const r: any = await ai.run(model, { messages: [{ role: 'system', content: sys }, { role: 'user', content: user }], max_tokens: 120, temperature: 0.2 });
       const t = String(r?.response ?? '').trim().split('\n')[0].replace(/^["'«»“”\s]+|["'«»“”\s.]+$/g, '').trim();
@@ -49,7 +49,9 @@ export async function translateZhAr(ai: any, text: string, kind: 'text' | 'attr'
   if (!ai || !text) return null;
   const sys = kind === 'attr' ? SYS_ATTR : kind === 'title' ? SYS_TITLE : SYS_TEXT;
   const user = hintEn && !hasCJK(hintEn) ? `الصينية: ${text.slice(0, 300)}\nالإنجليزية: ${hintEn.slice(0, 300)}` : text.slice(0, 300);
-  return (await llm(ai, sys, user)) ?? (hintEn && !hasCJK(hintEn) ? await m2m(ai, hintEn, 'english') : null) ?? (await m2m(ai, text, 'chinese'));
+  // العناوين: النموذج الكبير ثم الصغير؛ الخصائص القصيرة: النموذج الصغير (أسرع) يكفي
+  const models = kind === 'title' ? ['@cf/meta/llama-3.3-70b-instruct-fp8-fast', '@cf/meta/llama-3.1-8b-instruct'] : ['@cf/meta/llama-3.1-8b-instruct', '@cf/meta/llama-3.3-70b-instruct-fp8-fast'];
+  return (await llm(ai, sys, user, models)) ?? (hintEn && !hasCJK(hintEn) ? await m2m(ai, hintEn, 'english') : null) ?? (await m2m(ai, text, 'chinese'));
 }
 
 // ترجمة مع ذاكرة: قاموس → ذاكرة القاعدة → الذكاء الاصطناعي → (العنوان الإنجليزي إن وُجد) → النص الأصلي
@@ -79,7 +81,10 @@ export class Translator {
 // إعادة ترجمة ما بقي صينيًا أو ما تُرجم ترجمة رديئة (تكرار) — تُستخدم من الأدمن ومن /api/source/translate
 export async function retranslatePending(db: D1Database, ai: any, limit = 40): Promise<{ products: number; variants: number }> {
   const tr = new Translator(db, ai, limit + 60);
-  const { results } = await db.prepare("SELECT id,title_ar,title_src,supplier_name FROM products WHERE title_ar GLOB '*[一-龥]*' OR title_src GLOB '*[一-龥]*' OR supplier_name GLOB '*[一-龥]*' ORDER BY sales DESC,id DESC LIMIT 200").all<any>();
+  const { results } = await db.prepare("SELECT id,title_ar,title_src,supplier_name FROM products WHERE title_ar GLOB '*[一-龥]*' OR title_src GLOB '*[一-龥]*' OR supplier_name GLOB '*[一-龥]*' ORDER BY sales DESC,id DESC LIMIT 400").all<any>();
+  // العناوين الصينية أو الرديئة أولًا، ثم ما تبقى (موردون)
+  const needs = (p: any) => hasCJK(p.title_ar) || !goodArabic(p.title_ar);
+  results.sort((a, b) => Number(needs(b)) - Number(needs(a)));
   let n = 0, nv = 0;
   for (const p of results) {
     if (n >= limit) break;

@@ -7,10 +7,13 @@ async function logRaw(db: D1Database, direction: 'out' | 'in', url: string, stat
   await db.prepare('INSERT INTO payment_log(payment_id,direction,url,status_code,request,response,ok) VALUES(NULL,?,?,?,?,?,?)').bind(direction, 'SRC ' + url.replace(/(instanceKey|apiToken)=[^&]+/g, '$1=***'), status, '', body.slice(0, 60000), ok ? 1 : 0).run();
 }
 
-export async function runServerJobs(env: { DB: D1Database; AI?: any }, opts: { limit?: number; jobId?: number; byUserId?: number | null } = {}) {
+// maxItems: سقف المنتجات المفحوصة في الاستدعاء الواحد (مهمة المخزون) حتى لا يتجاوز الطلب حدود Worker؛ الاستدعاء التالي (كرون كل ساعة) يكمل من حيث توقف
+export async function runServerJobs(env: { DB: D1Database; AI?: any }, opts: { limit?: number; jobId?: number; byUserId?: number | null; maxItems?: number } = {}) {
   const db = env.DB; const s = await loadSettings(db); const prov = getProvider(s);
   if (!prov) return { ran: 0, error: 'لا يوجد مزوّد API مضبوط' };
-  const where = opts.jobId ? 'j.id=?' : "j.active=1 AND (j.run_now=1 OR j.last_run_at IS NULL OR j.last_run_at < datetime('now', '-' || j.interval_hours || ' hours'))";
+  const maxItems = Math.max(1, Math.min(opts.maxItems ?? 8, 25));
+  // مهمة المخزون لا تُقيَّد بـ last_run_at: تعمل كل مرة وتفحص فقط المنتجات المستحقة (أقدم من interval_hours)
+  const where = opts.jobId ? 'j.id=?' : "j.active=1 AND (j.run_now=1 OR j.type='stock' OR j.last_run_at IS NULL OR j.last_run_at < datetime('now', '-' || j.interval_hours || ' hours'))";
   const { results: jobs } = await db.prepare(`SELECT j.* FROM crawl_jobs j WHERE ${where} ORDER BY j.run_now DESC, j.last_run_at ASC LIMIT ?`).bind(...(opts.jobId ? [opts.jobId] : []), opts.limit ?? 3).all<any>();
   const out: any[] = [];
   for (const job of jobs) {
@@ -19,7 +22,8 @@ export async function runServerJobs(env: { DB: D1Database; AI?: any }, opts: { l
     try {
       if (job.type === 'stock') {
         // الأقدم فحصًا أولًا؛ فقط منتجات لها معرف 1688 حقيقي (رقمي)
-        const { results } = await db.prepare("SELECT source_offer_id,source_price_cny,category_id FROM products WHERE status='active' AND source='1688' AND source_offer_id GLOB '[0-9]*' AND length(source_offer_id)>=9 ORDER BY last_checked_at ASC, (sales*10+views) DESC LIMIT ?").bind(job.max_new || 100).all<any>();
+        const { results } = await db.prepare("SELECT source_offer_id,source_price_cny,category_id FROM products WHERE status='active' AND source='1688' AND source_offer_id GLOB '[0-9]*' AND length(source_offer_id)>=9 AND (last_checked_at IS NULL OR last_checked_at < datetime('now', '-' || ? || ' hours')) ORDER BY last_checked_at ASC, (sales*10+views) DESC LIMIT ?").bind(job.interval_hours || 12, Math.min(job.max_new || 100, maxItems)).all<any>();
+        if (!results.length) { rep.note += ' لا منتجات مستحقة للفحص الآن.'; }
         for (const p of results) {
           const r = await prov.item(p.source_offer_id); await logRaw(db, 'in', r.url, r.status, r.raw, r.ok);
           if (!r.ok) { rep.note += ` ${p.source_offer_id}: ${r.error}`; if (/NotFound/i.test(r.error ?? '')) await db.prepare("UPDATE products SET in_stock=0,last_checked_at=datetime('now') WHERE source='1688' AND source_offer_id=?").bind(p.source_offer_id).run(); continue; }
@@ -46,6 +50,7 @@ export async function runServerJobs(env: { DB: D1Database; AI?: any }, opts: { l
         }
       }
     } catch (e: any) { rep.status = 'error'; rep.note += ' ' + e.message; }
+    if (job.type === 'stock' && rep.status === 'ok' && rep.checked === 0 && !rep.note.includes(':')) { out.push({ job: job.name, ...rep, skipped: true }); continue; }
     await db.batch([
       db.prepare('INSERT INTO crawl_runs(job_id,started_at,status,pages,found,imported,updated,enriched,checked,note) VALUES(?,?,?,?,?,?,?,?,?,?)').bind(job.id, started, rep.status, rep.pages, rep.found, rep.imported, rep.updated, rep.enriched, rep.checked, (`[خادم/${prov.name}]` + rep.note).slice(0, 500)),
       db.prepare("UPDATE crawl_jobs SET run_now=0,last_run_at=datetime('now'),last_summary=? WHERE id=?").bind(`${rep.status} (خادم): صفحات ${rep.pages} · وُجد ${rep.found} · جديد ${rep.imported} · محدّث ${rep.updated} · مُثرى ${rep.enriched} · مفحوص ${rep.checked}`, job.id),

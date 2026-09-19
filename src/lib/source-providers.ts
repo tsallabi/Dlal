@@ -12,8 +12,8 @@ const arr = (v: any): any[] => (Array.isArray(v) ? v : v && typeof v === 'object
 const idOf = (v: any) => String(v ?? '').replace(/^abb-/, '').replace(/\D/g, '');
 const fixImg = (u: any) => (typeof u === 'string' ? u : g(u, 'Url', 'url', 'imgUrl', 'large', 'medium') ?? '').toString().replace(/^\/\//, 'https://');
 
-async function call(url: string): Promise<{ status: number; text: string; json: any }> {
-  const res = await fetch(url, { headers: { accept: 'application/json' } });
+async function call(url: string, headers: Record<string, string> = {}): Promise<{ status: number; text: string; json: any }> {
+  const res = await fetch(url, { headers: { accept: 'application/json', ...headers } });
   const text = await res.text(); let json: any = null; try { json = JSON.parse(text); } catch {}
   return { status: res.status, text: text.slice(0, 60000), json };
 }
@@ -73,33 +73,38 @@ class Tmapi implements Provider {
   name = 'tmapi';
   constructor(private base: string, private key: string, private lang: string) {}
   private u(path: string, q: Record<string, string>) { const p = new URLSearchParams({ apiToken: this.key, ...q }); return `${this.base.replace(/\/+$/, '')}${path}?${p}`; }
+  private h() { return { apikey: this.key }; }
   private norm(it: any): NormItem {
     const id = idOf(g(it, 'item_id', 'itemId', 'num_iid', 'id', 'offerId'));
     const price = num(g(it, 'price_info.price', 'price_info.sale_price', 'sale_price', 'price', 'priceRange.0.0', 'price_range.0.price'));
+    // صور الألوان من sku_props: props_ids "0:1;1:2" → pid 0 vid 1
+    const propImg = new Map<string, string>(); const propName = new Map<string, string>();
+    arr(g(it, 'sku_props')).forEach((p: any) => arr(p.values).forEach((v: any) => { const k = `${p.pid}:${v.vid}`; if (v.imageUrl) propImg.set(k, fixImg(v.imageUrl)); propName.set(k, `${p.prop_name}:${v.name}`); }));
     const variants = arr(g(it, 'skus', 'sku_list', 'sku.sku_list')).map((s: any) => {
       const props = String(g(s, 'props_names', 'properties_name', 'name', 'sku_name') ?? '');
       const parts = props.split(/[;；]/).map(p => p.split(/[:：]/).pop()?.trim() ?? '').filter(Boolean);
-      const sizeIdx = parts.findIndex(p => /^(xs|s|m|l|xl|xxl|xxxl|\d{2,3}|均码|f)$/i.test(p));
+      const sizeIdx = parts.findIndex(p => /^(xs|s|m|l|xl|xxl|xxxl|\d{2,3}|均码|f)$/i.test(p) || /尺码|尺寸|码/.test(props.split(/[;；]/).find(x => x.includes(p)) ?? ''));
       const size = sizeIdx >= 0 ? parts[sizeIdx] : undefined; const color = parts.find((_, i) => i !== sizeIdx);
-      return { skuId: String(g(s, 'skuid', 'sku_id', 'skuId') ?? ''), color, size, priceCny: num(g(s, 'sale_price', 'price')), inStock: num(g(s, 'stock', 'quantity')) > 0, image: fixImg(g(s, 'image', 'img', 'pic')) || undefined };
+      const ids = String(g(s, 'props_ids') ?? '').split(';'); const img = ids.map(k => propImg.get(k)).find(Boolean);
+      return { skuId: String(g(s, 'skuid', 'sku_id', 'skuId') ?? ''), color, size, priceCny: num(g(s, 'sale_price', 'price')), inStock: num(g(s, 'stock', 'quantity')) > 0, image: fixImg(g(s, 'image', 'img', 'pic')) || img || undefined };
     });
     return {
       offerId: id, url: `https://detail.1688.com/offer/${id}.html`, title: String(g(it, 'title', 'subject', 'name') ?? ''), titleEn: g(it, 'title_en', 'title_translated'),
       priceCny: price, images: arr(g(it, 'main_imgs', 'images', 'item_imgs', 'pic_urls')).map(fixImg).filter(Boolean).slice(0, 8).concat(g(it, 'img', 'pic_url', 'main_pic') ? [fixImg(g(it, 'img', 'pic_url', 'main_pic'))] : []).filter((u, i, a) => a.indexOf(u) === i),
-      sales: num(g(it, 'sale_info.sale_quantity_90days', 'sale_info.sales', 'sales', 'sold')), minQty: Math.max(1, num(g(it, 'min_order_quantity', 'sale_info.min_order', 'moq')) || 1),
+      sales: num(g(it, 'sale_info.sale_quantity_90days', 'sale_count', 'sale_info.sales', 'sales', 'sold')), minQty: Math.max(1, num(g(it, 'min_order_quantity', 'tiered_price_info.begin_num', 'sku_price_range.begin_num', 'sale_info.min_order', 'moq')) || 1),
       inStock: variants.length ? variants.some(v => v.inStock) : num(g(it, 'stock', 'quantity')) !== 0, supplier: g(it, 'seller_info.shop_name', 'shop_info.shop_name', 'seller_name', 'company_name'), variants,
     };
   }
   async search(keyword: string, page: number) {
     const url = this.u('/1688/search/items', { keyword, page: String(page), ...(this.lang && this.lang !== 'zh' ? { language: this.lang } : {}) });
-    try { const r = await call(url); const ok = r.status === 200 && (r.json?.code === 200 || r.json?.code === 0 || !!r.json?.data);
+    try { const r = await call(url, this.h()); const ok = r.status === 200 && (r.json?.code === 200 || r.json?.code === 0 || !!r.json?.data);
       const items = arr(g(r.json, 'data.items', 'data.list', 'data', 'items', 'result')).map(x => this.norm(x)).filter(x => x.offerId && x.priceCny);
       return { ok, data: items, raw: r.text, url, status: r.status, error: ok ? undefined : g(r.json, 'msg', 'message', 'error') ?? `HTTP ${r.status}` }; }
     catch (e: any) { return { ok: false, data: [], raw: '', url, status: 0, error: e.message }; }
   }
   async item(offerId: string) {
     const url = this.u('/1688/item_detail', { item_id: offerId });
-    try { const r = await call(url); const it = g(r.json, 'data.item', 'data', 'item', 'result'); const ok = r.status === 200 && !!it && typeof it === 'object';
+    try { const r = await call(url, this.h()); const it = g(r.json, 'data.item', 'data', 'item', 'result'); const ok = r.status === 200 && !!it && typeof it === 'object';
       return { ok, data: ok ? this.norm(it) : null, raw: r.text, url, status: r.status, error: ok ? undefined : g(r.json, 'msg', 'message', 'error') ?? `HTTP ${r.status}` }; }
     catch (e: any) { return { ok: false, data: null, raw: '', url, status: 0, error: e.message }; }
   }

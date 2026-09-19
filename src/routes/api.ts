@@ -102,8 +102,8 @@ api.post('/source/test', async (c) => {
 });
 api.post('/source/run', async (c) => {
   if (!tokenOk(c)) return c.json({ error: 'رمز غير صحيح' }, 401);
-  const b = await c.req.json<{ job_id?: number; limit?: number }>();
-  return c.json(await runServerJobs(c.env, { limit: Math.min(3, b.limit ?? 1), jobId: b.job_id, byUserId: c.get('user')?.id ?? null }));
+  const b = await c.req.json<{ job_id?: number; limit?: number; max_items?: number }>();
+  return c.json(await runServerJobs(c.env, { limit: Math.min(3, b.limit ?? 1), jobId: b.job_id, byUserId: c.get('user')?.id ?? null, maxItems: b.max_items ?? 8 }));
 });
 api.post('/source/translate', async (c) => {
   if (!tokenOk(c)) return c.json({ error: 'رمز غير صحيح' }, 401);
