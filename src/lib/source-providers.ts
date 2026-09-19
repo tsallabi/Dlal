@@ -40,7 +40,7 @@ class Otapi implements Provider {
       const cfg = attrs.filter(a => a.IsConfigurator);
       const isSize = (a: any) => /size|尺|码|规格/i.test(`${a.PropertyName ?? ''} ${a.OriginalPropertyName ?? ''} ${a.Pid ?? ''}`) || /^(xs|s|m|l|xl|xxl|xxxl|\d+)$/i.test(String(a.OriginalValue ?? a.Value ?? ''));
       const sizes = cfg.filter(isSize), colors = cfg.filter(a => !isSize(a));
-      const mk = (c?: any, sz?: any) => ({ skuId: undefined, color: c ? String(c.OriginalValue ?? c.Value) : undefined, colorEn: c?.Value, size: sz ? String(sz.OriginalValue ?? sz.Value) : undefined, sizeEn: sz?.Value, priceCny: undefined, inStock: true, image: c?.ImageUrl ? fixImg(c.ImageUrl) : sz?.ImageUrl ? fixImg(sz.ImageUrl) : undefined });
+      const mk = (c?: any, sz?: any) => ({ skuId: '', color: c ? String(c.OriginalValue ?? c.Value) : undefined, colorEn: c?.Value, size: sz ? String(sz.OriginalValue ?? sz.Value) : undefined, sizeEn: sz?.Value, priceCny: 0, inStock: true, image: c?.ImageUrl ? fixImg(c.ImageUrl) : sz?.ImageUrl ? fixImg(sz.ImageUrl) : undefined });
       if (colors.length && sizes.length) colors.forEach(c => sizes.forEach(sz => variants.push(mk(c, sz))));
       else (colors.length ? colors : sizes).forEach(a => variants.push(isSize(a) ? mk(undefined, a) : mk(a)));
     }
