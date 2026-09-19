@@ -13,6 +13,7 @@ import adminOps from './routes/admin-ops';
 import api1688Admin, { getClient, syncStock } from './routes/api1688-admin';
 import { loadSettings } from './lib/pricing';
 import { Client1688, type Tokens } from './lib/api1688';
+import { runServerJobs } from './lib/crawl';
 
 const app = new Hono<Env>();
 
@@ -41,6 +42,7 @@ export default {
   fetch: app.fetch,
   async scheduled(_ev: ScheduledEvent, env: Env['Bindings'], ctx: ExecutionContext) {
     const s = await loadSettings(env.DB);
+    if (s.src_key) ctx.waitUntil(runServerJobs(env, { limit: 4 }));   // مزوّد API من طرف ثالث
     if (!s.api1688_key || !s.api1688_tokens) return;
     const client = new Client1688(s.api1688_key, s.api1688_secret, JSON.parse(s.api1688_tokens) as Tokens,
       async (t) => { await env.DB.prepare("INSERT INTO settings(key,value) VALUES('api1688_tokens',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(JSON.stringify(t)).run(); });

@@ -12,6 +12,8 @@ import { requirePerm, STAFF_ROLES, ROLE_PERMS, PERM_LABELS, logActivity, permsOf
 import { loadSettings } from '../lib/pricing';
 import { loadMyPay, checkConnection } from '../lib/mypay';
 import { setOrderStatus, addPoints } from '../lib/orders';
+import { getProvider, PROVIDERS } from '../lib/source-providers';
+import { runServerJobs } from '../lib/crawl';
 
 const ops = new Hono<Env>();
 ops.use('*', requireRole('admin'));
@@ -410,6 +412,62 @@ ops.post('/crawler/:id', async (c) => {
   else if (f.action === 'run') await db.prepare('UPDATE crawl_jobs SET run_now=1,cooldown_until=NULL,active=1 WHERE id=?').bind(id).run();
   await logActivity(db, c.get('user')!.id, `crawler.job.${f.action}`, String(id));
   return c.redirect('/admin/crawler?ok=1');
+});
+
+// ---------- مزوّد API لبيانات 1688 (طرف ثالث) ----------
+ops.use('/source*', requirePerm('catalog.manage'));
+ops.get('/source', async (c) => {
+  const db = c.env.DB; const s = await loadSettings(db);
+  const logs = await db.prepare("SELECT * FROM payment_log WHERE url LIKE 'SRC %' ORDER BY id DESC LIMIT 20").all<any>();
+  const prov = getProvider(s);
+  return shell(c, 'source', 'مزوّد API لبيانات 1688', (
+    <>
+      <Flash msg={c.req.query('ok') ? 'تم الحفظ ✓' : c.req.query('ran') ? `شُغّلت ${c.req.query('ran')} مهمة من الخادم — انظر سجل التشغيل في صفحة الزاحف` : undefined} />
+      {c.req.query('test') && <Flash type={c.req.query('test') === 'ok' ? 'ok' : 'err'} msg={decodeURIComponent(c.req.query('detail') ?? '')} />}
+      <div class="two">
+        <div>
+          <form method="post" action="/admin/source" class="card-box"><h3>الإعدادات</h3>
+            <p style="font-size:13px;color:#666">مع مزوّد API يعمل الاستيراد وفحص المخزون من خادم دلال تلقائيًا كل ليلة (Cron 03:00 UTC) بلا متصفح مفتوح. بدون مزوّد تبقى إضافة المتصفح هي الطريقة.</p>
+            <label>المزوّد</label><select name="src_provider"><option value="none" selected={!s.src_provider || s.src_provider === 'none'}>— بلا (استخدم إضافة المتصفح) —</option>{Object.entries(PROVIDERS).map(([k, v]) => <option value={k} selected={s.src_provider === k}>{v.ar}</option>)}</select>
+            <label>عنوان API الأساسي</label><input type="url" name="src_base_url" value={s.src_base_url ?? ''} placeholder="https://otapi.net أو https://api.tmapi.top" dir="ltr" />
+            <label>المفتاح (instanceKey / apiToken)</label><input type="password" name="src_key" value={s.src_key ?? ''} dir="ltr" />
+            <label>لغة البيانات المطلوبة من المزوّد</label><select name="src_lang"><option value="zh" selected={(s.src_lang ?? 'zh') === 'zh'}>صينية (ثم تُترجم عندنا بالذكاء الاصطناعي)</option><option value="en" selected={s.src_lang === 'en'}>إنجليزية</option><option value="ar" selected={s.src_lang === 'ar'}>عربية (إن دعمها المزوّد)</option></select>
+            <div class="inline" style="margin-top:10px"><button class="btn sm">حفظ</button>
+              <input type="text" name="test_id" placeholder="معرف منتج 1688 للاختبار" style="width:200px" dir="ltr" /><button class="btn sm ghost" formaction="/admin/source/test">اختبار: جلب منتج</button>
+              <input type="text" name="test_kw" placeholder="كلمة بحث صينية" style="width:160px" /><button class="btn sm ghost" formaction="/admin/source/test">اختبار: بحث</button></div>
+          </form>
+          <form method="post" action="/admin/source/run" class="card-box"><h3>تشغيل من الخادم الآن</h3><p style="font-size:13px;color:#666">ينفذ المهام المستحقة في صفحة الزاحف عبر المزوّد (حتى 3 مهام في الضغطة الواحدة).</p><button class="btn sm ok" disabled={!prov}>شغّل المهام المستحقة</button> <a class="btn sm ghost" href="/admin/crawler">صفحة الزاحف ›</a></form>
+        </div>
+        <div>
+          <div class="card-box"><h3>المزوّدون المدعومون</h3><table class="tbl"><tr><th>المزوّد</th><th>الموقع</th><th>المفتاح</th></tr>{Object.entries(PROVIDERS).map(([k, v]) => <tr><td>{v.ar}</td><td><a href={v.site} target="_blank" class="src-link">{v.site}</a></td><td class="mono" style="display:table-cell">{v.keyLabel}</td></tr>)}</table>
+            <p style="font-size:12px;color:#666;margin-top:8px">سجّل عند المزوّد، خذ المفتاح، الصقه هنا، ثم "اختبار: جلب منتج". إن ظهر الرد بشكل مختلف عن المتوقع فالرد الخام أدناه يوضح الحقول وسنعدّل الموصّل.</p></div>
+          <div class="card-box"><h3>آخر الردود الخام من المزوّد</h3>{logs.results.length === 0 ? <p style="color:#888">لا استدعاءات بعد.</p> : logs.results.map(l => <details class="plog"><summary><span class={`status ${l.ok ? 'green' : 'red'}`}>{l.status_code}</span> <small>{l.url.slice(0, 90)} · {timeAgo(l.created_at)}</small></summary><pre class="mono">{l.response}</pre></details>)}</div>
+        </div>
+      </div>
+    </>
+  ));
+});
+ops.post('/source', async (c) => {
+  const f = await c.req.parseBody(); const db = c.env.DB;
+  const keys = ['src_provider', 'src_base_url', 'src_key', 'src_lang'];
+  await db.batch(keys.map(k => db.prepare("INSERT INTO settings(key,value,updated_at) VALUES(?,?,datetime('now')) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at").bind(k, String(f[k] ?? '').trim())));
+  await logActivity(db, c.get('user')!.id, 'source.settings', String(f.src_provider));
+  return c.redirect('/admin/source?ok=1');
+});
+ops.post('/source/test', async (c) => {
+  const f = await c.req.parseBody(); const db = c.env.DB;
+  const s = { ...(await loadSettings(db)), src_provider: String(f.src_provider), src_base_url: String(f.src_base_url), src_key: String(f.src_key), src_lang: String(f.src_lang) };
+  const prov = getProvider(s); if (!prov) return c.redirect('/admin/source?test=fail&detail=' + encodeURIComponent('اختر مزوّدًا وأدخل المفتاح'));
+  const r = f.test_kw ? await prov.search(String(f.test_kw), 1) : await prov.item(String(f.test_id).replace(/\D/g, ''));
+  await db.prepare('INSERT INTO payment_log(payment_id,direction,url,status_code,request,response,ok) VALUES(NULL,?,?,?,?,?,?)').bind('in', 'SRC ' + r.url.replace(/(instanceKey|apiToken)=[^&]+/g, '$1=***'), r.status, '', r.raw.slice(0, 4000), r.ok ? 1 : 0).run();
+  const d: any = r.data;
+  const detail = r.ok ? (Array.isArray(d) ? `نجح البحث: ${d.length} منتج. الأول: ${d[0]?.title?.slice(0, 40)} — ¥${d[0]?.priceCny}` : `نجح: ${d?.title?.slice(0, 50)} — ¥${d?.priceCny} — صور ${d?.images?.length} — متغيرات ${d?.variants?.length} — حد أدنى ${d?.minQty}`) : `فشل: ${r.error} (HTTP ${r.status})`;
+  return c.redirect(`/admin/source?test=${r.ok ? 'ok' : 'fail'}&detail=${encodeURIComponent(detail)}`);
+});
+ops.post('/source/run', async (c) => {
+  const r = await runServerJobs(c.env, { limit: 3, byUserId: c.get('user')!.id });
+  await logActivity(c.env.DB, c.get('user')!.id, 'source.run', String(r.ran));
+  return c.redirect(`/admin/source?ran=${r.ran}`);
 });
 
 export default ops;
