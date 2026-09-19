@@ -22,3 +22,11 @@
 - Cloudflare Workers + Hono JSX + D1 (SQLite) + Workers AI. الملفات: `src/routes/*` الصفحات، `src/lib/*` المنطق، `migrations/*` المخطط، `extension/` إضافة كروم، `scripts/` الاختبارات.
 - الأدوار: `src/lib/perm.ts`. الطلبات: `src/lib/orders.ts`. الدفع: `src/lib/mypay.ts`. مصادر 1688: زر الاستيراد، إضافة المتصفح (`/admin/crawler`)، مزوّد API (`/admin/source`).
 - أي تغيير في المخطط = ملف ترحيل جديد مرقّم؛ لا تعدّل ترحيلًا قديمًا.
+
+## مزوّد 1688 API (OTAPI) — ما ثبت عمليًا على الموقع الحي
+- الإعدادات في جدول `settings`: `src_provider=otapi`, `src_base_url=https://otapi.net`, `src_key` (instanceKey — لا يُكتب أبدًا في المستودع), `src_lang=en` (يعيد العنوان الأصلي الصيني + ترجمة إنجليزية تُستخدم كمساعد للترجمة العربية).
+- الطرق التي تعمل فعلًا: `GetItemFullInfo?itemId=abb-{id}` (الجذر `OtapiItemFullInfo`)، و`SearchItemsFrame` (النتائج في `Result.Items.Content`). `BatchSearchItemsFrame` يحتاج `blockList=SearchItems`.
+- منتج غير موجود يعيد `ErrorCode=NotFound` (المنتج نزل من 1688) فيُعلَّم غير متوفر.
+- الفحص الحي بلا تسجيل دخول: workflow `source-check.yml` (يستخدم `IMPORT_TOKEN`) → `/api/source/test|run|translate`. الردود الخام تُسجَّل في `payment_log` بعنوان يبدأ بـ `SRC ` مع إخفاء المفتاح.
+- الترجمة: نموذج m2m100 يُنتج تكرارًا رديئًا للعناوين الصينية ("حديقة حديقة…") — لذلك العناوين تُترجم بنموذج لغوي (`llama-3.3-70b` ثم `llama-3.1-8b`) مع فحص جودة `goodArabic` وسقوط إلى m2m100 من الإنجليزية. لا تعد إلى m2m100 كخيار أول.
+- التجربة المجانية 300 استدعاء/5 أيام: قلّل `max_pages`/`max_new` في `crawl_jobs` قبل أي تشغيل تجريبي.
