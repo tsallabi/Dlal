@@ -20,11 +20,13 @@ jobs:
           BASE: ${{ github.event.inputs.url || 'https://dlal.tsallabi.workers.dev' }}
         run: |
           fail=0
-          for p in / /c/dresses /c/bags /search?q=فستان /login /register /pages/faq /pages/returns /cart /wishlist; do
+          for p in / /c/dresses /c/bags /login /register /pages/faq /pages/returns /cart /wishlist; do
             code=$(curl -s -o /tmp/page.html -w '%{http_code}' "$BASE$p")
             echo "$code  $p"
             [ "$code" = "200" ] || fail=1
           done
+          code=$(curl -s -G --data-urlencode 'q=فستان' -o /tmp/s.html -w '%{http_code}' "$BASE/search"); echo "$code  /search?q=فستان"; [ "$code" = "200" ] || fail=1
+          grep -q 'نتائج البحث' /tmp/s.html && echo "search results OK" || fail=1
           echo "--- home content:"
           curl -s "$BASE/" > /tmp/home.html
           cards=$(grep -o 'class="card"' /tmp/home.html | wc -l)
