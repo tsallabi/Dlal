@@ -1,0 +1,5 @@
+# انسخ هذا الملف إلى .dev.vars قبل التشغيل المحلي (ملف .dev.vars لا يُرفع إلى GitHub)
+# cp .dev.vars.example .dev.vars
+ADMIN_PASSWORD=admin123
+SESSION_SECRET=dev-secret-change-me
+IMPORT_TOKEN=dev-import-token

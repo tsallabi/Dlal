@@ -36,8 +36,10 @@ scripts/e2e.mjs        تجربة على الشاشة (Playwright) لكل الت
 كوبونات تجريبية: `WELCOME10` (10% حتى 60 د.ل) — `FREESHIP` — `DLAL25`.
 
 ## تشغيل محلي
+> دليل خطوة بخطوة لجهاز جديد (ويندوز/ماك) في [`docs/LOCAL-SETUP.md`](docs/LOCAL-SETUP.md).
 ```bash
-npm i
+npm ci
+cp .dev.vars.example .dev.vars
 npx wrangler d1 migrations apply dlal-db --local -c wrangler.local.toml
 npx wrangler dev -c wrangler.local.toml     # النسخة المحلية بلا ربط Workers AI
 ```
