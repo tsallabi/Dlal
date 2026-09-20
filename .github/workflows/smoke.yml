@@ -33,6 +33,12 @@ jobs:
           echo "product cards on home: $cards"; [ "$cards" -ge 20 ] || fail=1
           grep -q 'دلال' /tmp/home.html && echo "brand text OK" || fail=1
           grep -q 'فساتين' /tmp/home.html && echo "categories OK" || fail=1
+          echo "--- browser extension package:"
+          zcode=$(curl -sL -o /tmp/ext.zip -w '%{http_code}' "$BASE/dlal-extension.zip")
+          zsize=$(stat -c%s /tmp/ext.zip)
+          echo "$zcode  /dlal-extension.zip  ${zsize} bytes"
+          [ "$zcode" = "200" ] && [ "$zsize" -gt 8000 ] || fail=1
+          unzip -l /tmp/ext.zip | grep -q manifest.json && echo "extension zip OK" || fail=1
           echo "--- product page:"
           slug=$(grep -oE 'href="/p/[^"]+"' /tmp/home.html | head -1 | sed 's/href="\/p\/\(.*\)"/\1/')
           code=$(curl -s -o /tmp/p.html -w '%{http_code}' "$BASE/p/$slug"); echo "$code  /p/$slug"; [ "$code" = "200" ] || fail=1
