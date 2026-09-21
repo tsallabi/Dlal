@@ -32,6 +32,10 @@ on:
         description: "products per stock/enrich run (1-25)"
         default: ""
         required: false
+      job_keyword:
+        description: "override the job's search keyword for this run (when its own results run out)"
+        default: ""
+        required: false
       enrich_only:
         description: "yes = enrich products that are missing images/variants/weight, ignoring last check time"
         default: ""
@@ -57,6 +61,7 @@ jobs:
           FP: ${{ github.event.inputs.from_page }}
           MI: ${{ github.event.inputs.max_items }}
           EO: ${{ github.event.inputs.enrich_only }}
+          JK: ${{ github.event.inputs.job_keyword }}
         run: |
           set -e
           post() { curl -s -o out.json -w '%{http_code}' -X POST -H 'content-type: application/json' -H "x-import-token: $TOKEN" -d "$1" "$BASE/api/source/$2"; }
@@ -76,6 +81,7 @@ jobs:
               [ -n "$FP" ] && extra="$extra,\"from_page\":$FP"
               [ -n "$MI" ] && extra="$extra,\"max_items\":$MI"
               [ "$EO" = "yes" ] && extra="$extra,\"enrich_only\":true"
+              [ -n "$JK" ] && extra="$extra,\"keyword\":$(python3 -c "import json,os;print(json.dumps(os.environ['JK']))")"
               # دفعة واحدة قد تتجاوز مهلة الـ Worker (curl 56)؛ لا نوقف بقية الدفعات بسببها
               code=$(post "{\"job_id\":$j,\"limit\":1$extra}" run) || { echo "انقطع الاتصال في هذه الدفعة، نكمل"; sleep 10; continue; }
               echo "HTTP $code"

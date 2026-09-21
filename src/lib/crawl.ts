@@ -8,7 +8,7 @@ async function logRaw(db: D1Database, direction: 'out' | 'in', url: string, stat
 }
 
 // maxItems: سقف المنتجات المفحوصة في الاستدعاء الواحد (مهمة المخزون) حتى لا يتجاوز الطلب حدود Worker؛ الاستدعاء التالي (كرون كل ساعة) يكمل من حيث توقف
-export async function runServerJobs(env: { DB: D1Database; AI?: any }, opts: { limit?: number; jobId?: number; byUserId?: number | null; maxItems?: number; pages?: number; fromPage?: number; enrichOnly?: boolean } = {}) {
+export async function runServerJobs(env: { DB: D1Database; AI?: any }, opts: { limit?: number; jobId?: number; byUserId?: number | null; maxItems?: number; pages?: number; fromPage?: number; enrichOnly?: boolean; keyword?: string } = {}) {
   const db = env.DB; const s = await loadSettings(db); const prov = getProvider(s);
   if (!prov) return { ran: 0, error: 'لا يوجد مزوّد API مضبوط' };
   const maxItems = Math.max(1, Math.min(opts.maxItems ?? 8, 25));
@@ -48,7 +48,8 @@ export async function runServerJobs(env: { DB: D1Database; AI?: any }, opts: { l
         const first = Math.max(1, opts.fromPage ?? 1);
         const last = first + (opts.pages ?? job.max_pages ?? 1) - 1;
         for (let p = first; p <= last; p++) {
-          const kw = job.type === 'url' ? (job.query.match(/keywords=([^&]+)/) ? decodeURIComponent(job.query.match(/keywords=([^&]+)/)![1]) : job.query) : job.query;
+          // كلمة بديلة لهذا التشغيل فقط: حين تنفد نتائج كلمة القسم الأصلية
+          const kw = opts.keyword || (job.type === 'url' ? (job.query.match(/keywords=([^&]+)/) ? decodeURIComponent(job.query.match(/keywords=([^&]+)/)![1]) : job.query) : job.query);
           const r = await prov.search(kw, p); await logRaw(db, 'in', r.url, r.status, r.raw, r.ok);
           if (!r.ok) { rep.status = 'error'; rep.note += ` صفحة ${p}: ${r.error}`; break; }
           rep.pages++; rep.found += r.data.length;
