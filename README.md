@@ -36,7 +36,7 @@ scripts/e2e.mjs        تجربة على الشاشة (Playwright) لكل الت
 كوبونات تجريبية: `WELCOME10` (10% حتى 60 د.ل) — `FREESHIP` — `DLAL25`.
 
 ## تشغيل محلي
-> دليل خطوة بخطوة لجهاز جديد (ويندوز/ماك) في [`docs/LOCAL-SETUP.md`](docs/LOCAL-SETUP.md).
+> على ويندوز: انقر مرتين على `start.cmd` ويتكفّل بكل شيء. دليل مفصّل في [`docs/LOCAL-SETUP.md`](docs/LOCAL-SETUP.md).
 ```bash
 npm ci
 npm run setup     # ينشئ .dev.vars ويطبّق ترحيلات القاعدة المحلية (ويندوز/ماك/لينكس)
