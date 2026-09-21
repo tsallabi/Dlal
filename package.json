@@ -4,7 +4,12 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "setup": "node scripts/setup.mjs",
+    "dev": "wrangler dev -c wrangler.local.toml",
+    "e2e": "node scripts/e2e.mjs",
+    "typecheck": "tsc --noEmit",
+    "migrate:local": "wrangler d1 migrations apply dlal-db --local -c wrangler.local.toml",
+    "seed": "node scripts/seed.mjs"
   },
   "repository": {
     "type": "git",

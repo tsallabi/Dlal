@@ -39,9 +39,8 @@ scripts/e2e.mjs        تجربة على الشاشة (Playwright) لكل الت
 > دليل خطوة بخطوة لجهاز جديد (ويندوز/ماك) في [`docs/LOCAL-SETUP.md`](docs/LOCAL-SETUP.md).
 ```bash
 npm ci
-cp .dev.vars.example .dev.vars
-npx wrangler d1 migrations apply dlal-db --local -c wrangler.local.toml
-npx wrangler dev -c wrangler.local.toml     # النسخة المحلية بلا ربط Workers AI
+npm run setup     # ينشئ .dev.vars ويطبّق ترحيلات القاعدة المحلية (ويندوز/ماك/لينكس)
+npm run dev       # النسخة المحلية بلا ربط Workers AI
 ```
 حسابات تجريبية: أدمن `0910000000/admin123` — موظف شاهين `0920000000/partner123` — زبونة `0930000000/customer123`
 

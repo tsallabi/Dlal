@@ -12,7 +12,8 @@
 - الزبونة لا ترى أبدًا رابط المصدر ولا سعره باليوان.
 
 ## التشغيل والاختبار
-- إعداد جهاز جديد خطوة بخطوة: `docs/LOCAL-SETUP.md` (مُجرَّب على نسخة نظيفة). الأسرار المحلية من `.dev.vars.example` → `.dev.vars`.
+- إعداد جهاز جديد خطوة بخطوة: `docs/LOCAL-SETUP.md` (مُجرَّب على نسخة نظيفة) — الأوامر: `npm ci` ثم `npm run setup` ثم `npm run dev`. تثبيت Claude Code على ويندوز: `docs/CLAUDE-CODE-WINDOWS.md`.
+- صاحب المشروع يعمل على **ويندوز**: لا تعطِه أوامر لينكس (`cp`, `export`, `&&` في PowerShell)؛ استخدم أوامر `npm run ...` التي تعمل على كل الأنظمة.
 - محليًا: `npx wrangler d1 migrations apply dlal-db --local -c wrangler.local.toml` ثم `npx wrangler dev -c wrangler.local.toml` (النسخة المحلية بلا ربط Workers AI).
 - الاختبار الشامل: `node scripts/e2e.mjs` (يجب أن يبقى 100% ناجحًا قبل أي دفع). اختبار الإضافة: `scripts/ext-test/README.md`.
 - النشر: أي دفع إلى `main` ينشر تلقائيًا عبر GitHub Actions إلى Cloudflare Workers، ثم يشغّل فحص الموقع الحي (`smoke.yml`). لا تنشر يدويًا.
