@@ -20,6 +20,14 @@ on:
         description: "re-translate N pending products with Workers AI (empty = skip)"
         default: ""
         required: false
+      pages:
+        description: "pages per job for this run (empty = the job's own setting)"
+        default: ""
+        required: false
+      from_page:
+        description: "start from this result page (use 2,3,4… to top up a thin category without refetching page 1)"
+        default: ""
+        required: false
       stats:
         description: "print live store stats per category (yes = print)"
         default: "yes"
@@ -37,6 +45,8 @@ jobs:
           JOB: ${{ github.event.inputs.job_id }}
           TR: ${{ github.event.inputs.translate }}
           ST: ${{ github.event.inputs.stats }}
+          PG: ${{ github.event.inputs.pages }}
+          FP: ${{ github.event.inputs.from_page }}
         run: |
           set -e
           post() { curl -s -o out.json -w '%{http_code}' -X POST -H 'content-type: application/json' -H "x-import-token: $TOKEN" -d "$1" "$BASE/api/source/$2"; }
@@ -51,7 +61,10 @@ jobs:
           if [ -n "$JOB" ]; then
             for j in $(echo "$JOB" | tr ',' ' '); do
               echo "=== run job $j"
-              code=$(post "{\"job_id\":$j,\"limit\":1}" run); echo "HTTP $code"
+              extra=""
+              [ -n "$PG" ] && extra="$extra,\"pages\":$PG"
+              [ -n "$FP" ] && extra="$extra,\"from_page\":$FP"
+              code=$(post "{\"job_id\":$j,\"limit\":1$extra}" run); echo "HTTP $code"
               python3 -c "import json;d=json.load(open('out.json'));r=(d.get('results') or [{}])[0];print(' ',r.get('job'),'|',r.get('status'),'| صفحات',r.get('pages'),'| وُجد',r.get('found'),'| جديد',r.get('imported'),'| مُثرى',r.get('enriched'),'|',r.get('note',''))" 2>/dev/null || cat out.json
               sleep 5
             done
