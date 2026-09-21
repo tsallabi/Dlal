@@ -421,6 +421,7 @@ ops.use('/source*', requirePerm('catalog.manage'));
 ops.get('/source', async (c) => {
   const db = c.env.DB; const s = await loadSettings(db);
   const logs = await db.prepare("SELECT * FROM payment_log WHERE url LIKE 'SRC %' ORDER BY id DESC LIMIT 20").all<any>();
+  const probes = await db.prepare("SELECT id,url,response,created_at FROM payment_log WHERE url LIKE 'PROBE %' ORDER BY id DESC LIMIT 5").all<{ id: number; url: string; response: string; created_at: string }>();
   const prov = getProvider(s);
   return shell(c, 'source', 'مزوّد API لبيانات 1688', (
     <>
@@ -443,6 +444,9 @@ ops.get('/source', async (c) => {
         <div>
           <div class="card-box"><h3>المزوّدون المدعومون</h3><table class="tbl"><tr><th>المزوّد</th><th>الموقع</th><th>المفتاح</th></tr>{Object.entries(PROVIDERS).map(([k, v]) => <tr><td>{v.ar}</td><td><a href={v.site} target="_blank" class="src-link">{v.site}</a></td><td class="mono" style="display:table-cell">{v.keyLabel}</td></tr>)}</table>
             <p style="font-size:12px;color:#666;margin-top:8px">سجّل عند المزوّد، خذ المفتاح، الصقه هنا، ثم "اختبار: جلب منتج". إن ظهر الرد بشكل مختلف عن المتوقع فالرد الخام أدناه يوضح الحقول وسنعدّل الموصّل.</p></div>
+          <div class="card-box"><h3>تشخيص صفحات 1688 من متصفحك</h3>
+            <p style="font-size:12px;color:#666">افتحي صفحة منتج على 1688 ثم اضغطي في الإضافة «فحص صفحة 1688 المفتوحة». ما تقرأه الإضافة يظهر هنا، ومنه نضبط القارئ على بنية الصفحة الحقيقية.</p>
+            {probes.results.length === 0 ? <p style="color:#888">لا تشخيص بعد.</p> : probes.results.map(l => <details class="plog"><summary><small>{l.url.slice(6, 90)} · {timeAgo(l.created_at)}</small></summary><pre class="mono">{l.response}</pre></details>)}</div>
           <div class="card-box"><h3>آخر الردود الخام من المزوّد</h3>{logs.results.length === 0 ? <p style="color:#888">لا استدعاءات بعد.</p> : logs.results.map(l => <details class="plog"><summary><span class={`status ${l.ok ? 'green' : 'red'}`}>{l.status_code}</span> <small>{l.url.slice(0, 90)} · {timeAgo(l.created_at)}</small></summary><pre class="mono">{l.response}</pre></details>)}</div>
         </div>
       </div>

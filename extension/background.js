@@ -125,8 +125,48 @@ async function testConn() {
   }
 }
 
+
+// ===== تشخيص صفحة 1688 المفتوحة =====
+// يقرأ التبويب النشط كما هو (بلا فتح صفحات) ويرسل ما وجده إلى الموقع لضبط القارئ على البنية الحقيقية
+async function probeActiveTab() {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab || !/1688\.com/.test(tab.url || '')) return { ok: false, error: 'افتحي صفحة منتج على 1688.com في التبويب النشط أولًا' };
+    const [r] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id }, world: 'MAIN',
+      func: () => {
+        const out = { url: location.href, title: document.title, loggedIn: !/Login|登录/i.test(document.querySelector('#login, .login-btn, [class*=loginBtn]')?.textContent || '') };
+        const keys = [];
+        for (const k of ['__INIT_DATA__', 'iDetailData', '__NEXT_DATA__', '__GLOBAL_DATA', 'detailData', '__AXIOM_DATA__']) if (window[k]) keys.push(k);
+        out.globalKeys = keys;
+        try { const d = window.__INIT_DATA__; if (d) out.initSample = JSON.stringify(d).slice(0, 4000); } catch (e) { out.initErr = String(e).slice(0, 120); }
+        const txt = (s) => (document.querySelector(s)?.textContent || '').trim().slice(0, 160);
+        out.dom = {
+          h1: txt('h1'),
+          titleCandidates: [...document.querySelectorAll('h1,[class*=title],[class*=Title]')].slice(0, 6).map(e => (e.textContent || '').trim().slice(0, 90)).filter(Boolean),
+          priceCandidates: [...document.querySelectorAll('[class*=price],[class*=Price]')].slice(0, 8).map(e => (e.textContent || '').trim().slice(0, 60)).filter(Boolean),
+          imgs: [...document.querySelectorAll('img')].map(i => i.currentSrc || i.src).filter(u => /alicdn/.test(u)).slice(0, 10),
+          tableRows: [...document.querySelectorAll('table tr')].slice(0, 25).map(tr => [...tr.cells].map(c => (c.textContent || '').trim().slice(0, 40)).join(' | ')),
+          loginWall: /Login to view|登录查看|立即登录/i.test(document.body.innerText || ''),
+          bodyLen: (document.body.innerText || '').length,
+        };
+        return JSON.stringify(out);
+      },
+    });
+    const data = r && r.result ? JSON.parse(r.result) : null;
+    if (!data) return { ok: false, error: 'تعذّرت قراءة الصفحة' };
+    await api('/api/crawl/probe', { method: 'POST', body: JSON.stringify(data) });
+    await log('أُرسل تشخيص الصفحة: ' + (data.dom?.h1 || data.title || '').slice(0, 40));
+    return { ok: true, sent: true, title: data.dom?.h1 || data.title, imgs: (data.dom?.imgs || []).length, keys: data.globalKeys, loginWall: data.dom?.loginWall };
+  } catch (e) {
+    await log('فشل التشخيص: ' + e.message);
+    return { ok: false, error: e.message };
+  }
+}
+
 chrome.runtime.onMessage.addListener((m, _s, reply) => {
   if (m.type === 'runNow') { tick(true).then(() => reply({ ok: true })); return true; }
   if (m.type === 'status') { cfg().then(c => reply({ running, ...c })); return true; }
   if (m.type === 'test') { testConn().then(reply); return true; }
+  if (m.type === 'probe') { probeActiveTab().then(reply); return true; }
 });

@@ -18,6 +18,14 @@ $('#test').onclick = async () => {
     : `<b style="color:#d3262b">فشل الاتصال</b><br>${r.error}`;
   refresh();
 };
+$('#probe').onclick = async () => {
+  const box = $('#testres'); box.style.display = 'block'; box.textContent = 'جارٍ قراءة التبويب المفتوح…';
+  const r = await chrome.runtime.sendMessage({ type: 'probe' });
+  box.innerHTML = r.ok
+    ? `<b style="color:#1a9c5b">أُرسل التشخيص ✓</b><br>العنوان: ${(r.title || '—').slice(0, 60)}<br>صور: ${r.imgs} · جدار دخول: ${r.loginWall ? 'نعم' : 'لا'}<br>مفاتيح: ${(r.keys || []).join(', ') || '—'}`
+    : `<b style="color:#d3262b">تعذّر الفحص</b><br>${r.error}`;
+  refresh();
+};
 $('#pause').onclick = async () => { const c = await chrome.storage.local.get('paused'); await chrome.storage.local.set({ paused: !c.paused }); refresh(); };
 $('#open').onclick = async () => { const c = await chrome.storage.local.get('api'); chrome.tabs.create({ url: (c.api || '') + '/admin/crawler' }); };
 refresh(); setInterval(refresh, 3000);

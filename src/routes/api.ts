@@ -111,5 +111,14 @@ api.post('/source/translate', async (c) => {
   const b = await c.req.json<{ limit?: number }>().catch(() => ({} as any));
   return c.json(await retranslatePending(c.env.DB, c.env.AI, Math.min(60, b.limit ?? 30)));
 });
+// تشخيص صفحة 1688 مفتوحة في متصفح المستخدم: تُرسل الإضافة ما وجدته فعلًا لنضبط القارئ على البنية الحقيقية
+api.post('/crawl/probe', async (c) => {
+  if (!tokenOk(c)) return c.json({ error: 'رمز غير صحيح' }, 401);
+  const b = await c.req.json<any>();
+  const url = String(b.url ?? '').slice(0, 300);
+  await c.env.DB.prepare('INSERT INTO payment_log(payment_id,direction,url,status_code,request,response,ok) VALUES(NULL,?,?,?,?,?,?)')
+    .bind('in', 'PROBE ' + url, 200, '', JSON.stringify(b).slice(0, 60000), 1).run();
+  return c.json({ ok: true });
+});
 
 export default api;
