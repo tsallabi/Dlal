@@ -1,11 +1,14 @@
 // دلال — عامل الخلفية: يجلب المهام من الخادم كل 15 دقيقة وينفذها في تبويب خلفي بإيقاع بشري
 const VERSION = chrome.runtime.getManifest().version;
-const DEF = { api: '', token: '', paused: false, log: [] };
+const DEF = { api: '', token: '', paused: false, log: [], fast: false };
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const rnd = (a, b) => a + Math.floor(Math.random() * (b - a));
+// وضع سريع للاختبار المحلي فقط: يختصر الإيقاع البشري حتى تكتمل التجربة في دقائق
+let FAST = false;
+const pace = (a, b) => (FAST ? rnd(150, 400) : rnd(a, b));
 let running = false;
 
-async function cfg() { return { ...DEF, ...(await chrome.storage.local.get(Object.keys(DEF))) }; }
+async function cfg() { const c = { ...DEF, ...(await chrome.storage.local.get(Object.keys(DEF))) }; FAST = !!c.fast; return c; }
 async function log(line) {
   const c = await cfg(); const l = [`${new Date().toLocaleTimeString('ar-LY')} ${line}`, ...c.log].slice(0, 60);
   await chrome.storage.local.set({ log: l, status: line });
@@ -25,7 +28,7 @@ async function openAndAsk(url, msg, tabRef) {
   else await chrome.tabs.update(tab.id, { url });
   // انتظار اكتمال التحميل
   await new Promise(res => { const t = setTimeout(res, 30000); const h = (id, info) => { if (id === tab.id && info.status === 'complete') { clearTimeout(t); chrome.tabs.onUpdated.removeListener(h); res(); } }; chrome.tabs.onUpdated.addListener(h); });
-  await sleep(rnd(4000, 8000));   // وقت لعرض المحتوى الديناميكي + إيقاع بشري
+  await sleep(pace(4000, 8000));   // وقت لعرض المحتوى الديناميكي + إيقاع بشري
   if (msg.type === 'extractDetail') {   // بيانات SKU تعيش في window الصفحة (العالم الرئيسي) وليس في عالم سكربت المحتوى
     try {
       const [r] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, world: 'MAIN', func: () => { try { const d = (window.__INIT_DATA__ && window.__INIT_DATA__.globalData) || window.iDetailData || null; if (!d) return null; const m = d.skuModel || d; return JSON.stringify({ skuInfoMap: m.skuInfoMap || null, skuProps: m.skuProps || null }); } catch (e) { return null; } } });
@@ -56,7 +59,7 @@ async function runJob(job) {
         const it = r?.item;
         await api('/api/import/check', { method: 'POST', body: JSON.stringify({ offerId: id, inStock: !!(it && it.inStock), priceCny: it && it.priceCny ? it.priceCny : null }) });
         rep.checked++;
-        await sleep(rnd(9000, 15000));
+        await sleep(pace(9000, 15000));
       }
     } else {
       const newIds = [];
@@ -70,7 +73,7 @@ async function runJob(job) {
         if (!items.length) { rep.note += ` صفحة ${p} بلا منتجات (${(r?.title || '').slice(0, 40)}).`; break; }
         const res = await api('/api/import', { method: 'POST', body: JSON.stringify({ category_id: job.category_id, page_url: url, items }) });
         rep.imported += res.imported || 0; rep.updated += res.updated || 0; newIds.push(...(res.newIds || []));
-        await sleep(rnd(6000, 12000));
+        await sleep(pace(6000, 12000));
       }
       // إثراء المنتجات الجديدة من صفحاتها (صور + مقاسات + ألوان + الحد الأدنى)
       if (job.enrich && rep.status === 'ok') {
@@ -80,7 +83,7 @@ async function runJob(job) {
           const r = await openAndAsk(`https://detail.1688.com/offer/${id}.html`, { type: 'extractDetail' }, tabRef);
           if (r?.blocked) { rep.status = 'partial'; rep.note += ' توقف الإثراء عند كابتشا.'; break; }
           if (r?.item && r.item.priceCny) { await api('/api/import', { method: 'POST', body: JSON.stringify({ category_id: job.category_id, page_url: r.url, items: [r.item] }) }); rep.enriched++; }
-          await sleep(rnd(8000, 14000));
+          await sleep(pace(8000, 14000));
         }
       }
     }
@@ -101,7 +104,7 @@ async function tick(force = false) {
     const { jobs } = await api('/api/crawl/jobs?v=' + VERSION);
     await chrome.storage.local.set({ lastCheck: new Date().toISOString(), pending: jobs.length });
     if (!jobs.length) { await log('لا مهام مستحقة'); return; }
-    for (const job of jobs) { const r = await runJob(job); if (r.status === 'blocked') break; await sleep(rnd(20000, 40000)); }
+    for (const job of jobs) { const r = await runJob(job); if (r.status === 'blocked') break; await sleep(pace(20000, 40000)); }
   } catch (e) { await log('خطأ: ' + e.message); }
   finally { running = false; }
 }

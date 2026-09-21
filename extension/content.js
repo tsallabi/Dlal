@@ -32,29 +32,73 @@
     return items;
   }
 
+  // ===== قراءة صفحة المنتج كما تظهر فعلًا بلا تسجيل دخول =====
+  // مبنية على تشخيص صفحة حقيقية: لا يوجد __INIT_DATA__، العنوان في document.title،
+  // السعر في عنصر نصّه يبدأ بـ Price/السعر، الصور من cbu*.alicdn.com/img/ibank،
+  // والمواصفات في جدول أعمدته أزواج: مفتاح | قيمة | مفتاح | قيمة.
+  const TITLE_SUFFIX = /\s*[-|]\s*(阿里巴巴|Alibaba|1688).*$/;
+  const isProductImg = (u) => /\/\/cbu\d*\.alicdn\.com\/img\/ibank\//.test(u) && !/\.(svg|gif)(\?|$|_)/i.test(u);
+  const normImg = (u) => u.replace(/^\/\//, 'https://').replace(/_\.webp$/i, '').replace(/\.\d+x\d+(\.\w+)$/, '$1').split('?')[0];
+
+  function attrTable() {
+    const out = {};
+    $$('table tr').forEach(tr => {
+      const cells = [...tr.cells].map(c => txt(c));
+      for (let i = 0; i + 1 < cells.length; i += 2) if (cells[i] && cells[i + 1]) out[cells[i]] = cells[i + 1];
+      if (cells.length === 1 && cells[0]) out.__last = cells[0];
+    });
+    // صف الوزن يأتي أحيانًا في صفّين: العنوان ثم القيمة
+    const rows = $$('table tr').map(tr => [...tr.cells].map(c => txt(c)).join('|'));
+    const wi = rows.findIndex(r => /^Weight|重量|净重/i.test(r));
+    if (wi >= 0 && rows[wi + 1] && /^[\d.]+$/.test(rows[wi + 1])) out['Weight'] = rows[wi + 1];
+    return out;
+  }
+  const pick = (attrs, re) => { const k = Object.keys(attrs).find(k => re.test(k)); return k ? attrs[k] : ''; };
+  const splitList = (v) => String(v || '').split(/[,،;；\/]/).map(x => x.trim()).filter(x => x && x.length <= 30).slice(0, 20);
+
   function extractDetail(init) {
     const id = offerIdFrom(location.href); if (!id) return null;
-    let data = init || null; try { if (!data) data = (window.__INIT_DATA__ && window.__INIT_DATA__.globalData) || window.iDetailData || null; } catch (e) {}
-    const title = txt($('h1,[class*="title-text"],[class*="offer-title"]')) || document.title;
-    const images = $$('img').map(i => i.src || i.dataset.src || '').filter(u => /cbu01\.alicdn|img\.alicdn/.test(u) && !/\.gif/.test(u)).map(cleanImg).filter((u, i, a) => a.indexOf(u) === i).slice(0, 8);
-    const prices = $$('[class*="price"]').map(e => num(txt(e))).filter(v => v > 0 && v < 100000);
-    let priceCny = prices.length ? Math.min(...prices) : 0;
-    if (!priceCny) { const m = document.documentElement.innerHTML.match(/"price":"?([\d.]+)/); if (m) priceCny = parseFloat(m[1]); }
+    const data = init || null;
+
+    const title = (document.title || '').replace(TITLE_SUFFIX, '').trim() || txt($('h1'));
+
+    const images = $$('img').map(i => i.currentSrc || i.src || i.dataset.src || '')
+      .filter(isProductImg).map(normImg).filter((u, i, a) => a.indexOf(u) === i).slice(0, 8);
+
+    // السعر: العنصر الذي يذكر Price/السعر ثم أي ¥ في الصفحة
+    let priceCny = 0;
+    const priceEls = $$('[class*="price" i],[class*="Price"]').map(txt).filter(Boolean);
+    for (const t of priceEls) { const m = t.match(/¥\s*([\d.]+)/); if (m) { const v = parseFloat(m[1]); if (v > 0 && v < 1e6) { priceCny = v; break; } } }
+    if (!priceCny) { const m = (document.body.innerText || '').match(/¥\s*([\d.]+)/); if (m) priceCny = parseFloat(m[1]); }
+
+    const attrs = attrTable();
+    const colors = splitList(pick(attrs, /^(Color|颜色|色系)/i));
+    const sizes = splitList(pick(attrs, /^(Size|尺码|尺寸|规格)/i));
+    const weightG = parseFloat(pick(attrs, /^(Weight|重量|净重)/i)) || 0;
+
     const variants = [];
-    try {
+    try {   // إن وُجدت بيانات SKU في الصفحة (عند تسجيل الدخول) فهي الأدق
       const skuMap = data && (data.skuModel?.skuInfoMap || data.skuInfoMap); const props = data && (data.skuModel?.skuProps || data.skuProps);
-      if (skuMap && props) Object.entries(skuMap).forEach(([key, v]) => { const parts = key.split('&gt;').join('>').split('>'); variants.push({ skuId: String(v.skuId), color: props[0] ? parts[0] : null, size: props[1] ? parts[1] : null, priceCny: num(v.price || v.discountPrice), inStock: (v.canBookCount ?? 1) > 0 }); });
+      if (skuMap && props) Object.entries(skuMap).forEach(([key, v]) => { const parts = key.split('&gt;').join('>').split('>'); variants.push({ skuId: String(v.skuId), color: parts[0], size: parts[1], priceCny: parseFloat(v.price) || 0, inStock: (v.canBookCount ?? v.quantity ?? 1) > 0 }); });
     } catch (e) {}
-    if (!variants.length) {
-      const colors = $$('[class*="sku"] [class*="prop"] [class*="value"],[class*="color-item"],[class*="prop-item"]').map(txt).filter(Boolean).slice(0, 20);
-      const sizes = $$('[class*="sku-item"] [class*="name"],[class*="size-item"]').map(txt).filter(Boolean).slice(0, 20);
-      colors.forEach(c => sizes.length ? sizes.forEach(s => variants.push({ color: c, size: s, inStock: true })) : variants.push({ color: c, inStock: true }));
-      if (!colors.length) sizes.forEach(s => variants.push({ size: s, inStock: true }));
+    if (!variants.length) {   // بلا تسجيل دخول: نبني المتغيرات من جدول المواصفات
+      if (colors.length && sizes.length) colors.forEach(c => sizes.forEach(z => variants.push({ color: c, size: z, inStock: true })));
+      else if (colors.length) colors.forEach(c => variants.push({ color: c, inStock: true }));
+      else sizes.forEach(z => variants.push({ size: z, inStock: true }));
     }
-    const minQty = num(txt($('[class*="min-order"],[class*="begin-amount"],[class*="mix-amount"]'))) || 1;
-    const gone = /商品已下架|已失效|不存在|offer-not-found/.test(document.body.innerText.slice(0, 5000));
-    return { offerId: id, url: `https://detail.1688.com/offer/${id}.html`, title: title.slice(0, 200), priceCny, images, variants, minQty, inStock: priceCny > 0 && !gone,
-      supplier: txt($('[class*="company-name"],[class*="supplier-name"]')), sales: num(txt($('[class*="sale-count"],[class*="sold"]'))) };
+
+    const body = (document.body.innerText || '').slice(0, 20000);
+    const minQty = num((body.match(/(?:起批量|Minimum order|≥)\s*([\d,]+)/) || [])[1]) || 1;
+    const sales = num((body.match(/([\d.]+\s*(?:million|万)?\+?)\s*(?:pcs|tickets|件)?\s*(?:have been )?sold/i) || [])[1]) || 0;
+    const gone = /商品已下架|已失效|不存在|offer-not-found|This product has been removed/i.test(body);
+    const supplier = txt($('h1')) || txt($('[class*="company-name"],[class*="shop-name"],[class*="supplier"]'));
+
+    return {
+      offerId: id, url: `https://detail.1688.com/offer/${id}.html`, title: String(title).slice(0, 200),
+      priceCny, images, variants, minQty, weightG: weightG || undefined,
+      inStock: priceCny > 0 && !gone, supplier: String(supplier || '').slice(0, 80), sales,
+      attrs,
+    };
   }
 
   chrome.runtime.onMessage.addListener((msg, _s, reply) => {

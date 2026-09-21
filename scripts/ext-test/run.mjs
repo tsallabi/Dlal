@@ -8,7 +8,9 @@ let sw = ctx.serviceWorkers()[0] || await ctx.waitForEvent('serviceworker');
 const extId = sw.url().split('/')[2];
 console.log('extension id:', extId);
 const pop = await ctx.newPage(); await pop.goto(`chrome-extension://${extId}/popup.html`);
-await pop.click('summary'); await pop.fill('#api', BASE); await pop.fill('#token', 'dev-import-token'); await pop.click('#save'); await pop.waitForTimeout(500);
+await pop.click('summary'); await pop.fill('#api', BASE); await pop.fill('#token', 'dev-import-token'); await pop.click('#save');
+await pop.evaluate(() => chrome.storage.local.set({ fast: true }));   // اختصار الإيقاع البشري في الاختبار
+await pop.waitForTimeout(500);
 console.log('status after save:', (await pop.textContent('#st')).replace(/\s+/g, ' '));
 await pop.click('#run');
 // انتظار حتى تُسجَّل تقارير التشغيل للمهمتين

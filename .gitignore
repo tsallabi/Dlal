@@ -9,3 +9,4 @@ public/dlal-extension.zip
 scripts/ext-test/*.pem
 public/dev-img/
 scripts/_shot.mjs
+scripts/_dbg.mjs

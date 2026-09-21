@@ -26,6 +26,13 @@
 - الأدوار: `src/lib/perm.ts`. الطلبات: `src/lib/orders.ts`. الدفع: `src/lib/mypay.ts`. مصادر 1688: زر الاستيراد، إضافة المتصفح (`/admin/crawler`)، مزوّد API (`/admin/source`).
 - أي تغيير في المخطط = ملف ترحيل جديد مرقّم؛ لا تعدّل ترحيلًا قديمًا.
 
+## صفحات 1688 بلا تسجيل دخول — ما ثبت عمليًا (تشخيص من متصفح صاحب المشروع)
+- صفحة المنتج `detail.1688.com/offer/{id}.html` تفتح كاملة لزائر غير مسجّل: العنوان (بالإنجليزية في `document.title` مع لاحقة ` - 阿里巴巴`)، السعر في عنصر صنفه يحوي price، الصور من `cbu*.alicdn.com/img/ibank/` (أيقونات الواجهة من `img.alicdn.com/imgextra` وتُستبعد)، وجدول مواصفات أعمدته أزواج يحوي **الألوان والمقاسات والوزن**.
+- **لا يوجد `__INIT_DATA__` إطلاقًا** في الصفحة بلا تسجيل دخول؛ القارئ يعتمد على DOM. لا تبنِ عليه.
+- المحجوب خلف الدخول: جدول SKU التفصيلي فقط (سعر ومخزون كل مقاس). نبني المتغيرات من جدول المواصفات بدله.
+- صفحة البحث `s.1688.com` تتطلب تسجيل دخول وتحوّل إلى `login.taobao.com`. البحث عبر OTAPI أو حساب الشريك في الصين.
+- اختبار القارئ: `xvfb-run -a node scripts/ext-test/parse-test.mjs` على `scripts/ext-test/detail-nologin.html` المطابق للبنية الحقيقية.
+
 ## مزوّد 1688 API (OTAPI) — ما ثبت عمليًا على الموقع الحي
 - الإعدادات في جدول `settings`: `src_provider=otapi`, `src_base_url=https://otapi.net`, `src_key` (instanceKey — لا يُكتب أبدًا في المستودع), `src_lang=en` (يعيد العنوان الأصلي الصيني + ترجمة إنجليزية تُستخدم كمساعد للترجمة العربية).
 - الطرق التي تعمل فعلًا: `GetItemFullInfo?itemId=abb-{id}` (الجذر `OtapiItemFullInfo`)، و`SearchItemsFrame` (النتائج في `Result.Items.Content`). `BatchSearchItemsFrame` يحتاج `blockList=SearchItems`.
