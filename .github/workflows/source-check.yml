@@ -13,7 +13,7 @@ on:
         default: "连衣裙 女 夏"
         required: false
       job_id:
-        description: "crawl job id to run on the server (empty = skip; use - to skip item/keyword)"
+        description: "crawl job id(s) to run on the server, comma separated (empty = skip; use - to skip item/keyword)"
         default: ""
         required: false
       translate:
@@ -44,7 +44,12 @@ jobs:
             python3 -c "import json;d=json.load(open('out.json'));print('ok',d.get('ok'),'status',d.get('status'),'error',d.get('error'));print('url',d.get('url'));xs=d.get('data') or [];print('items',len(xs));[print('-',x.get('offerId'),x.get('priceCny'),(x.get('title') or '')[:40],'|',(x.get('titleEn') or '')[:40]) for x in xs[:5]];print('raw',d.get('raw','')[:800])"
           fi
           if [ -n "$JOB" ]; then
-            echo "=== run job $JOB"; code=$(post "{\"job_id\":$JOB,\"limit\":1}" run); echo "HTTP $code"; cat out.json; echo
+            for j in $(echo "$JOB" | tr ',' ' '); do
+              echo "=== run job $j"
+              code=$(post "{\"job_id\":$j,\"limit\":1}" run); echo "HTTP $code"
+              python3 -c "import json;d=json.load(open('out.json'));r=(d.get('results') or [{}])[0];print(' ',r.get('job'),'|',r.get('status'),'| صفحات',r.get('pages'),'| وُجد',r.get('found'),'| جديد',r.get('imported'),'| مُثرى',r.get('enriched'),'|',r.get('note',''))" 2>/dev/null || cat out.json
+              sleep 5
+            done
           fi
           if [ -n "$TR" ]; then
             echo "=== translate $TR"; code=$(post "{\"limit\":$TR}" translate); echo "HTTP $code"; cat out.json; echo
