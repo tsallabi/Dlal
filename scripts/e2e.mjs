@@ -79,6 +79,11 @@ expect(page.url().includes('/p/'), 'بعد التسجيل يعود لصفحة ا
 await page.click('.chips[data-opt=color] .chip:not(.off) >> nth=0'); await page.click('.chips[data-opt=size] .chip:not(.off) >> nth=0');
 await page.click('#addForm button[type=submit]'); await page.waitForLoadState('networkidle');
 expect((await page.locator('.cart-row').count()) === 1, 'أضيف للسلة');
+// طرق الدفع: الخياران القديمان مخفيان، والدفع نقدًا في الفرع معروض بعناوين الفروع
+await page.goto(BASE + '/checkout');
+expect(!(await has(page, 'عربون 30%')) && !(await has(page, 'تحويل مصرفي / إيصال')), 'خيارا التحويل والعربون مخفيان من الدفع');
+expect(await has(page, 'دفع كاش في أقرب فرع'), 'خيار الدفع نقدًا في الفرع معروض');
+expect((await has(page, 'الفرناج')) && (await has(page, 'بنغازي')), 'عناوين الفروع تظهر في صفحة الدفع');
 await page.goto(BASE + '/c/bags'); await page.click('.card .fav >> nth=0'); await page.waitForTimeout(400);
 await page.goto(BASE + '/wishlist'); expect((await page.locator('.card').count()) === 1, 'المفضلة تحفظ المنتج');
 await page.goto(BASE + '/c/bags'); await page.click('.card >> nth=1'); await page.click('#addForm button[type=submit]'); await page.waitForLoadState('networkidle');

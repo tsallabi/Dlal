@@ -446,7 +446,8 @@ store.get('/checkout', async (c) => {
   const addrs = await c.env.DB.prepare('SELECT * FROM addresses WHERE user_id=? ORDER BY is_default DESC,id DESC').bind(u.id).all<any>();
   const mp = loadMyPay(t.s, c.env);
   const b = await base(c);
-  const pm = c.req.query('pm') ?? Object.keys(PAYMENT_METHODS)[0];
+  const pm = c.req.query('pm') ?? Object.keys(PAYMENT_METHODS).find(k => !PAYMENT_METHODS[k].hidden)!;
+  const branches = (t.s.branches ?? '').split('\n').map(x => x.trim()).filter(Boolean);
   return c.html(
     <Layout {...b} title="إتمام الطلب">
       <div class="sec-h"><h2>إتمام الطلب</h2><a href="/cart">← العودة للسلة</a></div>
@@ -466,9 +467,14 @@ store.get('/checkout', async (c) => {
           </div>
           <div class="card-box"><h3>💳 طريقة الدفع</h3>
             <div class="pm-list">
-              {Object.entries(PAYMENT_METHODS).filter(([, v]) => !v.online || mp.gateways.includes(v.gateway!)).map(([k, v]) => (
+              {Object.entries(PAYMENT_METHODS).filter(([, v]) => !v.hidden && (!v.online || mp.gateways.includes(v.gateway!))).map(([k, v]) => (
                 <label class={`radio pm ${v.online ? 'online' : ''}`}><input type="radio" name="payment_method" value={k} checked={k === pm} required /> <span class="pm-i">{v.icon}</span><span><b>{v.ar}</b>{v.online && <i class="pm-tag">فوري عبر MyPay</i>}<br /><small>{v.desc}</small></span></label>
               ))}
+            </div>
+            <div class="branches">
+              <b>فروعنا للدفع نقدًا</b>
+              <ul>{branches.map(b => <li>{b}</li>)}</ul>
+              <small>أرقام الهواتف تُضاف قريبًا. بعد الدفع في الفرع يُفعَّل طلبك فورًا.</small>
             </div>
             {mp.mode === 'mock' && <p style="font-size:12px;color:#d68b00">⚠️ بوابة الدفع في وضع المحاكاة (اختبار) — لا يُخصم أي مبلغ حقيقي.</p>}
           </div>

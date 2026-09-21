@@ -444,3 +444,9 @@ body{background:#fff}
 .dash>section,.two>*,.tbl-wrap{min-width:0}
 .tbl-wrap{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
 .admin-body{overflow-x:hidden}
+
+/* فروع الدفع نقدًا في صفحة الدفع */
+.branches{margin-top:12px;background:var(--soft);border:1px solid var(--line-2);border-radius:10px;padding:11px 13px;font-size:13px}
+.branches b{display:block;margin-bottom:6px;color:var(--brand)}
+.branches ul{margin:0;padding-inline-start:18px;line-height:1.9}
+.branches small{color:var(--mut);display:block;margin-top:6px}
