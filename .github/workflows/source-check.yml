@@ -70,8 +70,12 @@ jobs:
             python3 -c "import json;d=json.load(open('out.json'));print('ok',d.get('ok'),'provider',d.get('provider'),'status',d.get('status'),'error',d.get('error'));print('url',d.get('url'));x=d.get('data') or {};print('title',x.get('title'));print('titleEn',x.get('titleEn'));print('price',x.get('priceCny'),'images',len(x.get('images') or []),'variants',len(x.get('variants') or []),'minQty',x.get('minQty'),'supplier',x.get('supplier'));print('variants sample',(x.get('variants') or [])[:4]);print('meta',json.dumps(d.get('meta'),ensure_ascii=False)[:1500]);print('raw',d.get('raw','')[:600])"
           fi
           if [ -n "$KW" ] && [ "$KW" != "-" ]; then
+            # عدة كلمات مفصولة بـ | تُجرَّب واحدة واحدة: نعرف أيها يعطي نتائج قبل تشغيل مهمة كاملة
+            IFS='|' read -ra KWS <<< "$KW"
+            for KW in "${KWS[@]}"; do
             echo "=== search $KW"; code=$(post "$(python3 -c "import json,os;print(json.dumps({'kw':os.environ['KW']}))")" test); echo "HTTP $code"
-            python3 -c "import json;d=json.load(open('out.json'));print('ok',d.get('ok'),'status',d.get('status'),'error',d.get('error'));print('url',d.get('url'));xs=d.get('data') or [];print('items',len(xs));[print('-',x.get('offerId'),x.get('priceCny'),(x.get('title') or '')[:40],'|',(x.get('titleEn') or '')[:40]) for x in xs[:5]];print('raw',d.get('raw','')[:800])"
+            python3 -c "import json;d=json.load(open('out.json'));print('ok',d.get('ok'),'status',d.get('status'),'error',d.get('error'));print('url',d.get('url'));xs=d.get('data') or [];print('items',len(xs));[print('-',x.get('offerId'),x.get('priceCny'),(x.get('title') or '')[:40]) for x in xs[:3]]"
+            done
           fi
           if [ -n "$JOB" ]; then
             for j in $(echo "$JOB" | tr ',' ' '); do
