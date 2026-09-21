@@ -11,7 +11,8 @@ const problems = [];
 const PHONE = '09' + String(Date.now()).slice(-8);
 let n = 0;
 const shot = async (page, name) => { await page.screenshot({ path: `${OUT}/${String(++n).padStart(2, '0')}-${name}.png`, fullPage: false }); };
-const expect = (cond, msg) => { if (!cond) { problems.push(msg); console.log('❌', msg); } else console.log('✅', msg); };
+let passed = 0;
+const expect = (cond, msg) => { if (!cond) { problems.push(msg); console.log('❌', msg); } else { passed++; console.log('✅', msg); } };
 const has = async (page, t) => (await page.content()).includes(t);
 const login = async (page, phone, pw) => { await page.goto(BASE + '/logout'); await page.goto(BASE + '/login'); await page.fill('input[name=phone]', phone); await page.fill('input[name=password]', pw); await page.click('button:has-text("دخول")'); await page.waitForLoadState('networkidle'); };
 
@@ -295,5 +296,6 @@ const r404 = await page.goto(BASE + '/p/not-exist'); expect(r404.status() === 40
 
 await browser.close();
 console.log('\n===== النتيجة =====');
+console.log(`نجح: ${passed} · فشل: ${problems.length} · إجمالي: ${passed + problems.length}`);
 console.log(problems.length ? problems.join('\n') : 'كل الفحوصات نجحت ✓');
 process.exit(problems.length ? 1 : 0);
