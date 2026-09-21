@@ -22,7 +22,8 @@ async function shell(c: Context<Env>, active: string, title: string, body: any) 
     db.prepare("SELECT COUNT(*) n FROM order_items oi JOIN orders o ON o.id=oi.order_id WHERE o.user_id=? AND o.status='delivered' AND NOT EXISTS(SELECT 1 FROM reviews r WHERE r.order_id=o.id AND r.product_id=oi.product_id)").bind(u.id),
   ]);
   const n = (r: any) => (r.results[0] as any).n as number;
-  return c.html(<AccountShell user={u} cartCount={c.get('cartCount')} categories={await getCategories(db)} active={active} title={title} counts={{ orders: n(orders), tickets: n(tickets), notifications: n(notifs), reviews: n(reviews) }}>{body}</AccountShell>);
+  const w = await db.prepare('SELECT COUNT(*) n FROM wishlist WHERE user_id=?').bind(u.id).first<{ n: number }>();
+  return c.html(<AccountShell user={u} cartCount={c.get('cartCount')} wishCount={w?.n ?? 0} categories={await getCategories(db)} active={active} title={title} counts={{ orders: n(orders), tickets: n(tickets), notifications: n(notifs), reviews: n(reviews) }}>{body}</AccountShell>);
 }
 
 // ---------- نظرة عامة ----------

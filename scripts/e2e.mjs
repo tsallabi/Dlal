@@ -123,7 +123,11 @@ expect(bad.status() === 401, 'ويبهوك بتوقيع غير صالح يُرف
 // ---------- حسابي ----------
 await page.goto(BASE + '/account');
 expect(await has(page, orderCode), 'نظرة عامة حسابي تعرض الطلب');
-expect((await page.locator('.acct-side a').count()) >= 10, 'قائمة حسابي كاملة (طلبات، تذاكر، تقييمات، كوبونات، نقاط، عناوين…)');
+expect((await page.locator('.pc-side a').count()) >= 18, 'مركز الحساب فيه كل الروابط (طلبات، تذاكر، تقييمات، كوبونات، نقاط، عناوين، سياسات…)');
+expect((await page.locator('.pc-grp').count()) === 6, 'مركز الحساب مقسّم إلى ست مجموعات');
+expect(await page.locator('.pc-grp', { hasText: 'حسابي' }).first().getAttribute('open') !== null, 'المجموعة التي تحوي الصفحة الحالية مفتوحة');
+expect(await page.locator('.pc-side .acct-me b').isVisible(), 'اسم الزبونة يظهر في أعلى مركز الحساب');
+await shot(page, 'account-center');
 await shot(page, 'account-home');
 await page.goto(BASE + '/account/orders'); expect((await page.locator('.order-card').count()) >= 1, 'صفحة طلباتي تعرض بطاقات الطلبات'); await shot(page, 'account-orders');
 await page.goto(BASE + '/account/addresses');
