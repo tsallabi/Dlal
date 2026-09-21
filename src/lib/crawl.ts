@@ -13,7 +13,7 @@ export async function runServerJobs(env: { DB: D1Database; AI?: any }, opts: { l
   if (!prov) return { ran: 0, error: 'لا يوجد مزوّد API مضبوط' };
   const maxItems = Math.max(1, Math.min(opts.maxItems ?? 8, 25));
   // مهمة المخزون لا تُقيَّد بـ last_run_at: تعمل كل مرة وتفحص فقط المنتجات المستحقة (أقدم من interval_hours)
-  const where = opts.jobId ? 'j.id=?' : "j.active=1 AND (j.run_now=1 OR j.type='stock' OR j.last_run_at IS NULL OR j.last_run_at < datetime('now', '-' || j.interval_hours || ' hours'))";
+  const where = opts.jobId ? 'j.id=?' : "j.active=1 AND j.runner IN ('any','server') AND (j.run_now=1 OR j.type='stock' OR j.last_run_at IS NULL OR j.last_run_at < datetime('now', '-' || j.interval_hours || ' hours'))";
   const { results: jobs } = await db.prepare(`SELECT j.* FROM crawl_jobs j WHERE ${where} ORDER BY j.run_now DESC, j.last_run_at ASC LIMIT ?`).bind(...(opts.jobId ? [opts.jobId] : []), opts.limit ?? 3).all<any>();
   const out: any[] = [];
   for (const job of jobs) {

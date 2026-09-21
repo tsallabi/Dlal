@@ -34,7 +34,7 @@ api.post('/import', async (c) => {
 // قائمة الفحص: الأهم أولًا ثم الأقدم فحصًا
 api.get('/import/queue', async (c) => {
   if (!tokenOk(c)) return c.json({ error: 'رمز غير صحيح' }, 401);
-  const { results } = await c.env.DB.prepare("SELECT source_offer_id FROM products WHERE status='active' AND source='1688' ORDER BY (sales*10+views) DESC, last_checked_at ASC LIMIT 300").all<{ source_offer_id: string }>();
+  const { results } = await c.env.DB.prepare("SELECT source_offer_id FROM products WHERE status='active' AND source='1688' ORDER BY (last_checked_at IS NULL) DESC, last_checked_at ASC, (sales*10+views) DESC LIMIT 300").all<{ source_offer_id: string }>();
   return c.json({ ids: results.map(r => r.source_offer_id) });
 });
 
@@ -68,7 +68,7 @@ api.get('/crawl/jobs', async (c) => {
   if (!tokenOk(c)) return c.json({ error: 'رمز غير صحيح' }, 401);
   await touch(c.env.DB, c.req.query('v'));
   const { results } = await c.env.DB.prepare(`SELECT j.*,c.name_ar AS category_name FROM crawl_jobs j LEFT JOIN categories c ON c.id=j.category_id
-    WHERE j.active=1 AND (j.cooldown_until IS NULL OR j.cooldown_until < datetime('now'))
+    WHERE j.active=1 AND j.runner IN ('any','extension') AND (j.cooldown_until IS NULL OR j.cooldown_until < datetime('now'))
       AND (j.run_now=1 OR j.last_run_at IS NULL OR j.last_run_at < datetime('now', '-' || j.interval_hours || ' hours'))
     ORDER BY j.run_now DESC, j.last_run_at ASC LIMIT 5`).all<any>();
   return c.json({ jobs: results, all: (await c.env.DB.prepare('SELECT id,name,type,active,last_run_at FROM crawl_jobs ORDER BY id').all<any>()).results });

@@ -57,7 +57,13 @@ async function runJob(job) {
         const r = await openAndAsk(`https://detail.1688.com/offer/${id}.html`, { type: 'extractDetail' }, tabRef);
         if (r?.blocked) { rep.status = 'blocked'; rep.note = 'كابتشا/حجب عند ' + id; break; }
         const it = r?.item;
-        await api('/api/import/check', { method: 'POST', body: JSON.stringify({ offerId: id, inStock: !!(it && it.inStock), priceCny: it && it.priceCny ? it.priceCny : null }) });
+        if (it && it.priceCny) {
+          // الصفحة تُقرأ كاملة بلا تسجيل دخول: نرسل المنتج كله ليُحدَّث السعر ويُثرى بالصور والمقاسات والوزن
+          const res = await api('/api/import', { method: 'POST', body: JSON.stringify({ category_id: job.category_id ?? null, page_url: 'ext:stock', items: [it] }) });
+          rep.updated += res.updated || 0; rep.enriched += res.enriched || 0; rep.imported += res.imported || 0;
+        } else {
+          await api('/api/import/check', { method: 'POST', body: JSON.stringify({ offerId: id, inStock: false, priceCny: null }) });
+        }
         rep.checked++;
         await sleep(pace(9000, 15000));
       }

@@ -363,8 +363,11 @@ ops.get('/crawler', async (c) => {
       <div class="two" style="grid-template-columns:1fr 360px">
         <div>
           <div class="card-box"><h3>المهام</h3>
-            <div class="tbl-wrap"><table class="tbl"><tr><th>المهمة</th><th>النوع</th><th>القسم</th><th>صفحات</th><th>كل</th><th>آخر تشغيل</th><th>الحالة</th><th></th></tr>
-              {jobs.results.map(j => <tr><td><b>{j.name}</b><br /><small class="mono" style="display:inline">{(j.query ?? '').slice(0, 40)}</small></td><td>{T[j.type]}</td><td>{j.cat ?? '—'}</td><td>{j.type === 'stock' ? `${j.max_new} منتج` : j.max_pages}</td><td>{j.interval_hours} س</td><td><small>{j.last_run_at ? timeAgo(j.last_run_at) : '—'}<br />{j.last_summary ?? ''}</small></td><td><span class={`status ${j.cooldown_until && j.cooldown_until > new Date().toISOString().slice(0, 19).replace('T', ' ') ? 'red' : j.run_now ? 'blue' : j.active ? 'green' : 'gray'}`}>{j.run_now ? 'في الطابور' : j.active ? 'نشطة' : 'موقوفة'}</span></td>
+            <p style="font-size:12px;color:#666;margin:0 0 8px">البحث عن منتجات جديدة يحتاج حساب 1688، لذلك ينفّذه <b>الخادم</b> عبر مزوّد API. فحص المخزون والأسعار وجلب التفاصيل تعمل بلا حساب، لذلك تنفّذها <b>الإضافة</b> مجانًا من متصفحك.</p>
+            <div class="tbl-wrap"><table class="tbl"><tr><th>المهمة</th><th>النوع</th><th>من ينفّذها</th><th>القسم</th><th>صفحات</th><th>كل</th><th>آخر تشغيل</th><th>الحالة</th><th></th></tr>
+              {jobs.results.map(j => <tr><td><b>{j.name}</b><br /><small class="mono" style="display:inline">{(j.query ?? '').slice(0, 40)}</small></td><td>{T[j.type]}</td>
+                <td><form method="post" action={`/admin/crawler/${j.id}`} class="inline"><input type="hidden" name="action" value="runner" /><select name="runner" onchange="this.form.submit()" style="font-size:12px;padding:2px 4px"><option value="any" selected={j.runner === 'any'}>أيهما</option><option value="server" selected={j.runner === 'server'}>الخادم (API)</option><option value="extension" selected={j.runner === 'extension'}>الإضافة (مجانًا)</option></select></form></td>
+                <td>{j.cat ?? '—'}</td><td>{j.type === 'stock' ? `${j.max_new} منتج` : j.max_pages}</td><td>{j.interval_hours} س</td><td><small>{j.last_run_at ? timeAgo(j.last_run_at) : '—'}<br />{j.last_summary ?? ''}</small></td><td><span class={`status ${j.cooldown_until && j.cooldown_until > new Date().toISOString().slice(0, 19).replace('T', ' ') ? 'red' : j.run_now ? 'blue' : j.active ? 'green' : 'gray'}`}>{j.run_now ? 'في الطابور' : j.active ? 'نشطة' : 'موقوفة'}</span></td>
                 <td><form method="post" action={`/admin/crawler/${j.id}`} class="inline"><button class="btn sm ok" name="action" value="run">شغّل الآن</button><button class="btn sm ghost" name="action" value="toggle">{j.active ? 'إيقاف' : 'تفعيل'}</button><button class="btn sm ghost" name="action" value="delete" style="color:#d3262b">حذف</button></form></td></tr>)}
             </table></div>
           </div>
@@ -412,6 +415,7 @@ ops.post('/crawler/:id', async (c) => {
   if (f.action === 'delete') await db.prepare('DELETE FROM crawl_jobs WHERE id=?').bind(id).run();
   else if (f.action === 'toggle') await db.prepare('UPDATE crawl_jobs SET active=1-active WHERE id=?').bind(id).run();
   else if (f.action === 'run') await db.prepare('UPDATE crawl_jobs SET run_now=1,cooldown_until=NULL,active=1 WHERE id=?').bind(id).run();
+  else if (f.action === 'runner') await db.prepare("UPDATE crawl_jobs SET runner=? WHERE id=?").bind(['any', 'server', 'extension'].includes(String(f.runner)) ? String(f.runner) : 'any', id).run();
   await logActivity(db, c.get('user')!.id, `crawler.job.${f.action}`, String(id));
   return c.redirect('/admin/crawler?ok=1');
 });
