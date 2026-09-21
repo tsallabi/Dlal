@@ -16,7 +16,7 @@
 - على ويندوز يكفي النقر مرتين على `start.cmd` في جذر المشروع (تحديث + تثبيت + قاعدة محلية + تشغيل).
 - صاحب المشروع يعمل على **ويندوز**: لا تعطِه أوامر لينكس (`cp`, `export`, `&&` في PowerShell)؛ استخدم أوامر `npm run ...` التي تعمل على كل الأنظمة.
 - محليًا: `npx wrangler d1 migrations apply dlal-db --local -c wrangler.local.toml` ثم `npx wrangler dev -c wrangler.local.toml` (النسخة المحلية بلا ربط Workers AI).
-- الاختبار الشامل: `node scripts/e2e.mjs` (يجب أن يبقى 100% ناجحًا قبل أي دفع). اختبار الإضافة: `scripts/ext-test/README.md`.
+- الاختبار الشامل: `npm run e2e` (يجب أن يبقى 100% ناجحًا قبل أي دفع)، و`npm run e2e:watch` يعرضه على الشاشة بمتصفح مرئي — استخدمه عند مراجعة ميزة أمام صاحب المشروع. اختبار الإضافة: `scripts/ext-test/README.md`.
 - النشر: أي دفع إلى `main` ينشر تلقائيًا عبر GitHub Actions إلى Cloudflare Workers، ثم يشغّل فحص الموقع الحي (`smoke.yml`). لا تنشر يدويًا.
 - الأسرار في GitHub Secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `IMPORT_TOKEN`، واختياريًا `MYPAY_*`.
 - كلمات مرور البذور التجريبية لا تُستخدم على الموقع الحي.

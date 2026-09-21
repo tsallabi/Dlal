@@ -9,7 +9,8 @@
     "e2e": "node scripts/e2e.mjs",
     "typecheck": "tsc --noEmit",
     "migrate:local": "wrangler d1 migrations apply dlal-db --local -c wrangler.local.toml",
-    "seed": "node scripts/seed.mjs"
+    "seed": "node scripts/seed.mjs",
+    "e2e:watch": "node scripts/e2e.mjs --headed"
   },
   "repository": {
     "type": "git",

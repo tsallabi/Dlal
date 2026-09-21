@@ -1,7 +1,7 @@
 // تجربة حقيقية على الشاشة (Playwright) — الإصدار 2
 // زبونة (كوبون + ماي باي) → أدمن → موظف شاهين → تسليم → نقاط وتقييم وتذكرة → مراجعة الأدمن → الأدوار والصلاحيات → دفع فاشل وإلغاء → جوال
 import { chromium } from 'playwright';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, existsSync } from 'node:fs';
 import { createHmac } from 'node:crypto';
 
 const BASE = process.env.BASE || 'http://localhost:8787';
@@ -15,7 +15,18 @@ const expect = (cond, msg) => { if (!cond) { problems.push(msg); console.log('�
 const has = async (page, t) => (await page.content()).includes(t);
 const login = async (page, phone, pw) => { await page.goto(BASE + '/logout'); await page.goto(BASE + '/login'); await page.fill('input[name=phone]', phone); await page.fill('input[name=password]', pw); await page.click('button:has-text("دخول")'); await page.waitForLoadState('networkidle'); };
 
-const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
+// المتصفح: نسخة Playwright المثبّتة على الجهاز (ويندوز/ماك) أو نسخة الخادم إن وُجدت. PW_CHROMIUM يتقدّم عليهما.
+// node scripts/e2e.mjs --headed  ← لمشاهدة الاختبار وهو يضغط ويتنقّل على الشاشة
+const HEADED = process.argv.includes('--headed');
+const SANDBOX_CHROMIUM = '/opt/pw-browsers/chromium';
+const exePath = process.env.PW_CHROMIUM || (existsSync(SANDBOX_CHROMIUM) ? SANDBOX_CHROMIUM : undefined);
+let browser;
+try {
+  browser = await chromium.launch({ headless: !HEADED, slowMo: HEADED ? 350 : 0, ...(exePath ? { executablePath: exePath } : {}) });
+} catch (e) {
+  console.error('\n✖ تعذّر فتح المتصفح. ثبّته مرة واحدة بالأمر:  npx playwright install chromium\n' + e.message);
+  process.exit(1);
+}
 const ctx = await browser.newContext({ viewport: { width: 1280, height: 860 }, locale: 'ar' });
 const page = await ctx.newPage();
 page.on('pageerror', e => problems.push('JS error: ' + e.message));
