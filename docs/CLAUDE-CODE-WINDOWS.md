@@ -24,21 +24,22 @@ claude --version
 ```
 
 ## 2. أول تشغيل
+في PowerShell، سطر واحد:
+```powershell
+cd C:\Users\astgf\Dlal; claude
 ```
-cd C:\Users\astgf\Dlal
-claude
-```
+أو افتح مجلد `Dlal` في مستكشف الملفات، اكتب `powershell` في شريط العنوان واضغط Enter، ثم اكتب `claude`.
 سيفتح المتصفح لتسجيل الدخول بحسابك في claude.ai. إن لم يعد المتصفح تلقائيًا، انسخ الرمز المعروض والصقه في الطرفية.
 
 ملف `CLAUDE.md` في جذر المشروع يُقرأ تلقائيًا عند بدء كل جلسة، فتبقى كل قواعد المشروع سارية بلا إعداد إضافي. للتأكد اكتب `/context` داخل الجلسة وابحث عن «Memory files».
 
-## 3. إن لم يُعرف الأمر `claude`
-مكان التثبيت المعتاد: `%USERPROFILE%\.local\bin\claude.exe`. أضفه إلى PATH من PowerShell:
+## 3. إن لم يُعرف الأمر `claude` (يحدث غالبًا بعد التثبيت)
+المثبّت يضع البرنامج في `%USERPROFILE%\.local\bin\claude.exe` لكنه لا يضيف المسار إلى PATH دائمًا، وينبّهك بذلك في آخر رسائله.
+الحل: الصق هذا **السطر الواحد** في PowerShell:
 ```powershell
-$p = [Environment]::GetEnvironmentVariable('PATH','User')
-[Environment]::SetEnvironmentVariable('PATH', "$p;$env:USERPROFILE\.local\bin", 'User')
+[Environment]::SetEnvironmentVariable('PATH', [Environment]::GetEnvironmentVariable('PATH','User') + ';' + "$env:USERPROFILE\.local\bin", 'User')
 ```
-ثم أغلق الطرفية وافتحها من جديد.
+ثم **أغلق النافذة وافتح واحدة جديدة** (التغيير لا يسري على النوافذ المفتوحة)، وتحقق بـ `claude --version`.
 
 ## 4. ملاحظات ويندوز
 - **الطرفية**: للعرض الصحيح للعربية والرموز استخدم **Windows Terminal** من متجر مايكروسوفت بدل نافذة cmd القديمة.
