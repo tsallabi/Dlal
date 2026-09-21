@@ -437,3 +437,10 @@ body{background:#fff}
 .tbl td.sum{max-width:230px}
 .two{gap:16px}
 @media(min-width:1500px){.admin-body .two{grid-template-columns:1fr 380px}}
+
+/* ===== إصلاح تمدّد الجداول للصفحة كلها =====
+   عنصر داخل CSS Grid عرضه 1fr يتمدّد ليسع محتواه (min-width:auto)، فيمدّ الجدول العريض
+   الصفحة بأكملها بدل أن ينزلق داخل إطاره وتختفي أزرار الصف خارج الشاشة. */
+.dash>section,.two>*,.tbl-wrap{min-width:0}
+.tbl-wrap{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.admin-body{overflow-x:hidden}
