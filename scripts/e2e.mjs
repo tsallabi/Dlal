@@ -336,6 +336,45 @@ const ptsFinal = parseInt((await page.locator('.acct-card b').first().textConten
 expect(ptsFinal === ptsAfter, `النقاط المستخدمة أُعيدت بعد الإلغاء (${ptsFinal})`);
 await page.goto(BASE + '/account/orders?stage=cancelled'); expect(await has(page, order2), 'فلتر الطلبات الملغاة يعمل');
 
+// ---------- هيكل المتجر: الرأس والقائمة الكبيرة والتذييل وبطاقة المنتج ----------
+await page.goto(BASE + '/logout'); await page.goto(BASE + '/');
+expect(await page.locator('.hdr-strip a', { hasText: 'معلومات الشحن' }).isVisible(), 'الشريط العلوي يعرض معلومات الشحن');
+expect(await page.locator('.hdr-main .logo').isVisible() && await page.locator('.hdr-main .search input').isVisible(), 'الشعار وحقل البحث في الشريط الرئيسي');
+expect((await page.locator('.hdr-icons > a').count()) >= 3, 'أيقونات الحساب والسلة والمفضلة في الرأس');
+expect(await page.locator('#allCats').isVisible(), 'زر «كل الأقسام» موجود');
+expect(await page.locator('#megaMenu').isHidden(), 'القائمة الكبيرة مغلقة في البداية');
+await page.click('#allCats');
+expect(await page.locator('#megaMenu').isVisible(), 'النقر يفتح القائمة الكبيرة');
+expect((await page.locator('#megaMenu .mega-side button').count()) >= 10, 'القائمة الكبيرة تسرد كل الأقسام');
+const firstMega = (await page.locator('#megaMenu .mega-side button').nth(2).textContent()).replace('›', '').trim();
+await page.click('#megaMenu .mega-side button >> nth=2');
+expect(await page.locator('#megaMenu .mega-panel.on h4').textContent().then(t => t.includes(firstMega)), `تمرير المؤشر يبدّل لوحة القسم (${firstMega})`);
+await shot(page, 'home-mega');
+await page.keyboard.press('Escape');
+expect(await page.locator('#megaMenu').isHidden(), 'Escape يغلق القائمة الكبيرة');
+// أسهم شريط الأقسام
+const sx = await page.evaluate(() => document.getElementById('catsRow').scrollLeft);
+await page.click('[data-nav="1"]'); await page.waitForTimeout(600);
+const sx2 = await page.evaluate(() => document.getElementById('catsRow').scrollLeft);
+expect(Math.abs(sx2 - sx) > 50, `سهم شريط الأقسام يمرّره (${sx} → ${sx2})`);
+// التذييل
+expect(await has(page, 'المساعدة والدعم') && await has(page, 'خدمة الزبائن'), 'التذييل فيه أعمدة الروابط');
+expect(await has(page, 'نقبل الدفع بـ'), 'التذييل يعرض وسائل الدفع');
+expect(await page.locator('.ftr-news form input').isVisible(), 'التذييل فيه اشتراك النشرة');
+await page.goto(BASE + '/c/dresses');
+expect((await page.locator('.card .add').count()) > 0, 'كل بطاقة فيها زر «+» للإضافة السريعة');
+expect((await page.locator('.card .ship').count()) > 0, 'البطاقة تعرض مدة الوصول');
+const swatches = await page.locator('.card .swatch').count();
+expect(swatches > 0, `البطاقة تعرض عدد الألوان (${swatches} بطاقة)`);
+await shot(page, 'category-cards');
+// الإضافة السريعة: منتج بمتغيرات يفتح صفحته، وبلا متغيرات يضاف مباشرة
+await login(page, PHONE, 'secret456');
+await page.goto(BASE + '/c/dresses');
+await page.locator('.card .add').first().click();
+await page.waitForLoadState('networkidle');
+expect(page.url().includes('/p/') || (await page.locator('.hdr-icons a[href="/cart"] b').count()) > 0, 'زر «+» إما يضيف للسلة أو يفتح المنتج لاختيار اللون والمقاس');
+await shot(page, 'quick-add');
+
 // ---------- المال: التسعير بالحجم، الربح، والمستحق لشركة الشحن ----------
 await login(page, '0910000000', 'admin123');
 await page.goto(BASE + '/admin/pricing');

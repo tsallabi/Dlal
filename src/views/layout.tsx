@@ -5,13 +5,14 @@ type Props = {
   title?: string;
   user: User | null;
   cartCount?: number;
+  wishCount?: number;
   categories?: { slug: string; name_ar: string; icon: string | null }[];
   active?: string;
   children: any;
   q?: string;
 };
 
-export const Layout: FC<Props> = ({ title, user, cartCount = 0, categories = [], active, children, q }) => (
+export const Layout: FC<Props> = ({ title, user, cartCount = 0, wishCount = 0, categories = [], active, children, q }) => (
   <html lang="ar" dir="rtl">
     <head>
       <meta charset="utf-8" />
@@ -26,43 +27,131 @@ export const Layout: FC<Props> = ({ title, user, cartCount = 0, categories = [],
     </head>
     <body>
       <header class="hdr">
+        {/* شريط علوي: معلومات تطمئن الزبونة قبل أي شيء */}
         <div class="hdr-strip">
           <div class="wrap">
-            <span>🚚 توصيل لكل ليبيا · <b>أسعار نهائية</b> شاملة الشحن والجمارك</span>
-            <nav>
-              <a href="/pages/how">كيف نعمل؟</a>
-              <a href="/account/orders">تتبّع طلبي</a>
-              <a href="/pages/returns">الإرجاع</a>
-              <a href="/pages/contact">تواصلي معنا</a>
-            </nav>
+            <a href="/pages/shipping"><i>🚚</i>معلومات الشحن</a>
+            <span class="sep"></span>
+            <a href="/pages/returns"><i>↩️</i>الإرجاع والاسترداد</a>
+            <span class="sep"></span>
+            <a href="/pages/how"><i>🏷️</i>أسعار نهائية شاملة الشحن والجمارك</a>
           </div>
         </div>
-        <div class="hdr-top wrap">
-          <a href="/" class="logo">دلال<small>من الصين إلى بابك</small></a>
+        {/* الشريط الرئيسي: الشعار + بحث + أيقونات */}
+        <div class="hdr-main wrap">
+          <a href="/" class="logo">دلال</a>
           <form class="search" action="/search" method="get" role="search">
             <input name="q" placeholder="ابحثي عن فستان، عباية، حقيبة…" value={q ?? ''} aria-label="ابحثي عن منتج" />
-            <button type="submit">بحث</button>
+            <button type="submit" aria-label="بحث"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.2-3.2" stroke-linecap="round" /></svg></button>
           </form>
-          <nav class="hdr-links">
-            <a href="/wishlist"><i>♡</i><span>المفضلة</span></a>
-            <a href="/cart" class="cart-link"><i>🛒</i><span>السلة</span>{cartCount > 0 && <span class="badge">{cartCount}</span>}</a>
-            <a href={user ? '/account' : '/login'}><i>👤</i><span>{user ? user.name.split(' ')[0] : 'دخول'}</span></a>
+          <nav class="hdr-icons">
+            <a href={user ? '/account' : '/login'} aria-label="حسابي" title={user ? user.name : 'دخول'}><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 3.6-6 8-6s8 2 8 6" stroke-linecap="round" /></svg></a>
+            <a href="/cart" aria-label="السلة"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 5h2.2l2.3 10.2a2 2 0 0 0 2 1.6h7.2a2 2 0 0 0 2-1.5L20 8H6.4" stroke-linecap="round" stroke-linejoin="round" /><circle cx="10" cy="20" r="1.4" fill="currentColor" stroke="none" /><circle cx="17" cy="20" r="1.4" fill="currentColor" stroke="none" /></svg>{cartCount > 0 && <b>{cartCount}</b>}</a>
+            <a href="/wishlist" aria-label="المفضلة"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 20s-7.5-4.6-7.5-9.4A4.1 4.1 0 0 1 12 8a4.1 4.1 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20Z" stroke-linejoin="round" /></svg>{wishCount > 0 && <b>{wishCount}</b>}</a>
+            <a href="/account/tickets" aria-label="خدمة الزبائن" class="only-wide"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 12a8 8 0 1 1 3 6.2V21l-3-1.2A8 8 0 0 1 4 12Z" stroke-linejoin="round" /></svg></a>
             {user?.role === 'admin' && <a href="/admin" class="pill">الإدارة</a>}
             {user?.role === 'partner' && <a href="/partner" class="pill">لوحة الشحن</a>}
           </nav>
         </div>
-        <div class="cats wrap">
-          <a href="/" class={!active ? 'on' : ''}>الكل</a>
-          {categories.map(c => <a href={`/c/${c.slug}`} class={active === c.slug ? 'on' : ''}>{c.name_ar}</a>)}
+        {/* شريط الأقسام: «كل الأقسام» يفتح القائمة الكبيرة، والباقي يمرّ أفقيًا */}
+        <div class="hdr-nav">
+          <div class="wrap">
+            <button type="button" class="all-cats" id="allCats" aria-expanded="false">كل الأقسام <span>⌄</span></button>
+            <button type="button" class="nav-arrow" data-nav="-1" aria-label="السابق">‹</button>
+            <nav class="cats" id="catsRow">
+              <a href="/new" class={active === 'new' ? 'on' : ''}>وصل حديثًا</a>
+              {categories.map(c => <a href={`/c/${c.slug}`} class={active === c.slug ? 'on' : ''}>{c.name_ar}</a>)}
+              <a href="/sale" class={active === 'sale' ? 'on' : ''}>عروض وتخفيضات</a>
+            </nav>
+            <button type="button" class="nav-arrow" data-nav="1" aria-label="التالي">›</button>
+          </div>
+          <div class="mega" id="megaMenu" hidden>
+            <div class="wrap">
+              <div class="mega-side">
+                {categories.map((c, i) => <button type="button" data-mega={c.slug} class={i === 0 ? 'on' : ''}>{c.name_ar}<i>›</i></button>)}
+              </div>
+              <div class="mega-panels">
+                {categories.map((c, i) => (
+                  <div class={`mega-panel ${i === 0 ? 'on' : ''}`} data-panel={c.slug}>
+                    <h4>{c.icon} {c.name_ar}</h4>
+                    <div class="mega-grid">
+                      <a href={`/c/${c.slug}`}><span class="mt all">▦</span>عرض الكل</a>
+                      <a href={`/c/${c.slug}?sort=new`}><span class="mt">🆕</span>وصل حديثًا</a>
+                      <a href={`/c/${c.slug}?sort=sales`}><span class="mt">🔥</span>الأكثر مبيعًا</a>
+                      <a href={`/c/${c.slug}?sort=price`}><span class="mt">💰</span>الأرخص سعرًا</a>
+                      <a href={`/c/${c.slug}?deal=1`}><span class="mt">%</span>عليها خصم</a>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
       </header>
       <main class="wrap">{children}</main>
-      <footer class="ftr wrap">
-        <div>
-          <b>دلال</b> — نشتري لك من الصين ونوصّل إلى بابك في ليبيا. الأسعار بالدينار الليبي شاملة الشحن والجمارك.
+      <footer class="ftr">
+        <div class="ftr-top">
+          <div class="ftr-col">
+            <h5>عن دلال</h5>
+            <a href="/pages/how">من نحن وكيف نعمل</a>
+            <a href="/pages/branches">فروعنا في ليبيا</a>
+            <a href="/pages/privacy">إشعار الخصوصية</a>
+            <a href="/pages/terms">الشروط والأحكام</a>
+          </div>
+          <div class="ftr-col">
+            <h5>المساعدة والدعم</h5>
+            <a href="/pages/shipping">معلومات الشحن</a>
+            <a href="/pages/returns">الإرجاع والاسترداد</a>
+            <a href="/pages/how-to-order">كيف أطلب؟</a>
+            <a href="/pages/sizes">دليل المقاسات</a>
+            <a href="/account/orders">تتبّع طلبي</a>
+          </div>
+          <div class="ftr-col">
+            <h5>خدمة الزبائن</h5>
+            <a href="/pages/contact">تواصلي معنا</a>
+            <a href="/pages/payment">طرق الدفع والرسوم</a>
+            <a href="/account/points">نقاط المكافآت</a>
+            <a href="/pages/faq">الأسئلة الشائعة</a>
+          </div>
+          <div class="ftr-col">
+            <h5>تابعينا</h5>
+            <div class="ftr-social">
+              <a href="https://facebook.com" target="_blank" rel="noopener" aria-label="فيسبوك">f</a>
+              <a href="https://instagram.com" target="_blank" rel="noopener" aria-label="إنستغرام">◎</a>
+              <a href="https://wa.me/218000000000" target="_blank" rel="noopener" aria-label="واتساب">✆</a>
+              <a href="https://tiktok.com" target="_blank" rel="noopener" aria-label="تيك توك">♪</a>
+            </div>
+            <div class="ftr-news">
+              <h5>وصلك كل جديد وعروضنا</h5>
+              <form method="post" action="/subscribe">
+                <input type="tel" name="phone" placeholder="رقم واتساب أو هاتف" inputmode="tel" aria-label="رقم الهاتف" />
+                <button type="submit">اشتراك</button>
+              </form>
+            </div>
+          </div>
+          <div class="ftr-col">
+            <h5>ادفعي كما يناسبك</h5>
+            <a href="/pages/payment">بطاقة مصرفية محلية (معاملات)</a>
+            <a href="/pages/payment">سداد · إدفعلي · موبي كاش</a>
+            <a href="/pages/branches">كاش في أقرب فرع</a>
+          </div>
         </div>
-        <div class="ftr-links">
-          <a href="/pages/how">كيف نعمل؟</a><a href="/pages/shipping">الشحن والتوصيل</a><a href="/pages/returns">سياسة الإرجاع</a><a href="/pages/contact">تواصل معنا</a>
+        <div class="ftr-pay">
+          <div class="wrap">
+            <h5>نقبل الدفع بـ</h5>
+            <div class="pay-logos">
+              <span>💳 معاملات</span><span>📱 سداد</span><span>📲 إدفعلي</span><span>📳 موبي كاش</span><span>🏪 كاش في الفرع</span>
+            </div>
+          </div>
+        </div>
+        <div class="ftr-legal">
+          <div class="wrap">
+            <span>© {new Date().getFullYear()} دلال — جميع الحقوق محفوظة</span>
+            <a href="/pages/privacy">الخصوصية</a>
+            <a href="/pages/terms">الشروط</a>
+            <a href="/pages/returns">الإرجاع</a>
+            <span>الأسعار بالدينار الليبي شاملة الشحن والجمارك</span>
+          </div>
         </div>
       </footer>
       <nav class="bottom-nav">

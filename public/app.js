@@ -171,3 +171,62 @@ const proxyImg = (u) => (!u ? u : /(^|\.)(alicdn\.com|1688\.com|taobao\.com|tbcd
   // إشعار بردود جديدة حتى والنافذة مغلقة
   setInterval(() => { if (panel.hidden) poll(); }, 45000);
 })();
+
+// ===== شريط الأقسام: القائمة الكبيرة والأسهم =====
+(function () {
+  const btn = document.getElementById('allCats');
+  const mega = document.getElementById('megaMenu');
+  const row = document.getElementById('catsRow');
+  if (btn && mega) {
+    const close = () => { mega.hidden = true; btn.setAttribute('aria-expanded', 'false'); };
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const open = mega.hidden;
+      mega.hidden = !open; btn.setAttribute('aria-expanded', String(open));
+    });
+    document.addEventListener('click', (e) => { if (!mega.hidden && !mega.contains(e.target)) close(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+    mega.querySelectorAll('[data-mega]').forEach(b => {
+      const show = () => {
+        mega.querySelectorAll('[data-mega]').forEach(x => x.classList.toggle('on', x === b));
+        const slug = b.getAttribute('data-mega');
+        mega.querySelectorAll('.mega-panel').forEach(p => p.classList.toggle('on', p.getAttribute('data-panel') === slug));
+      };
+      b.addEventListener('mouseenter', show);
+      b.addEventListener('click', show);
+    });
+  }
+  if (row) {
+    // في RTL يسير scrollLeft بالسالب، فاتجاه السهم معكوس
+    const rtl = getComputedStyle(row).direction === 'rtl';
+    document.querySelectorAll('[data-nav]').forEach(b => b.addEventListener('click', () => {
+      const dir = Number(b.getAttribute('data-nav')) * (rtl ? -1 : 1);
+      row.scrollBy({ left: dir * 240, behavior: 'smooth' });
+    }));
+  }
+})();
+
+// ===== زر + على بطاقة المنتج: يضيف للسلة بلا مغادرة الصفحة =====
+(function () {
+  document.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-add]');
+    if (!b) return;
+    e.preventDefault(); e.stopPropagation();
+    const id = b.getAttribute('data-add');
+    b.disabled = true; const old = b.textContent; b.textContent = '…';
+    try {
+      const r = await fetch('/cart/add', {
+        method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ product_id: id, qty: '1', quick: '1' }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (d.needVariant) { location.href = '/p/' + d.slug; return; }
+      b.textContent = '✓';
+      const c = document.querySelector('.hdr-icons a[href="/cart"] b');
+      if (d.count != null) { if (c) c.textContent = d.count; else { const a = document.querySelector('.hdr-icons a[href="/cart"]'); if (a) a.insertAdjacentHTML('beforeend', `<b>${d.count}</b>`); } }
+      const n = document.querySelector('.bottom-nav a[href="/cart"] .dot');
+      if (n && d.count != null) n.textContent = d.count;
+      setTimeout(() => { b.textContent = old; b.disabled = false; }, 1200);
+    } catch { b.textContent = old; b.disabled = false; }
+  });
+})();

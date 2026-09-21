@@ -21,9 +21,11 @@ async function favs(c: Context<Env>): Promise<Set<number>> {
   return new Set(results.map((r: any) => r.product_id));
 }
 
-const base = async (c: Context<Env>) => ({
-  user: c.get('user'), cartCount: c.get('cartCount'), categories: await getCategories(c.env.DB),
-});
+const base = async (c: Context<Env>) => {
+  const u = c.get('user');
+  const w = u ? await c.env.DB.prepare('SELECT COUNT(*) n FROM wishlist WHERE user_id=?').bind(u.id).first<{ n: number }>() : null;
+  return { user: u, cartCount: c.get('cartCount'), wishCount: w?.n ?? 0, categories: await getCategories(c.env.DB) };
+};
 
 // ---------- الرئيسية (تخطيط 1688 بهوية دلال: قائمة أقسام جانبية + بانر + بطاقة الحساب + طوابق أقسام) ----------
 store.get('/', async (c) => {
@@ -313,13 +315,28 @@ store.post('/cart/add', async (c) => {
   const u = c.get('user');
   const f = await c.req.parseBody();
   const pid = Number(f.product_id), vid = f.variant_id ? Number(f.variant_id) : null, qty = Math.max(1, Number(f.qty) || 1);
-  if (!u) { let back = '/'; try { back = new URL(c.req.header('referer') ?? '/', c.req.url).pathname; } catch {} return c.redirect(`/login?next=${encodeURIComponent(back)}`); }
-  const p = await c.env.DB.prepare('SELECT in_stock,min_qty FROM products WHERE id=? AND status=?').bind(pid, 'active').first<any>();
-  if (!p || !p.in_stock) return c.redirect((c.req.header('referer') ?? '/') + '?err=unavailable');
+  // quick=1: زر «+» على بطاقة المنتج — يرد JSON ولا يغادر الصفحة
+  const quick = f.quick === '1';
+  if (!u) {
+    if (quick) return c.json({ needLogin: true }, 401);
+    let back = '/'; try { back = new URL(c.req.header('referer') ?? '/', c.req.url).pathname; } catch {}
+    return c.redirect(`/login?next=${encodeURIComponent(back)}`);
+  }
+  const p = await c.env.DB.prepare('SELECT slug,in_stock,min_qty,(SELECT COUNT(*) FROM variants v WHERE v.product_id=products.id) vars FROM products WHERE id=? AND status=?').bind(pid, 'active').first<any>();
+  if (!p || !p.in_stock) {
+    if (quick) return c.json({ error: 'غير متوفر' }, 400);
+    return c.redirect((c.req.header('referer') ?? '/') + '?err=unavailable');
+  }
+  // منتج له ألوان/مقاسات: لا نضيفه بضغطة واحدة بل نفتح صفحته لتختار
+  if (quick && p.vars > 0 && !vid) return c.json({ needVariant: true, slug: p.slug });
   await c.env.DB.prepare(
     `INSERT INTO cart_items(user_id,product_id,variant_id,qty) VALUES(?,?,?,?)
      ON CONFLICT(user_id,product_id,variant_id) DO UPDATE SET qty=qty+excluded.qty`,
   ).bind(u.id, pid, vid, Math.max(qty, p.min_qty)).run();
+  if (quick) {
+    const n = await c.env.DB.prepare('SELECT COALESCE(SUM(qty),0) n FROM cart_items WHERE user_id=?').bind(u.id).first<{ n: number }>();
+    return c.json({ ok: true, count: n?.n ?? 0 });
+  }
   return c.redirect('/cart?added=1');
 });
 store.post('/cart/update', async (c) => {
