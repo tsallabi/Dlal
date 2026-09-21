@@ -165,6 +165,19 @@ for (const [path, name, check] of [
   ['/admin/stock', 'admin-stock', 'فحص المخزون'], ['/admin/pricing', 'admin-pricing', 'سعر الصرف'], ['/admin/partners', 'admin-partners', 'شاهين'], ['/admin/staff', 'admin-staff', 'مصفوفة الصلاحيات'], ['/admin/customers', 'admin-customers', 'منى'],
   ['/admin/reports', 'admin-reports', 'المبيعات اليومية'], ['/admin/activity', 'admin-activity', 'سجل النشاط'], ['/admin/tickets', 'admin-tickets', 'التذاكر'], ['/admin/reviews', 'admin-reviews', 'بانتظار المراجعة'],
 ]) { await page.goto(BASE + path); expect(await has(page, check), `صفحة ${path} تعمل`); await shot(page, name); }
+
+// كل رابط في شريط لوحة الإدارة يفتح صفحة سليمة (فحص شامل لا يحتاج تحديثًا عند إضافة صفحة)
+await page.goto(BASE + '/admin');
+const sideLinks = await page.locator('.side a').evaluateAll(els => [...new Set(els.map(e => e.getAttribute('href')).filter(h => h && h.startsWith('/admin')))]);
+expect(sideLinks.length >= 12, `شريط لوحة الإدارة فيه ${sideLinks.length} رابطًا`);
+const broken = [];
+for (const href of sideLinks) {
+  const res = await page.goto(BASE + href, { waitUntil: 'domcontentloaded' });
+  const html = await page.content();
+  const bad = !res || res.status() >= 400 || /Internal Server Error|D1_ERROR|SQLITE_|<title>Error/i.test(html) || !html.includes('dash-title');
+  if (bad) broken.push(`${href} (${res?.status()})`);
+}
+expect(broken.length === 0, `كل صفحات لوحة الإدارة تعمل${broken.length ? ' — المعطوبة: ' + broken.join(', ') : ''}`);
 // صور المنتجات تمر عبر وسيط الموقع ولا تكشف المصدر
 await page.goto(BASE + '/');
 const html0 = await page.content();

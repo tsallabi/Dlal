@@ -206,6 +206,11 @@ ops.get('/payments', async (c) => {
             <p style="font-size:12px;color:#666">عنوان الويبهوك الذي تسجّله في لوحة ماي باي: <b class="mono" style="display:inline">{origin}/api/mypay/webhook</b></p>
             {canManage && <div class="inline" style="margin-top:8px"><button class="btn sm">حفظ</button><button class="btn sm ghost" formaction="/admin/payments/test">اختبار الاتصال</button></div>}
           </form>
+          <form method="post" action="/admin/payments/settings" class="card-box"><h3>فروع الدفع نقدًا</h3>
+            <p style="font-size:12px;color:#666;margin:0 0 6px">سطر لكل فرع، تظهر للزبونة في صفحة الدفع تحت خيار «دفع كاش في أقرب فرع». أضيفي رقم الهاتف في نفس السطر متى توفّر.</p>
+            <textarea name="branches" rows={5} dir="rtl" disabled={!canManage} style="width:100%;font-family:inherit">{s.branches ?? ''}</textarea>
+            {canManage && <button class="btn sm" style="margin-top:8px">حفظ الفروع</button>}
+          </form>
           <div class="card-box"><h3>كيف يعمل التكامل</h3><ol style="font-size:13px;line-height:1.8;padding-inline-start:18px"><li>الزبونة تختار وسيلة فورية عند الدفع → دلال ينشئ دفعة بمرجع فريد ويطلب رابط الدفع من ماي باي.</li><li>تُحوَّل لصفحة ماي باي وتدفع.</li><li>ماي باي يرسل Webhook موقّعًا (HMAC-SHA256 في X-MyPay-Signature) → دلال يتحقق من التوقيع والمبلغ ويحوّل الطلب إلى "مدفوع" ويُبلغ الزبونة وشريك الشراء.</li><li>عودة المتصفح وحدها لا تؤكد الدفع — الويبهوك هو مصدر الحقيقة.</li></ol></div>
         </div>
       </div>
@@ -214,7 +219,7 @@ ops.get('/payments', async (c) => {
 });
 ops.post('/payments/settings', requirePerm('payments.manage'), async (c) => {
   const f = await c.req.parseBody(); const db = c.env.DB;
-  const keys = ['mypay_mode', 'mypay_base_url', 'mypay_create_path', 'mypay_api_key', 'mypay_webhook_secret', 'mypay_gateways'];
+  const keys = ['mypay_mode', 'mypay_base_url', 'mypay_create_path', 'mypay_api_key', 'mypay_webhook_secret', 'mypay_gateways', 'branches'];
   await db.batch(keys.filter(k => f[k] !== undefined).map(k => db.prepare("INSERT INTO settings(key,value,updated_at) VALUES(?,?,datetime('now')) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at").bind(k, String(f[k]).trim())));
   await logActivity(db, c.get('user')!.id, 'payments.settings', 'mypay', `mode=${f.mypay_mode}`);
   return c.redirect('/admin/payments?ok=1');
