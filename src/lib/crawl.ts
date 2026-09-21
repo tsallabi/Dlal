@@ -8,7 +8,7 @@ async function logRaw(db: D1Database, direction: 'out' | 'in', url: string, stat
 }
 
 // maxItems: سقف المنتجات المفحوصة في الاستدعاء الواحد (مهمة المخزون) حتى لا يتجاوز الطلب حدود Worker؛ الاستدعاء التالي (كرون كل ساعة) يكمل من حيث توقف
-export async function runServerJobs(env: { DB: D1Database; AI?: any }, opts: { limit?: number; jobId?: number; byUserId?: number | null; maxItems?: number; pages?: number; fromPage?: number } = {}) {
+export async function runServerJobs(env: { DB: D1Database; AI?: any }, opts: { limit?: number; jobId?: number; byUserId?: number | null; maxItems?: number; pages?: number; fromPage?: number; enrichOnly?: boolean } = {}) {
   const db = env.DB; const s = await loadSettings(db); const prov = getProvider(s);
   if (!prov) return { ran: 0, error: 'لا يوجد مزوّد API مضبوط' };
   const maxItems = Math.max(1, Math.min(opts.maxItems ?? 8, 25));
@@ -22,8 +22,15 @@ export async function runServerJobs(env: { DB: D1Database; AI?: any }, opts: { l
     try {
       if (job.type === 'stock') {
         // الأقدم فحصًا أولًا؛ فقط منتجات لها معرف 1688 حقيقي (رقمي)
-        const { results } = await db.prepare("SELECT source_offer_id,source_price_cny,category_id FROM products WHERE status='active' AND source='1688' AND source_offer_id GLOB '[0-9]*' AND length(source_offer_id)>=9 AND (last_checked_at IS NULL OR last_checked_at < datetime('now', '-' || ? || ' hours')) ORDER BY last_checked_at ASC, (sales*10+views) DESC LIMIT ?").bind(job.interval_hours || 12, opts.maxItems ? maxItems : Math.min(job.max_new || 100, maxItems)).all<any>();
-        if (!results.length) { rep.note += ' لا منتجات مستحقة للفحص الآن.'; }
+        // enrichOnly: المنتجات الناقصة (صورة واحدة أو بلا مقاسات) أولًا مهما كان وقت آخر فحص —
+        // منتجات استُوردت من صفحة البحث تصل بصورة واحدة بلا ألوان ولا مقاسات ولا وزن.
+        const dueSql = "SELECT source_offer_id,source_price_cny,category_id FROM products WHERE status='active' AND source='1688' AND source_offer_id GLOB '[0-9]*' AND length(source_offer_id)>=9 AND (last_checked_at IS NULL OR last_checked_at < datetime('now', '-' || ? || ' hours')) ORDER BY last_checked_at ASC, (sales*10+views) DESC LIMIT ?";
+        const thinSql = "SELECT p.source_offer_id,p.source_price_cny,p.category_id FROM products p WHERE p.status='active' AND p.source='1688' AND p.source_offer_id GLOB '[0-9]*' AND length(p.source_offer_id)>=9 AND ((SELECT COUNT(*) FROM product_images i WHERE i.product_id=p.id) <= 1 OR (SELECT COUNT(*) FROM variants v WHERE v.product_id=p.id) = 0 OR p.weight_g IS NULL) ORDER BY (p.sales*10+p.views) DESC, p.id LIMIT ?";
+        const batch = opts.maxItems ? maxItems : Math.min(job.max_new || 100, maxItems);
+        const { results } = opts.enrichOnly
+          ? await db.prepare(thinSql).bind(batch).all<any>()
+          : await db.prepare(dueSql).bind(job.interval_hours || 12, batch).all<any>();
+        if (!results.length) { rep.note += opts.enrichOnly ? ' كل المنتجات مُثراة بالفعل.' : ' لا منتجات مستحقة للفحص الآن.'; }
         for (const p of results) {
           const r = await prov.item(p.source_offer_id); await logRaw(db, 'in', r.url, r.status, r.raw, r.ok);
           if (!r.ok) { rep.note += ` ${p.source_offer_id}: ${r.error}`; if (/NotFound/i.test(r.error ?? '')) await db.prepare("UPDATE products SET in_stock=0,last_checked_at=datetime('now') WHERE source='1688' AND source_offer_id=?").bind(p.source_offer_id).run(); continue; }
@@ -33,7 +40,7 @@ export async function runServerJobs(env: { DB: D1Database; AI?: any }, opts: { l
           await db.prepare("UPDATE products SET in_stock=?,source_price_cny=COALESCE(?,source_price_cny),last_checked_at=datetime('now') WHERE source='1688' AND source_offer_id=?").bind(it.inStock ? 1 : 0, it.priceCny || null, p.source_offer_id).run();
           rep.checked++;
           // إثراء بالتفاصيل الكاملة (صور، مقاسات/ألوان، عنوان عربي، حد أدنى) إن كانت ناقصة
-          if (it.priceCny && (it.variants.length || it.images.length > 1)) { const res = await importProducts(db, [it], p.category_id ?? null, opts.byUserId ?? null, `api:${prov.name}:stock`, env.AI); rep.enriched += res.enriched; }
+          if (it.priceCny && (it.variants.length || it.images.length > 1 || it.weightG)) { const res = await importProducts(db, [it], p.category_id ?? null, opts.byUserId ?? null, `api:${prov.name}:stock`, env.AI); rep.enriched += res.enriched; }
         }
       } else {
         const newIds: string[] = [];

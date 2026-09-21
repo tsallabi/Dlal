@@ -105,8 +105,8 @@ api.post('/source/test', async (c) => {
 });
 api.post('/source/run', async (c) => {
   if (!tokenOk(c)) return c.json({ error: 'رمز غير صحيح' }, 401);
-  const b = await c.req.json<{ job_id?: number; limit?: number; max_items?: number; pages?: number; from_page?: number }>();
-  return c.json(await runServerJobs(c.env, { limit: Math.min(3, b.limit ?? 1), jobId: b.job_id, byUserId: c.get('user')?.id ?? null, maxItems: b.max_items ?? 8, pages: b.pages, fromPage: b.from_page }));
+  const b = await c.req.json<{ job_id?: number; limit?: number; max_items?: number; pages?: number; from_page?: number; enrich_only?: boolean }>();
+  return c.json(await runServerJobs(c.env, { limit: Math.min(3, b.limit ?? 1), jobId: b.job_id, byUserId: c.get('user')?.id ?? null, maxItems: b.max_items ?? 8, pages: b.pages, fromPage: b.from_page, enrichOnly: b.enrich_only === true }));
 });
 // حالة المتجر الحقيقية من القاعدة الحية (أرقام لكل قسم) — للفحص عن بُعد بلا لوحة إدارة
 api.post('/source/stats', async (c) => {

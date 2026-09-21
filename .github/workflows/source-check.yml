@@ -32,6 +32,10 @@ on:
         description: "products per stock/enrich run (1-25)"
         default: ""
         required: false
+      enrich_only:
+        description: "yes = enrich products that are missing images/variants/weight, ignoring last check time"
+        default: ""
+        required: false
       stats:
         description: "print live store stats per category (yes = print)"
         default: "yes"
@@ -52,6 +56,7 @@ jobs:
           PG: ${{ github.event.inputs.pages }}
           FP: ${{ github.event.inputs.from_page }}
           MI: ${{ github.event.inputs.max_items }}
+          EO: ${{ github.event.inputs.enrich_only }}
         run: |
           set -e
           post() { curl -s -o out.json -w '%{http_code}' -X POST -H 'content-type: application/json' -H "x-import-token: $TOKEN" -d "$1" "$BASE/api/source/$2"; }
@@ -70,6 +75,7 @@ jobs:
               [ -n "$PG" ] && extra="$extra,\"pages\":$PG"
               [ -n "$FP" ] && extra="$extra,\"from_page\":$FP"
               [ -n "$MI" ] && extra="$extra,\"max_items\":$MI"
+              [ "$EO" = "yes" ] && extra="$extra,\"enrich_only\":true"
               code=$(post "{\"job_id\":$j,\"limit\":1$extra}" run); echo "HTTP $code"
               python3 -c "import json;d=json.load(open('out.json'));r=(d.get('results') or [{}])[0];print(' ',r.get('job'),'|',r.get('status'),'| صفحات',r.get('pages'),'| وُجد',r.get('found'),'| جديد',r.get('imported'),'| مُثرى',r.get('enriched'),'|',r.get('note',''))" 2>/dev/null || cat out.json
               sleep 5
