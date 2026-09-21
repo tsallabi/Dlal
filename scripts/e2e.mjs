@@ -206,7 +206,7 @@ expect(badRes.ok() && (badRes.headers()['content-type'] || '').includes('svg'), 
 await page.goto(BASE + '/admin/crawler');
 expect(await has(page, 'id="dlal-ext-config"'), 'لوحة الزاحف تعرض بيانات الضبط التلقائي للإضافة');
 expect(await has(page, 'data-token="dev-import-token"'), 'بيانات الضبط تحمل رمز الاستيراد الصحيح');
-expect(await has(page, '/dlal-extension.zip'), 'رابط تنزيل الإضافة موجود في لوحة الزاحف');
+expect(await has(page, '/talin-extension.zip'), 'رابط تنزيل الإضافة موجود في لوحة الزاحف');
 await shot(page, 'admin-crawler-config');
 
 await page.goto(BASE + '/admin/customers'); await page.click(`a:has-text("منى التجريبية")`); await page.waitForLoadState('networkidle');

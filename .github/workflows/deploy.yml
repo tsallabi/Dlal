@@ -1,4 +1,4 @@
-# نشر دلال على Cloudflare Workers عند كل دفع إلى main (أو يدويًا)
+# نشر تالين على Cloudflare Workers عند كل دفع إلى main (أو يدويًا)
 # يلزم إضافة الأسرار في GitHub → Settings → Secrets and variables → Actions:
 #   CLOUDFLARE_API_TOKEN   (صلاحيات: Workers Scripts:Edit, D1:Edit, Account Settings:Read)
 #   CLOUDFLARE_ACCOUNT_ID
@@ -22,7 +22,7 @@ jobs:
       - run: npm ci
       - run: npx tsc --noEmit
       - name: Package browser extension
-        run: (cd extension && zip -qr ../public/dlal-extension.zip .) && ls -la public/dlal-extension.zip
+        run: (cd extension && zip -qr ../public/talin-extension.zip .) && ls -la public/talin-extension.zip
       - name: Apply D1 migrations (remote)
         run: npx wrangler d1 migrations apply dlal-db --remote
       - name: Deploy Worker
@@ -42,4 +42,4 @@ jobs:
           MYPAY_API_KEY: ${{ secrets.MYPAY_API_KEY }}
           MYPAY_WEBHOOK_SECRET: ${{ secrets.MYPAY_WEBHOOK_SECRET }}
       - name: Summary
-        run: echo "### 🚀 نُشر دلال على ${{ steps.deploy.outputs.url }}" >> "$GITHUB_STEP_SUMMARY"
+        run: echo "### 🚀 نُشر تالين على ${{ steps.deploy.outputs.url }}" >> "$GITHUB_STEP_SUMMARY"

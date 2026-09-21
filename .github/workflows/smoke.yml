@@ -31,7 +31,7 @@ jobs:
           curl -s "$BASE/" > /tmp/home.html
           cards=$(grep -o 'class="card"' /tmp/home.html | wc -l)
           echo "product cards on home: $cards"; [ "$cards" -ge 20 ] || fail=1
-          grep -q 'دلال' /tmp/home.html && echo "brand text OK" || fail=1
+          grep -q 'تالين' /tmp/home.html && echo "brand text OK" || fail=1
           grep -q 'فساتين' /tmp/home.html && echo "categories OK" || fail=1
           echo "--- product image proxy:"
           pimg=$(grep -oE '/img/[A-Za-z0-9_-]+' /tmp/home.html | head -1)
@@ -47,9 +47,9 @@ jobs:
           grep -q 'alicdn.com' /tmp/home.html && { echo "SOURCE CDN LEAKED ON HOME"; fail=1; } || echo "home hides source cdn"
 
           echo "--- browser extension package:"
-          zcode=$(curl -sL -o /tmp/ext.zip -w '%{http_code}' "$BASE/dlal-extension.zip")
+          zcode=$(curl -sL -o /tmp/ext.zip -w '%{http_code}' "$BASE/talin-extension.zip")
           zsize=$(stat -c%s /tmp/ext.zip)
-          echo "$zcode  /dlal-extension.zip  ${zsize} bytes"
+          echo "$zcode  /talin-extension.zip  ${zsize} bytes"
           [ "$zcode" = "200" ] && [ "$zsize" -gt 8000 ] || fail=1
           unzip -l /tmp/ext.zip | grep -q manifest.json && echo "extension zip has manifest" || fail=1
           unzip -l /tmp/ext.zip | grep -q config.js && echo "extension zip has auto-config script" || fail=1

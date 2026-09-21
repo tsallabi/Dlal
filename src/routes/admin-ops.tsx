@@ -434,7 +434,7 @@ ops.get('/crawler', async (c) => {
           <div class="card-box"><h3>تثبيت الإضافة (مرة واحدة)</h3>
             <div id="dlal-ext-config" data-api={origin} data-token={c.env.IMPORT_TOKEN ?? ''} style="display:none"></div>
             <ol style="font-size:13px;line-height:1.9;padding-inline-start:18px">
-              <li><a class="btn sm brand" href="/dlal-extension.zip">⬇️ تنزيل dlal-extension.zip</a> وفكّ الضغط في مجلد على حاسوب Chrome.</li>
+              <li><a class="btn sm brand" href="/talin-extension.zip">⬇️ تنزيل talin-extension.zip</a> وفكّ الضغط في مجلد على حاسوب Chrome.</li>
               <li>افتح <span class="mono" style="display:inline">chrome://extensions</span> → فعّل "وضع المطوّر" → "تحميل غير مضغوط" → اختر المجلد.</li>
               <li>أعد تحميل هذه الصفحة بعد التثبيت: تأخذ الإضافة العنوان والرمز تلقائيًا ويظهر شريط أخضر بالأعلى. (يدويًا عند الحاجة: العنوان <span class="mono" style="display:inline">{origin}</span> والرمز <span class="mono" style="display:inline">{c.env.IMPORT_TOKEN ?? '(IMPORT_TOKEN غير مضبوط)'}</span>.)</li>
               <li>اضغط أيقونة الإضافة ثم "اختبار الاتصال"؛ يجب أن يظهر عدد المهام. بعدها "شغّل الآن".</li>

@@ -1,4 +1,4 @@
-// دلال — عامل الخلفية: يجلب المهام من الخادم كل 15 دقيقة وينفذها في تبويب خلفي بإيقاع بشري
+// تالين — عامل الخلفية: يجلب المهام من الخادم كل 15 دقيقة وينفذها في تبويب خلفي بإيقاع بشري
 const VERSION = chrome.runtime.getManifest().version;
 const DEF = { api: '', token: '', paused: false, log: [], fast: false };
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -97,7 +97,7 @@ async function runJob(job) {
   finally { if (tabRef.id) chrome.tabs.remove(tabRef.id).catch(() => {}); }
   await api('/api/crawl/report', { method: 'POST', body: JSON.stringify(rep) }).catch(e => log('تعذر إرسال التقرير: ' + e.message));
   await log(`${job.name}: ${rep.status} — جديد ${rep.imported} · محدّث ${rep.updated} · مُثرى ${rep.enriched} · مفحوص ${rep.checked}`);
-  if (rep.status === 'blocked') notify('دلال — توقف الزاحف', `1688 طلب تحققًا. افتح 1688 وحلّ الكابتشا ثم اضغط "شغّل الآن". (${job.name})`);
+  if (rep.status === 'blocked') notify('تالين — توقف الزاحف', `1688 طلب تحققًا. افتح 1688 وحلّ الكابتشا ثم اضغط "شغّل الآن". (${job.name})`);
   return rep;
 }
 
@@ -122,7 +122,7 @@ chrome.alarms.onAlarm.addListener(a => { if (a.name === 'tick') tick(); });
 async function testConn() {
   try {
     const c = await cfg();
-    if (!c.api || !c.token) return { ok: false, error: 'العنوان أو الرمز غير مضبوط. افتح لوحة الزاحف في موقع دلال ليُضبط تلقائيًا.' };
+    if (!c.api || !c.token) return { ok: false, error: 'العنوان أو الرمز غير مضبوط. افتح لوحة الزاحف في موقع تالين ليُضبط تلقائيًا.' };
     const j = await api('/api/crawl/jobs?v=' + VERSION);
     const due = (j.jobs || []).length, all = (j.all || []).length;
     await log(`اختبار الاتصال: نجح — ${all} مهمة، ${due} مستحقة الآن`);

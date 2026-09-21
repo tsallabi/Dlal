@@ -1,4 +1,4 @@
-// دلال — سكربت المحتوى: يستخرج بيانات المنتجات من صفحات 1688 عند طلب الخلفية
+// تالين — سكربت المحتوى: يستخرج بيانات المنتجات من صفحات 1688 عند طلب الخلفية
 (function () {
   if (window.__dlalContent) return; window.__dlalContent = true;
   const $ = (s, r = document) => r.querySelector(s);
