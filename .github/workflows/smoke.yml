@@ -33,6 +33,19 @@ jobs:
           echo "product cards on home: $cards"; [ "$cards" -ge 20 ] || fail=1
           grep -q 'دلال' /tmp/home.html && echo "brand text OK" || fail=1
           grep -q 'فساتين' /tmp/home.html && echo "categories OK" || fail=1
+          echo "--- product image proxy:"
+          pimg=$(grep -oE '/img/[A-Za-z0-9_-]+' /tmp/home.html | head -1)
+          if [ -n "$pimg" ]; then
+            icode=$(curl -sL -o /tmp/p.img -w '%{http_code} %{content_type}' "$BASE$pimg")
+            isize=$(stat -c%s /tmp/p.img)
+            echo "$icode  $isize bytes"
+            # الصورة الحقيقية أكبر بكثير من صورة البديل (placeholder.svg) — فحجم كبير يعني أن alicdn استجاب فعلًا
+            case "$icode" in *image/*) [ "$isize" -gt 5000 ] && echo "image proxy serves real product photos" || { echo "PROXY FELL BACK TO PLACEHOLDER"; fail=1; } ;; *) echo "IMAGE PROXY NOT SERVING IMAGES"; fail=1 ;; esac
+          else
+            echo "no proxied image on home page"; fail=1
+          fi
+          grep -q 'alicdn.com' /tmp/home.html && { echo "SOURCE CDN LEAKED ON HOME"; fail=1; } || echo "home hides source cdn"
+
           echo "--- browser extension package:"
           zcode=$(curl -sL -o /tmp/ext.zip -w '%{http_code}' "$BASE/dlal-extension.zip")
           zsize=$(stat -c%s /tmp/ext.zip)

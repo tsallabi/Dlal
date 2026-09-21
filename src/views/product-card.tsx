@@ -1,6 +1,6 @@
 import type { FC } from 'hono/jsx';
 import type { ProductRow } from '../lib/db';
-import { fmt } from '../lib/db';
+import { fmt, imgUrl } from '../lib/db';
 
 export const ProductCard: FC<{ p: ProductRow; fav?: boolean }> = ({ p, fav }) => {
   const off = p.compare_price_lyd && p.compare_price_lyd > p.price_lyd
@@ -8,7 +8,7 @@ export const ProductCard: FC<{ p: ProductRow; fav?: boolean }> = ({ p, fav }) =>
   return (
     <a class="card" href={`/p/${p.slug}`} data-id={p.id}>
       <div class="ph">
-        <img src={p.image ?? '/placeholder.svg'} alt={p.title_ar} loading="lazy" />
+        <img src={imgUrl(p.image)} alt={p.title_ar} loading="lazy" decoding="async" referrerpolicy="no-referrer" />
         {off > 0 && <span class="tag">-{off}%</span>}
         {p.sales > 50 && off === 0 && <span class="tag" style="background:#1a1a1a">الأكثر مبيعًا</span>}
         <button class={`fav ${fav ? 'on' : ''}`} data-fav={p.id} aria-label="أضف للمفضلة" type="button">{fav ? '♥' : '♡'}</button>

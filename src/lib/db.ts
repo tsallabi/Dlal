@@ -43,3 +43,20 @@ export function timeAgo(iso: string) {
 export async function notify(db: D1Database, userId: number, title: string, body: string, link?: string) {
   await db.prepare('INSERT INTO notifications(user_id,title,body,link) VALUES(?,?,?,?)').bind(userId, title, body, link ?? null).run();
 }
+
+// وسيط الصور: صور 1688 تمنع العرض من مواقع أخرى (حماية الروابط الساخنة)، فتُمرَّر عبر /img
+// الرابط مُعمّى بـ base64url حتى لا يظهر اسم مصدر المنتج للزبونة في كود الصفحة.
+const PROXY_HOSTS = /(^|\.)(alicdn\.com|1688\.com|taobao\.com|tbcdn\.cn|aliyuncs\.com)$/i;
+export const b64url = (s: string) => btoa(String.fromCharCode(...new TextEncoder().encode(s))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+export const unb64url = (s: string) => {
+  const b = s.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = b + '==='.slice((b.length + 3) % 4);
+  return new TextDecoder().decode(Uint8Array.from(atob(padded), ch => ch.charCodeAt(0)));
+};
+export function imgUrl(u?: string | null): string {
+  if (!u) return '/placeholder.svg';
+  if (u.startsWith('/')) return u;
+  let h = '';
+  try { h = new URL(u).hostname; } catch { return '/placeholder.svg'; }
+  return PROXY_HOSTS.test(h) ? `/img/${b64url(u)}` : u;
+}

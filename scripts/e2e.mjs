@@ -47,7 +47,19 @@ const prices = await page.$$eval('.card .p', els => els.map(e => parseFloat((e.f
 expect(prices.every((v, i) => i === 0 || v >= prices[i - 1]), 'الترتيب بالسعر تصاعدي صحيح');
 await page.fill('.search input', 'حقيبة'); await page.press('.search input', 'Enter'); await page.waitForLoadState('networkidle');
 expect((await page.locator('.card').count()) >= 3, 'البحث عن "حقيبة" يعيد نتائج');
-await page.goto(BASE + '/c/dresses'); await page.click('.card >> nth=0'); await page.waitForLoadState('networkidle');
+// افتح أول منتج في القسم يملك ألوانًا ومقاسات (المنتجات المستوردة حديثًا قد تكون بلا متغيرات بعد)
+async function openProductWithVariants(cat = 'dresses') {
+  await page.goto(BASE + '/c/' + cat);
+  const n = Math.min(await page.locator('.card').count(), 8);
+  for (let i = 0; i < n; i++) {
+    await page.goto(BASE + '/c/' + cat);
+    await page.locator('.card').nth(i).click();
+    await page.waitForLoadState('networkidle');
+    if (await page.locator('.chips[data-opt=color] .chip:not(.off)').count() && await page.locator('.chips[data-opt=size] .chip:not(.off)').count()) return true;
+  }
+  return false;
+}
+expect(await openProductWithVariants(), 'يوجد منتج بألوان ومقاسات في قسم فساتين');
 expect(await page.locator('.pd h1').isVisible(), 'صفحة المنتج تفتح');
 expect(await has(page, 'التقييمات ('), 'صفحة المنتج تعرض قسم التقييمات');
 expect(!(await has(page, 'detail.1688.com')), 'رابط المصدر مخفي عن الزبونة');
@@ -148,6 +160,20 @@ for (const [path, name, check] of [
   ['/admin/stock', 'admin-stock', 'فحص المخزون'], ['/admin/pricing', 'admin-pricing', 'سعر الصرف'], ['/admin/partners', 'admin-partners', 'شاهين'], ['/admin/staff', 'admin-staff', 'مصفوفة الصلاحيات'], ['/admin/customers', 'admin-customers', 'منى'],
   ['/admin/reports', 'admin-reports', 'المبيعات اليومية'], ['/admin/activity', 'admin-activity', 'سجل النشاط'], ['/admin/tickets', 'admin-tickets', 'التذاكر'], ['/admin/reviews', 'admin-reviews', 'بانتظار المراجعة'],
 ]) { await page.goto(BASE + path); expect(await has(page, check), `صفحة ${path} تعمل`); await shot(page, name); }
+// صور المنتجات تمر عبر وسيط الموقع ولا تكشف المصدر
+await page.goto(BASE + '/');
+const html0 = await page.content();
+expect(!/alicdn\.com|1688\.com/.test(html0), 'الصفحة الرئيسية لا تكشف روابط 1688/alicdn للزبونة');
+const srcs = await page.locator('.card .ph img').evaluateAll(els => els.map(e => e.getAttribute('src') || ''));
+expect(srcs.length > 0 && !srcs.some(u => /alicdn|1688/i.test(u)), 'لا توجد بطاقة تشير مباشرة إلى صور 1688');
+// وسيط الصور نفسه: رابط صورة 1688 حقيقي معمّى بـ base64url
+const b64 = (t) => Buffer.from(t, 'utf8').toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const proxied = '/img/' + b64('https://cbu01.alicdn.com/img/ibank/O1CN01DiEsNY1Wgh229kMT8_!!1948462818-0-cib.jpg');
+const imgRes = await ctx.request.get(BASE + proxied);
+expect(imgRes.ok() && (imgRes.headers()['content-type'] || '').startsWith('image/'), `وسيط الصور يعيد صورة (${imgRes.status()} ${imgRes.headers()['content-type']})`);
+const badRes = await ctx.request.get(BASE + '/img/' + b64('https://evil.example.com/x.jpg'));
+expect(badRes.ok() && (badRes.headers()['content-type'] || '').includes('svg'), 'وسيط الصور يرفض النطاقات غير المسموح بها');
+
 // لوحة الزاحف تحمل بيانات الضبط التلقائي للإضافة
 await page.goto(BASE + '/admin/crawler');
 expect(await has(page, 'id="dlal-ext-config"'), 'لوحة الزاحف تعرض بيانات الضبط التلقائي للإضافة');

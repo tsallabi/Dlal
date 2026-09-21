@@ -4,7 +4,7 @@ import type { Env } from '../types';
 import { ORDER_STATUS, PAYMENT_METHODS } from '../types';
 import { AdminShell } from '../views/dash';
 import { Flash } from '../views/layout';
-import { getCategories, PRODUCT_SELECT, fmt, timeAgo } from '../lib/db';
+import { getCategories, PRODUCT_SELECT, fmt, imgUrl, timeAgo } from '../lib/db';
 import type { ProductRow } from '../lib/db';
 import { loadSettings, computePrice } from '../lib/pricing';
 import { requireRole } from '../lib/auth';
@@ -243,10 +243,13 @@ export async function importProducts(db: D1Database, arr: any[], categoryId: num
   const cats = await getCategories(db);
   const cat = cats.find(x => x.id === categoryId) ?? null;
   let imported = 0, updated = 0, skipped = 0, enriched = 0; const newIds: string[] = [];
+  const seen = new Set<string>();   // نتائج البحث قد تكرر المنتج نفسه في الدفعة الواحدة
   for (const it of arr) {
     const offerId = String(it.offerId ?? it.offer_id ?? '').trim();
     const price = parseFloat(it.priceCny ?? it.price_cny ?? it.price);
     if (!offerId || !price) { skipped++; continue; }
+    if (seen.has(offerId)) { skipped++; continue; }
+    seen.add(offerId);
     const weight = it.weightG ?? cat?.est_weight_g ?? 300;
     const pr = computePrice(s, price, weight, cat?.markup_percent);
     let titleAr: string = it.titleAr ?? it.title_ar ?? it.title ?? 'منتج';
@@ -279,12 +282,13 @@ export async function importProducts(db: D1Database, arr: any[], categoryId: num
     }
     const slug = `${offerId}-${Math.random().toString(36).slice(2, 6)}`;
     const ins = await db.prepare(
-      `INSERT INTO products(source,source_offer_id,source_url,slug,title_ar,title_src,description_ar,category_id,source_price_cny,price_lyd,compare_price_lyd,weight_g,min_qty,in_stock,status,supplier_name,last_checked_at,sales,rating)
+      `INSERT OR IGNORE INTO products(source,source_offer_id,source_url,slug,title_ar,title_src,description_ar,category_id,source_price_cny,price_lyd,compare_price_lyd,weight_g,min_qty,in_stock,status,supplier_name,last_checked_at,sales,rating)
        VALUES('1688',?,?,?,?,?,?,?,?,?,?,?,?,?,'active',?,datetime('now'),?,?)`,
     ).bind(offerId, it.url ?? `https://detail.1688.com/offer/${offerId}.html`, slug, titleAr, it.title ?? null, it.descriptionAr ?? null,
       categoryId, price, pr.total_lyd, Math.random() < 0.4 ? Math.ceil(pr.total_lyd * 1.25 / 5) * 5 : null, it.weightG ?? null,
       Math.max(1, parseInt(it.minQty ?? 1) || 1), it.inStock === false ? 0 : 1, supplierAr, parseInt(it.sales ?? 0) || 0, 4.5 + Math.random() * 0.5).run();
     const pid = ins.meta.last_row_id as number;
+    if (!pid || !ins.meta.changes) { skipped++; continue; }   // تجاهل صفّ لم يُدرج (تعارض مع استيراد متزامن)
     const stmts: D1PreparedStatement[] = [];
     (it.images ?? []).slice(0, 6).forEach((u: string, i: number) => stmts.push(db.prepare('INSERT INTO product_images(product_id,url,sort) VALUES(?,?,?)').bind(pid, u, i)));
     (it.variants ?? []).forEach((v: any) => stmts.push(db.prepare('INSERT INTO variants(product_id,source_sku_id,color,size,price_delta_lyd,in_stock,image_url) VALUES(?,?,?,?,?,?,?)')
@@ -310,7 +314,7 @@ admin.get('/products', async (c) => {
       <Flash msg={c.req.query('imported') ? `تم استيراد ${c.req.query('imported')} منتج وتحديث ${c.req.query('updated')}` : c.req.query('translated') ? `تُرجم ${c.req.query('translated')} عنوانًا` : c.req.query('ok') ? 'تم الحفظ ✓' : undefined} /><Flash type="err" msg={c.req.query('noai') ? 'الترجمة تعمل على Cloudflare فقط (ربط Workers AI غير متاح هنا)' : undefined} />
       <form class="inline" style="margin-bottom:10px"><input type="text" name="q" placeholder="بحث بالاسم أو offerId" value={q} /><select name="status"><option value="">كل الحالات</option>{['active', 'draft', 'hidden', 'unavailable'].map(x => <option value={x} selected={st === x}>{x}</option>)}</select><button class="btn sm">بحث</button><a class="btn sm ghost" href="/admin/products/new">+ منتج يدوي</a><button class="btn sm ghost" formaction="/admin/products/translate" formmethod="post">🈶 ترجمة العناوين الصينية ({untranslated})</button></form>
       <div class="tbl-wrap"><table class="tbl"><tr><th></th><th>المنتج</th><th>القسم</th><th>سعر المصدر</th><th>سعر البيع</th><th>الحالة</th><th>مبيعات</th><th>آخر فحص</th><th></th></tr>
-        {rows.results.map(p => <tr><td><img src={p.image ?? '/placeholder.svg'} /></td><td><a href={`/admin/products/${p.id}`}>{p.title_ar}</a><br /><a class="src-link" href={p.source_url ?? '#'} target="_blank">{p.source_offer_id}</a></td><td>{p.cat_name ?? '—'}</td><td>{p.source_price_cny} ¥</td><td><b>{fmt(p.price_lyd)}</b><br /><small style="color:#888">هامش ≈ {Math.round((1 - (p.source_price_cny * parseFloat(s.fx_cny_lyd)) / p.price_lyd) * 100)}%</small></td><td><span class={`status ${p.status === 'active' ? 'green' : p.status === 'unavailable' ? 'red' : 'gray'}`}>{p.status}</span>{!p.in_stock && <><br /><small style="color:#d3262b">نفد</small></>}</td><td>{p.sales}</td><td><small>{p.last_checked_at ? timeAgo(p.last_checked_at) : '—'}</small></td><td><a href={`/p/${p.slug}`} target="_blank">👁</a></td></tr>)}
+        {rows.results.map(p => <tr><td><img src={imgUrl(p.image)} /></td><td><a href={`/admin/products/${p.id}`}>{p.title_ar}</a><br /><a class="src-link" href={p.source_url ?? '#'} target="_blank">{p.source_offer_id}</a></td><td>{p.cat_name ?? '—'}</td><td>{p.source_price_cny} ¥</td><td><b>{fmt(p.price_lyd)}</b><br /><small style="color:#888">هامش ≈ {Math.round((1 - (p.source_price_cny * parseFloat(s.fx_cny_lyd)) / p.price_lyd) * 100)}%</small></td><td><span class={`status ${p.status === 'active' ? 'green' : p.status === 'unavailable' ? 'red' : 'gray'}`}>{p.status}</span>{!p.in_stock && <><br /><small style="color:#d3262b">نفد</small></>}</td><td>{p.sales}</td><td><small>{p.last_checked_at ? timeAgo(p.last_checked_at) : '—'}</small></td><td><a href={`/p/${p.slug}`} target="_blank">👁</a></td></tr>)}
       </table></div>
     </>
   ));

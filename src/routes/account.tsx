@@ -5,7 +5,7 @@ import type { Env } from '../types';
 import { ORDER_STATUS, TICKET_TYPES, TICKET_STATUS, CITIES, PAYMENT_METHODS } from '../types';
 import { AccountShell, Stars } from '../views/account';
 import { Flash } from '../views/layout';
-import { getCategories, fmt, timeAgo, notify } from '../lib/db';
+import { getCategories, fmt, imgUrl, timeAgo, notify } from '../lib/db';
 import { hashPassword, verifyPassword } from '../lib/auth';
 import { loadSettings } from '../lib/pricing';
 import { setOrderStatus, ticketCode, addPoints } from '../lib/orders';
@@ -80,7 +80,7 @@ acct.get('/orders', async (c) => {
       {results.length === 0 ? <div class="empty"><div class="big">📦</div>لا طلبات هنا</div> : results.map(o => (
         <div class="order-card">
           <div class="oc-h"><b>{o.code}</b><span class={`status ${ORDER_STATUS[o.status]?.color}`}>{ORDER_STATUS[o.status]?.ar}</span></div>
-          <div class="oc-b"><img src={o.image ?? '/placeholder.svg'} alt="" /><div><div>{o.items} منتج · {fmt(o.total_lyd)}</div><small style="color:#888">{timeAgo(o.created_at)} · {PAYMENT_METHODS[o.payment_method]?.ar}</small></div></div>
+          <div class="oc-b"><img src={imgUrl(o.image)} alt="" /><div><div>{o.items} منتج · {fmt(o.total_lyd)}</div><small style="color:#888">{timeAgo(o.created_at)} · {PAYMENT_METHODS[o.payment_method]?.ar}</small></div></div>
           <div class="oc-f">
             <a class="btn sm ghost" href={`/orders/${o.code}`}>التفاصيل والتتبع</a>
             {o.status === 'pending_payment' && PAYMENT_METHODS[o.payment_method]?.online && <a class="btn sm brand" href={`/pay/start/${o.code}`}>ادفعي الآن</a>}
@@ -178,7 +178,7 @@ acct.get('/reviews', async (c) => {
         {pending.results.length === 0 ? <p style="color:#888">لا منتجات بانتظار التقييم.</p> : pending.results.map(it => (
           <form method="post" action="/account/reviews" class="review-form">
             <input type="hidden" name="product_id" value={it.product_id} /><input type="hidden" name="order_id" value={it.order_id} />
-            <img src={it.image ?? '/placeholder.svg'} alt="" /><div style="flex:1">
+            <img src={imgUrl(it.image)} alt="" /><div style="flex:1">
               <b>{it.title_ar}</b> <small style="color:#888">{[it.color, it.size].filter(Boolean).join(' · ')} · {it.code}</small>
               <div class="rate"><input type="radio" name="rating" value="5" id={`r5_${it.id}`} checked /><label for={`r5_${it.id}`}>★</label><input type="radio" name="rating" value="4" id={`r4_${it.id}`} /><label for={`r4_${it.id}`}>★</label><input type="radio" name="rating" value="3" id={`r3_${it.id}`} /><label for={`r3_${it.id}`}>★</label><input type="radio" name="rating" value="2" id={`r2_${it.id}`} /><label for={`r2_${it.id}`}>★</label><input type="radio" name="rating" value="1" id={`r1_${it.id}`} /><label for={`r1_${it.id}`}>★</label></div>
               <div class="inline"><select name="size_fit"><option value="">المقاس؟</option><option value="small">أصغر من المتوقع</option><option value="true">مطابق</option><option value="large">أكبر من المتوقع</option></select><input type="url" name="image_url" placeholder="رابط صورة (اختياري)" style="flex:1" /></div>

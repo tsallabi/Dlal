@@ -4,7 +4,7 @@ import type { Env } from '../types';
 import { ORDER_STATUS } from '../types';
 import { PartnerShell } from '../views/dash';
 import { Flash } from '../views/layout';
-import { fmt, timeAgo, notify } from '../lib/db';
+import { fmt, imgUrl, timeAgo, notify } from '../lib/db';
 import { setOrderStatus } from '../lib/orders';
 import { requireRole } from '../lib/auth';
 
@@ -33,7 +33,7 @@ async function ordersWithItems(db: D1Database, pid: number, statuses: string[]) 
 
 const ItemRow = (i: any, o: any) => (
   <tr>
-    <td><img src={i.image ?? '/placeholder.svg'} /></td>
+    <td><img src={imgUrl(i.image)} /></td>
     <td>{i.title_ar}<br /><a class="src-link" href={i.source_url ?? `https://detail.1688.com/offer/${i.source_offer_id}.html`} target="_blank">🔗 فتح في 1688 — {i.source_offer_id}</a></td>
     <td><b>{[i.color, i.size].filter(Boolean).join(' · ') || '—'}</b></td>
     <td><b style="font-size:16px">× {i.qty}</b></td>
@@ -106,7 +106,7 @@ partner.get('/warehouse', async (c) => {
         <div class="card-box">
           <div class="inline" style="justify-content:space-between"><h3 style="margin:0">{o.code}</h3><small style="color:#888">{o.name} · {o.ship_city}</small></div>
           <table class="tbl" style="margin-top:8px"><tr><th></th><th>المنتج</th><th>المواصفة</th><th>الكمية</th><th>الوزن الفعلي (غ)</th><th>صورة الفحص</th></tr>
-            {o.items.map((i: any) => <tr><form method="post" action={`/partner/item/${i.id}/inspect`}><input type="hidden" name="code" value={o.code} /><td><img src={i.image ?? '/placeholder.svg'} /></td><td>{i.title_ar}</td><td>{[i.color, i.size].filter(Boolean).join(' · ') || '—'}</td><td>× {i.qty}</td><td><input type="number" name="actual_weight_g" value={i.actual_weight_g ?? ''} style="width:90px" /></td><td class="inline"><input type="url" name="proof_image_url" value={i.proof_image_url ?? ''} placeholder="رابط الصورة" style="width:180px" /><button class="btn sm ghost">حفظ</button></td></form></tr>)}
+            {o.items.map((i: any) => <tr><form method="post" action={`/partner/item/${i.id}/inspect`}><input type="hidden" name="code" value={o.code} /><td><img src={imgUrl(i.image)} /></td><td>{i.title_ar}</td><td>{[i.color, i.size].filter(Boolean).join(' · ') || '—'}</td><td>× {i.qty}</td><td><input type="number" name="actual_weight_g" value={i.actual_weight_g ?? ''} style="width:90px" /></td><td class="inline"><input type="url" name="proof_image_url" value={i.proof_image_url ?? ''} placeholder="رابط الصورة" style="width:180px" /><button class="btn sm ghost">حفظ</button></td></form></tr>)}
           </table>
           {open.results.length > 0 && <form method="post" action={`/partner/order/${o.code}/consolidate`} class="inline" style="margin-top:8px"><select name="shipment_id">{open.results.map(s => <option value={s.id}>{s.code} ({s.method === 'air' ? 'جوي' : 'بحري'})</option>)}</select><button class="btn sm ok">ضمّ إلى الشحنة 📦</button></form>}
         </div>

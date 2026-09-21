@@ -6,7 +6,7 @@ import { ORDER_STATUS, PAYMENT_METHODS, CITIES } from '../types';
 import { Layout, Flash } from '../views/layout';
 import { Grid } from '../views/product-card';
 import { Stars } from '../views/account';
-import { getCategories, PRODUCT_SELECT, fmt, orderCode, timeAgo, notify } from '../lib/db';
+import { getCategories, PRODUCT_SELECT, fmt, imgUrl, orderCode, timeAgo, notify } from '../lib/db';
 import type { ProductRow } from '../lib/db';
 import { loadSettings } from '../lib/pricing';
 import { checkCoupon } from '../lib/coupons';
@@ -219,8 +219,8 @@ store.get('/p/:slug', async (c) => {
       <div class="crumbs"><a href="/">الرئيسية</a> › <a href={`/c/${p.cat_slug}`}>{p.cat_name}</a> › <span>{p.title_ar.slice(0, 40)}</span></div>
       <div class="pd" data-product={p.id}>
         <div class="gallery">
-          <div class="main"><img id="mainImg" src={images[0]} alt={p.title_ar} />{off > 0 && <span class="tag">-{off}%</span>}</div>
-          <div class="thumbs">{images.map((u, i) => <img src={u} class={i === 0 ? 'on' : ''} data-thumb loading="lazy" />)}</div>
+          <div class="main"><img id="mainImg" src={imgUrl(images[0])} alt={p.title_ar} referrerpolicy="no-referrer" />{off > 0 && <span class="tag">-{off}%</span>}</div>
+          <div class="thumbs">{images.map((u, i) => <img src={imgUrl(u)} data-full={imgUrl(u)} class={i === 0 ? 'on' : ''} data-thumb loading="lazy" referrerpolicy="no-referrer" />)}</div>
         </div>
         <div>
           <h1>{p.title_ar}</h1>
@@ -410,7 +410,7 @@ store.get('/cart', async (c) => {
           <div>
             {rows.map(r => (
               <div class="cart-row">
-                <a href={`/p/${r.slug}`}><img src={r.image ?? '/placeholder.svg'} alt="" /></a>
+                <a href={`/p/${r.slug}`}><img src={imgUrl(r.image)} alt="" loading="lazy" referrerpolicy="no-referrer" /></a>
                 <div>
                   <div class="t"><a href={`/p/${r.slug}`}>{r.title_ar}</a></div>
                   <div class="v">{[r.color, r.size].filter(Boolean).join(' · ')}</div>
@@ -597,7 +597,7 @@ store.get('/orders/:code', async (c) => {
           </div>
           <div class="card-box"><h3>المنتجات</h3>
             {items.results.map(it => (
-              <div class="cart-row"><img src={it.image ?? '/placeholder.svg'} alt="" /><div><div class="t"><a href={`/p/${it.slug}`}>{it.title_ar}</a></div><div class="v">{[it.color, it.size].filter(Boolean).join(' · ')} × {it.qty}</div>
+              <div class="cart-row"><img src={imgUrl(it.image)} alt="" loading="lazy" referrerpolicy="no-referrer" /><div><div class="t"><a href={`/p/${it.slug}`}>{it.title_ar}</a></div><div class="v">{[it.color, it.size].filter(Boolean).join(' · ')} × {it.qty}</div>
                 {it.purchase_status === 'unavailable' && <div style="color:#d3262b;font-size:12px">⚠️ نفد عند المورد — سنتواصل معك لبديل أو استرجاع</div>}
                 {it.proof_image_url && <a href={it.proof_image_url} target="_blank" style="font-size:12px;color:#1c47b3">📷 صورة الفحص من المخزن</a>}
               </div><div style="font-weight:800">{fmt(it.unit_price_lyd * it.qty)}</div></div>

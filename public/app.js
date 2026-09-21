@@ -1,6 +1,9 @@
 // دلال — سلوك الواجهة (بدون مكتبات)
 (function () {
   const $ = (s, r = document) => r.querySelector(s);
+// صور 1688 تمر عبر وسيط الموقع (alicdn يمنع العرض الخارجي ويجب ألا يظهر المصدر للزبونة)
+const b64url = (s) => btoa(String.fromCharCode(...new TextEncoder().encode(s))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const proxyImg = (u) => (!u ? u : /(^|\.)(alicdn\.com|1688\.com|taobao\.com|tbcdn\.cn)/i.test(u) ? '/img/' + b64url(u) : u);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 
   // toast
@@ -57,7 +60,7 @@
       $('#variantId').value = m ? m.id : '';
       const cl = $('#colorLbl'); if (cl) cl.textContent = sel.color || '';
       const sl = $('#sizeLbl'); if (sl) sl.textContent = sel.size || '';
-      if (m && m.image_url) $('#mainImg').src = m.image_url;
+      if (m && m.image_url) $('#mainImg').src = proxyImg(m.image_url);
     };
     opts.forEach(g => $$('.chip', g).forEach(ch => ch.addEventListener('click', () => { if (ch.classList.contains('off')) return; sel[g.dataset.opt] = ch.dataset.val; refresh(); })));
     // اختيار افتراضي

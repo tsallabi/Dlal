@@ -7,6 +7,7 @@ import auth from './routes/auth';
 import admin from './routes/admin';
 import partner from './routes/partner';
 import api from './routes/api';
+import img from './routes/img';
 import pay from './routes/pay';
 import account from './routes/account';
 import adminOps from './routes/admin-ops';
@@ -24,6 +25,7 @@ app.use('*', async (c, next) => {
   await next();
 });
 
+app.route('/', img);
 app.route('/api', api);
 app.route('/admin/api1688', api1688Admin);
 app.route('/admin', adminOps);
