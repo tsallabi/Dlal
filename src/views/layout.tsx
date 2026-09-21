@@ -17,28 +17,43 @@ export const Layout: FC<Props> = ({ title, user, cartCount = 0, categories = [],
       <meta charset="utf-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1" />
       <title>{title ? `${title} | دلال` : 'دلال — تسوق من الصين إلى ليبيا'}</title>
+      <link rel="preconnect" href="https://fonts.googleapis.com" />
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" />
       <link rel="stylesheet" href="/style.css" />
       <link rel="icon" href="/favicon.svg" />
+      <meta name="theme-color" content="#b5124f" />
     </head>
     <body>
       <header class="hdr">
+        <div class="hdr-strip">
+          <div class="wrap">
+            <span>🚚 توصيل لكل ليبيا · <b>أسعار نهائية</b> شاملة الشحن والجمارك</span>
+            <nav>
+              <a href="/pages/how">كيف نعمل؟</a>
+              <a href="/account/orders">تتبّع طلبي</a>
+              <a href="/pages/returns">الإرجاع</a>
+              <a href="/pages/contact">تواصلي معنا</a>
+            </nav>
+          </div>
+        </div>
         <div class="hdr-top wrap">
-          <a href="/" class="logo">دلال</a>
-          <form class="search" action="/search" method="get">
-            <input name="q" placeholder="ابحث عن منتج…" value={q ?? ''} />
-            <button type="submit" aria-label="بحث">🔍</button>
+          <a href="/" class="logo">دلال<small>من الصين إلى بابك</small></a>
+          <form class="search" action="/search" method="get" role="search">
+            <input name="q" placeholder="ابحثي عن فستان، عباية، حقيبة…" value={q ?? ''} aria-label="ابحثي عن منتج" />
+            <button type="submit">بحث</button>
           </form>
           <nav class="hdr-links">
-            <a href="/wishlist" title="المفضلة">♡</a>
-            <a href="/cart" class="cart-link" title="السلة">🛒{cartCount > 0 && <span class="badge">{cartCount}</span>}</a>
-            {user ? <a href="/account">{user.name.split(' ')[0]}</a> : <a href="/login">دخول</a>}
+            <a href="/wishlist"><i>♡</i><span>المفضلة</span></a>
+            <a href="/cart" class="cart-link"><i>🛒</i><span>السلة</span>{cartCount > 0 && <span class="badge">{cartCount}</span>}</a>
+            <a href={user ? '/account' : '/login'}><i>👤</i><span>{user ? user.name.split(' ')[0] : 'دخول'}</span></a>
             {user?.role === 'admin' && <a href="/admin" class="pill">الإدارة</a>}
             {user?.role === 'partner' && <a href="/partner" class="pill">لوحة الشحن</a>}
           </nav>
         </div>
         <div class="cats wrap">
           <a href="/" class={!active ? 'on' : ''}>الكل</a>
-          {categories.map(c => <a href={`/c/${c.slug}`} class={active === c.slug ? 'on' : ''}>{c.icon} {c.name_ar}</a>)}
+          {categories.map(c => <a href={`/c/${c.slug}`} class={active === c.slug ? 'on' : ''}>{c.name_ar}</a>)}
         </div>
       </header>
       <main class="wrap">{children}</main>

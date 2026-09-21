@@ -51,8 +51,8 @@ store.get('/', async (c) => {
       <section class="home-top">
         <aside class="cat-menu">
           <h4>كل الأقسام</h4>
-          {b.categories.map(cat => <a href={`/c/${cat.slug}`}><span>{cat.icon}</span>{cat.name_ar}<i>›</i></a>)}
-          <a href="/sale" class="hot"><span>⚡</span>عروض وتخفيضات<i>›</i></a>
+          {b.categories.map(cat => <a href={`/c/${cat.slug}`}>{cat.name_ar}<i>›</i></a>)}
+          <a href="/sale" class="hot">عروض وتخفيضات<i>›</i></a>
         </aside>
         <div class="carousel" data-carousel>
           <div class="slides">{slides.map(sl => <div class={`slide ${sl.cls}`}><span class="eyebrow">توصيل لكل ليبيا · أسعار نهائية</span><h1>{sl.k}</h1><p>{sl.t}</p><a class="cta" href={sl.a}>{sl.l}</a></div>)}</div>
@@ -64,7 +64,7 @@ store.get('/', async (c) => {
             <div class="uc-grid"><a href="/account/orders">📦<span>طلباتي</span>{myOrders?.n ? <i>{myOrders.n}</i> : null}</a><a href="/account/coupons">🎟️<span>كوبوناتي</span></a><a href="/wishlist">♡<span>المفضلة</span></a><a href="/account/tickets">↩️<span>الدعم</span></a></div>
           </> : <>
             <div class="uc-h"><div class="av">👋</div><div><b>أهلًا بك في دلال</b><br /><small>سجّلي واكسبي نقاطًا مع كل طلب</small></div></div>
-            <a class="btn brand" href="/register" style="display:block;text-align:center">إنشاء حساب</a><a class="btn ghost" href="/login" style="display:block;text-align:center;margin-top:6px">تسجيل الدخول</a>
+            <div class="uc-promo"><b>سجّلي الآن</b><span>واكسبي نقاطًا تُخصم من طلبك القادم</span></div><a class="btn brand" href="/register" style="display:block;text-align:center">إنشاء حساب</a><a class="btn ghost" href="/login" style="display:block;text-align:center;margin-top:6px">تسجيل الدخول</a>
           </>}
           <ul class="uc-list"><li>🚚 الوصول خلال 15–25 يومًا</li><li>🔍 فحص وتصوير قبل الشحن</li><li>↩️ تعويض كامل لأي تالف</li></ul>
           <div class="uc-stats"><span><b>{stats?.p ?? 0}</b> منتج</span><span><b>{stats?.d ?? 0}</b> طلب مُسلَّم</span><span><b>{stats?.u ?? 0}</b> زبونة</span></div>

@@ -9,14 +9,20 @@ export const ProductCard: FC<{ p: ProductRow; fav?: boolean }> = ({ p, fav }) =>
     <a class="card" href={`/p/${p.slug}`} data-id={p.id}>
       <div class="ph">
         <img src={imgUrl(p.image)} alt={p.title_ar} loading="lazy" decoding="async" referrerpolicy="no-referrer" />
-        {off > 0 && <span class="tag">-{off}%</span>}
-        {p.sales > 50 && off === 0 && <span class="tag" style="background:#1a1a1a">الأكثر مبيعًا</span>}
+        {off > 0 && <span class="tag">خصم {off}%</span>}
+        {off === 0 && p.sales > 50 && <span class="tag" style="background:#141414">الأكثر مبيعًا</span>}
         <button class={`fav ${fav ? 'on' : ''}`} data-fav={p.id} aria-label="أضف للمفضلة" type="button">{fav ? '♥' : '♡'}</button>
         {!p.in_stock && <div class="unavail">غير متوفر حاليًا</div>}
       </div>
-      <div class="t">{p.title_ar}</div>
-      <div class="p">{fmt(p.price_lyd)}{off > 0 && <s>{fmt(p.compare_price_lyd!)}</s>}</div>
-      <div class="meta">★ {p.rating.toFixed(1)} · {p.sales > 0 ? `${p.sales}+ بيعت` : 'جديد'}</div>
+      <div class="body">
+        <div class="t">{p.title_ar}</div>
+        <div class="p">{fmt(p.price_lyd)}{off > 0 && <s>{fmt(p.compare_price_lyd!)}</s>}</div>
+        <div class="meta">
+          <span class="star">★ {p.rating.toFixed(1)}</span>
+          <span class="dot">·</span>
+          <span>{p.sales > 0 ? `${p.sales}+ بيعت` : 'وصل حديثًا'}</span>
+        </div>
+      </div>
     </a>
   );
 };
