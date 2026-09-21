@@ -605,3 +605,48 @@ body{background:#fff}
 .pc-side .acct-pts{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 0;font-size:12.5px;border-bottom:1px solid var(--line-2)}
 .pc-side .acct-pts a{color:var(--brand);font-weight:700}
 .pc-grp a .cnt{margin-inline-start:auto;background:var(--brand);color:#fff;font-size:11px;font-weight:800;min-width:18px;height:18px;border-radius:9px;display:grid;place-items:center;padding:0 5px}
+
+/* ===== صفحات المساعدة والسياسات ===== */
+.doc{max-width:900px;margin:0 auto;padding-bottom:40px}
+.doc h1{text-align:center;font-size:30px;margin:18px 0 6px}
+.doc .sub{text-align:center;color:var(--mut);font-size:14.5px;margin:0 0 26px}
+.doc h2{font-size:19px;margin:30px 0 10px;padding-bottom:8px;border-bottom:1px solid var(--line-2)}
+.doc h3{font-size:15.5px;margin:20px 0 6px}
+.doc p{font-size:14.5px;line-height:1.95;color:var(--ink-2);margin:0 0 12px}
+.doc ul{margin:0 0 14px;padding-inline-start:20px}
+.doc li{font-size:14.5px;line-height:1.9;color:var(--ink-2);margin-bottom:6px}
+.doc table{width:100%;border-collapse:collapse;margin:0 0 18px;font-size:14px}
+.doc th,.doc td{border:1px solid var(--line);padding:11px 12px;text-align:start;vertical-align:top}
+.doc th{background:var(--soft);font-weight:800;font-size:13.5px}
+.doc .note{background:var(--soft);border:1px solid var(--line-2);padding:14px 16px;margin:18px 0;font-size:13.5px}
+.doc .note b{display:block;margin-bottom:6px}
+.doc .mark{color:var(--err);font-weight:800}
+/* خطوات مرقّمة */
+.steps{display:flex;flex-direction:column;gap:0}
+.step{display:grid;grid-template-columns:44px 1fr;gap:14px;padding:20px 0;border-bottom:1px solid var(--line-2)}
+.step:last-child{border-bottom:0}
+.step .num{width:36px;height:36px;border-radius:50%;background:var(--ink);color:#fff;display:grid;place-items:center;font-weight:900;font-size:15px}
+.step h3{margin:4px 0 6px;font-size:16.5px}
+.step p{margin:0 0 6px}
+/* أكورديون الأسئلة */
+.faq details{border-bottom:1px solid var(--line-2)}
+.faq summary{cursor:pointer;list-style:none;padding:15px 2px;font-weight:700;font-size:14.5px;display:flex;justify-content:space-between;align-items:center;gap:10px}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:"⌄";font-size:16px;color:var(--mut);transition:transform .18s}
+.faq details[open] summary::after{transform:rotate(180deg)}
+.faq details[open] summary{color:var(--brand)}
+.faq .a{padding:0 2px 16px;font-size:14px;line-height:1.9;color:var(--ink-2)}
+/* شبكة خدمة الزبائن */
+.svc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:20px 10px;margin:8px 0 30px}
+.svc-grid a{display:flex;flex-direction:column;align-items:center;gap:9px;text-align:center;font-size:13px;color:var(--ink-2)}
+.svc-grid a:hover{color:var(--brand)}
+.svc-grid .ic{width:52px;height:52px;border-radius:50%;background:var(--ink);color:#fff;display:grid;place-items:center;font-size:23px}
+.svc-grid a:hover .ic{background:var(--brand)}
+/* بطاقات طرق الدفع */
+.paycards{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px;margin:6px 0 20px}
+.paycard{border:1px solid var(--line);padding:15px 16px}
+.paycard b{display:flex;align-items:center;gap:8px;font-size:14.5px;margin-bottom:6px}
+.paycard span{font-size:13px;color:var(--ink-2);line-height:1.8}
+.doc-nav{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 26px;justify-content:center}
+.doc-nav a{border:1px solid var(--line);padding:7px 14px;font-size:13px;font-weight:600;color:var(--ink-2)}
+.doc-nav a:hover,.doc-nav a.on{border-color:var(--ink);background:var(--ink);color:#fff}

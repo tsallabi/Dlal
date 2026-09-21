@@ -340,6 +340,49 @@ const ptsFinal = parseInt((await page.locator('.acct-card b').first().textConten
 expect(ptsFinal === ptsAfter, `النقاط المستخدمة أُعيدت بعد الإلغاء (${ptsFinal})`);
 await page.goto(BASE + '/account/orders?stage=cancelled'); expect(await has(page, order2), 'فلتر الطلبات الملغاة يعمل');
 
+// ---------- صفحات المساعدة والسياسات بالعربية ----------
+const HELP = [
+  ['/pages/how', 'كيف تعمل دلال؟', 'شحن جوي إلى ليبيا'],
+  ['/pages/how-to-order', 'كيف أطلب من دلال؟', 'أكّدي الطلب وادفعي'],
+  ['/pages/shipping', 'معلومات الشحن', 'التوصيل داخل ليبيا'],
+  ['/pages/returns', 'سياسة الإرجاع والاسترداد', 'متى تستحقين تعويضًا كاملًا'],
+  ['/pages/payment', 'طرق الدفع والرسوم', 'الدفع كاش في أحد فروعنا'],
+  ['/pages/points', 'نقاط المكافآت', 'كيف تكسبين النقاط'],
+  ['/pages/sizes', 'دليل المقاسات', 'المقاس الصيني'],
+  ['/pages/branches', 'فروعنا في ليبيا', 'الدفع كاش في الفرع'],
+  ['/pages/faq', 'الأسئلة الشائعة', 'متى يصل طلبي'],
+  ['/pages/contact', 'خدمة الزبائن', 'ساعات العمل'],
+  ['/pages/privacy', 'إشعار الخصوصية', 'لا نبيع بياناتك'],
+  ['/pages/terms', 'الشروط والأحكام', 'المنتجات الممنوعة'],
+];
+for (const [path, title, needle] of HELP) {
+  const r = await page.goto(BASE + path);
+  const okStatus = r.status() === 200;
+  const h1 = okStatus ? (await page.locator('.doc h1').textContent().catch(() => '')) : '';
+  const hasBody = okStatus && await has(page, needle);
+  const cjk = okStatus && /[一-鿿]/.test(await page.locator('.doc').textContent());
+  expect(okStatus && h1.includes(title) && hasBody && !cjk, `${path} يفتح بالعربية بعنوان «${title}» ومحتواه كامل`);
+}
+await page.goto(BASE + '/pages/faq');
+const accordions = await page.locator('.faq details').count();
+expect(accordions >= 12, `الأسئلة الشائعة فيها ${accordions} سؤالًا في أكورديون`);
+await page.locator('.faq summary').first().click();
+expect(await page.locator('.faq details').first().getAttribute('open') !== null, 'النقر يفتح إجابة السؤال');
+await shot(page, 'page-faq');
+await page.goto(BASE + '/pages/shipping');
+expect((await page.locator('.doc table tr').count()) >= 6, 'صفحة الشحن فيها جدول المراحل والتكاليف');
+expect(await has(page, 'مجاني للطلبات فوق'), 'صفحة الشحن تذكر حد التوصيل المجاني من الإعدادات');
+await shot(page, 'page-shipping');
+await page.goto(BASE + '/pages/contact');
+expect((await page.locator('.svc-grid a').count()) >= 8, 'صفحة خدمة الزبائن فيها شبكة الخدمات');
+await shot(page, 'page-contact');
+// روابط التذييل تصل فعلًا
+await page.goto(BASE + '/');
+const ftrLinks = await page.locator('.ftr-col a[href^="/pages/"]').evaluateAll(els => [...new Set(els.map(e => e.getAttribute('href')))]);
+const ftrBroken = [];
+for (const href of ftrLinks) { const rr = await page.goto(BASE + href); if (rr.status() !== 200) ftrBroken.push(`${href}:${rr.status()}`); }
+expect(ftrBroken.length === 0, `كل روابط التذييل تعمل (${ftrLinks.length} رابطًا${ftrBroken.length ? ' — مكسور: ' + ftrBroken.join(', ') : ''})`);
+
 // ---------- صفحة القسم: الفلاتر الجانبية وشريط الترتيب ----------
 await page.goto(BASE + '/logout');
 await page.goto(BASE + '/c/dresses'); await page.waitForLoadState('networkidle');

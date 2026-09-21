@@ -10,6 +10,7 @@ import api from './routes/api';
 import img from './routes/img';
 import pay from './routes/pay';
 import account from './routes/account';
+import pages from './routes/pages';
 import adminOps from './routes/admin-ops';
 import api1688Admin, { getClient, syncStock } from './routes/api1688-admin';
 import { loadSettings } from './lib/pricing';
@@ -33,6 +34,7 @@ app.route('/admin', admin);
 app.route('/account', account);
 app.route('/', pay);
 app.route('/partner', partner);
+app.route('/pages', pages);
 app.route('/', auth);
 app.route('/', store);
 
