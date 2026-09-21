@@ -49,7 +49,7 @@ export async function createPayment(cfg: MyPayConfig, r: CreateReq, origin: stri
   const body = {
     amount: r.amount, currency: r.currency, order_id: r.orderCode, reference: r.trxRef, trx_ref: r.trxRef,
     billing_name: r.name, billing_phone: r.phone, billing_email: r.email ?? undefined,
-    return_url: r.returnUrl, cancel_url: r.cancelUrl, webhook_url: r.webhookUrl, gateway: r.gateway, description: `طلب دلال ${r.orderCode}`,
+    return_url: r.returnUrl, cancel_url: r.cancelUrl, webhook_url: r.webhookUrl, gateway: r.gateway, description: `طلب تالين ${r.orderCode}`,
   };
   if (cfg.mode === 'mock') {
     const token = 'mock_' + r.trxRef;

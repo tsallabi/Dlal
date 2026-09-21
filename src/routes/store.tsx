@@ -8,7 +8,8 @@ import { Grid } from '../views/product-card';
 import { Stars } from '../views/account';
 import { getCategories, PRODUCT_SELECT, fmt, imgUrl, orderCode, timeAgo, notify } from '../lib/db';
 import type { ProductRow } from '../lib/db';
-import { loadSettings, computePrice } from '../lib/pricing';
+import { loadSettings, computePrice, shipRates, seaOn } from '../lib/pricing';
+import type { ShipMode } from '../lib/pricing';
 import { checkCoupon } from '../lib/coupons';
 import { loadMyPay } from '../lib/mypay';
 
@@ -27,7 +28,7 @@ const base = async (c: Context<Env>) => {
   return { user: u, cartCount: c.get('cartCount'), wishCount: w?.n ?? 0, categories: await getCategories(c.env.DB) };
 };
 
-// ---------- الرئيسية (تخطيط 1688 بهوية دلال: قائمة أقسام جانبية + بانر + بطاقة الحساب + طوابق أقسام) ----------
+// ---------- الرئيسية (تخطيط 1688 بهوية تالين: قائمة أقسام جانبية + بانر + بطاقة الحساب + طوابق أقسام) ----------
 store.get('/', async (c) => {
   const db = c.env.DB; const u = c.get('user');
   const b = await base(c);
@@ -46,7 +47,7 @@ store.get('/', async (c) => {
   const s = await loadSettings(db);
   const myOrders = u ? await db.prepare("SELECT COUNT(*) n FROM orders WHERE user_id=? AND status NOT IN ('delivered','cancelled','refunded')").bind(u.id).first<any>() : null;
   const slides = [
-    { cls: 'sl-a', k: 'دلال يجيبلك من الصين لباب البيت', t: 'آلاف المنتجات بأسعار نهائية بالدينار الليبي، شاملة الشحن والجمارك.', a: '/c/dresses', l: 'تسوقي الآن' },
+    { cls: 'sl-a', k: 'تالين تجيبلك من الصين لباب البيت', t: 'آلاف المنتجات بأسعار نهائية بالدينار الليبي، شاملة الشحن والجمارك.', a: '/c/dresses', l: 'تسوقي الآن' },
     { cls: 'sl-b', k: 'ادفعي ببطاقتك أو سداد أو إدفعلي', t: 'دفع فوري وآمن عبر ماي باي، أو تحويل، أو عربون 30% والباقي عند الاستلام.', a: '/pages/faq', l: 'طرق الدفع' },
     { cls: 'sl-c', k: 'نقاط مع كل طلب + كوبون ترحيبي WELCOME10', t: 'نقطة لكل دينار عند التسليم، وكل 100 نقطة = دينار تُخصم من طلبك التالي.', a: u ? '/account/points' : '/register', l: u ? 'نقاطي' : 'أنشئي حسابًا' },
   ];
@@ -67,7 +68,7 @@ store.get('/', async (c) => {
             <div class="uc-h"><div class="av">{u.name.slice(0, 1)}</div><div><b>أهلًا {u.name.split(' ')[0]}</b><br /><small>⭐ {u.points} نقطة</small></div></div>
             <div class="uc-grid"><a href="/account/orders">📦<span>طلباتي</span>{myOrders?.n ? <i>{myOrders.n}</i> : null}</a><a href="/account/coupons">🎟️<span>كوبوناتي</span></a><a href="/wishlist">♡<span>المفضلة</span></a><a href="/account/tickets">↩️<span>الدعم</span></a></div>
           </> : <>
-            <div class="uc-h"><div class="av">👋</div><div><b>أهلًا بك في دلال</b><br /><small>سجّلي واكسبي نقاطًا مع كل طلب</small></div></div>
+            <div class="uc-h"><div class="av">👋</div><div><b>أهلًا بك في تالين</b><br /><small>سجّلي واكسبي نقاطًا مع كل طلب</small></div></div>
             <div class="uc-promo"><b>سجّلي الآن</b><span>واكسبي نقاطًا تُخصم من طلبك القادم</span></div><a class="btn brand" href="/register" style="display:block;text-align:center">إنشاء حساب</a><a class="btn ghost" href="/login" style="display:block;text-align:center;margin-top:6px">تسجيل الدخول</a>
           </>}
           <ul class="uc-list"><li>🚚 الوصول خلال 15–25 يومًا</li><li>🔍 فحص وتصوير قبل الشحن</li><li>↩️ تعويض كامل لأي تالف</li></ul>
@@ -427,6 +428,13 @@ store.post('/cart/add', async (c) => {
   }
   return c.redirect('/cart?added=1');
 });
+// حفظ طريقة الشحن المختارة (كوكي) — تبقى بين السلة والدفع
+store.post('/cart/ship', async (c) => {
+  const f = await c.req.parseBody();
+  const mode = String(f.mode) === 'sea' ? 'sea' : 'air';
+  setCookie(c, 'ship', mode, { path: '/', maxAge: 60 * 60 * 24 * 30 });
+  return c.redirect(String(f.back ?? '/cart'));
+});
 store.post('/cart/update', async (c) => {
   const u = c.get('user'); if (!u) return c.redirect('/login');
   const f = await c.req.parseBody();
@@ -440,22 +448,31 @@ store.post('/cart/coupon', async (c) => {
   const f = await c.req.parseBody();
   const back = String(f.back ?? '/cart');
   if (f.action === 'remove' || !f.code) { deleteCookie(c, 'coupon', { path: '/' }); return c.redirect(back); }
-  const rows = await cartRows(c.env.DB, u.id);
+  const rows = await cartRows(c.env.DB, u.id, shipMode(c));
   const r = await checkCoupon(c.env.DB, String(f.code), u.id, rows.reduce((a, x) => a + x.line, 0));
   if (!r.ok) { deleteCookie(c, 'coupon', { path: '/' }); return c.redirect(`${back}?cerr=${encodeURIComponent(r.error)}`); }
   setCookie(c, 'coupon', r.coupon.code, { path: '/', maxAge: 86400, sameSite: 'Lax' });
   return c.redirect(`${back}?cok=1`);
 });
 
-async function cartRows(db: D1Database, uid: number) {
+async function cartRows(db: D1Database, uid: number, mode: ShipMode = 'air') {
   const { results } = await db.prepare(
-    `SELECT ci.id,ci.qty,ci.variant_id,p.id AS product_id,p.slug,p.title_ar,p.price_lyd,p.in_stock,p.status,p.source_offer_id,p.source_url,
+    `SELECT ci.id,ci.qty,ci.variant_id,p.id AS product_id,p.slug,p.title_ar,p.price_lyd,p.price_sea_lyd,p.in_stock,p.status,p.source_offer_id,p.source_url,
             p.source_price_cny,p.weight_g,p.volume_cm3,p.category_id,c.est_weight_g,c.markup_percent,
             v.color,v.size,COALESCE(v.price_delta_lyd,0) AS delta,
             COALESCE(v.image_url,(SELECT url FROM product_images i WHERE i.product_id=p.id ORDER BY sort LIMIT 1)) AS image
      FROM cart_items ci JOIN products p ON p.id=ci.product_id LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN variants v ON v.id=ci.variant_id WHERE ci.user_id=?`,
   ).bind(uid).all<any>();
-  return results.map(r => ({ ...r, unit: r.price_lyd + r.delta, line: (r.price_lyd + r.delta) * r.qty }));
+  // السعر البحري أرخص؛ إن لم يُحسب بعد لمنتج قديم نستخدم الجوي حتى لا يُباع بأقل من تكلفته
+  return results.map(r => {
+    const base = mode === 'sea' && r.price_sea_lyd ? r.price_sea_lyd : r.price_lyd;
+    return { ...r, unit: base + r.delta, line: (base + r.delta) * r.qty, air_unit: r.price_lyd + r.delta, sea_unit: (r.price_sea_lyd ?? r.price_lyd) + r.delta };
+  });
+}
+
+// طريقة الشحن المختارة محفوظة في كوكي حتى تبقى بين السلة والدفع
+function shipMode(c: Context<Env>): ShipMode {
+  return getCookie(c, 'ship') === 'sea' ? 'sea' : 'air';
 }
 
 // حساب ملخص السلة: خصم كوبون + نقاط + توصيل
@@ -476,14 +493,53 @@ async function cartTotals(c: Context<Env>, rows: any[], usePoints: boolean) {
   const pointsLyd = Math.round(pointsUsed * ptsValue * 100) / 100;
   const delivery = freeShip || subtotal >= parseFloat(s.free_ship_over_lyd) ? 0 : parseFloat(s.delivery_lyd);
   const total = Math.round((afterCoupon - pointsLyd + delivery) * 100) / 100;
-  return { s, subtotal, discount, freeShip, coupon, couponErr, pointsUsed, pointsLyd, maxPts, ptsValue, delivery, total };
+  // فرق السعر بين الطريقتين ليظهر للزبونة كم توفّر بالبحري
+  const mode = shipMode(c);
+  const airSum = rows.reduce((a, r) => a + (r.air_unit ?? r.unit) * r.qty, 0);
+  const seaSum = rows.reduce((a, r) => a + (r.sea_unit ?? r.unit) * r.qty, 0);
+  const seaSaving = Math.round((airSum - seaSum) * 100) / 100;
+  const shipDays = mode === 'sea' ? (s.sea_days || '٣٠ — ٤٥ يومًا') : (s.air_days || '١٢ — ١٨ يومًا');
+  return { s, subtotal, discount, freeShip, coupon, couponErr, pointsUsed, pointsLyd, maxPts, ptsValue, delivery, total, mode, airSum, seaSum, seaSaving, shipDays };
 }
+
+// اختيار طريقة الشحن من الصين: جوي سريع أو بحري أرخص
+const ShipPicker = ({ t, back }: any) => {
+  if (!seaOn(t.s)) return null;
+  const air = t.s.air_days || '١٢ — ١٨ يومًا';
+  const sea = t.s.sea_days || '٣٠ — ٤٥ يومًا';
+  return (
+    <form method="post" action="/cart/ship" class="card-box" style="margin-bottom:14px">
+      <input type="hidden" name="back" value={back} />
+      <h3 style="margin:0 0 4px;font-size:16px">طريقة الشحن من الصين</h3>
+      <p style="font-size:12.5px;color:#767676;margin:0 0 12px">السعر المعروض لكل منتج يشمل الشحن — اختاري الطريقة ويتغيّر السعر تلقائيًا.</p>
+      <div class="shipsel">
+        <label class={t.mode === 'air' ? 'on' : ''}>
+          <input type="radio" name="mode" value="air" checked={t.mode === 'air'} onchange="this.form.submit()" />
+          <div>
+            <div class="t">✈️ شحن جوي <span class="fast">الأسرع</span></div>
+            <div class="d">يصل خلال <b>{air}</b> · إجمالي السلة {fmt(t.airSum)}</div>
+          </div>
+        </label>
+        <label class={t.mode === 'sea' ? 'on' : ''}>
+          <input type="radio" name="mode" value="sea" checked={t.mode === 'sea'} onchange="this.form.submit()" />
+          <div>
+            <div class="t">🚢 شحن بحري {t.seaSaving > 0 && <span class="save">وفّري {fmt(t.seaSaving)}</span>}</div>
+            <div class="d">يصل خلال <b>{sea}</b> · إجمالي السلة {fmt(t.seaSum)}</div>
+          </div>
+        </label>
+      </div>
+      <noscript><button class="btn sm" type="submit">تطبيق</button></noscript>
+    </form>
+  );
+};
 
 const Summary = ({ t, u, rows, showItems, usePointsToggle }: any) => (
   <div class="summary">
     <h3 style="margin:0 0 10px">ملخص الطلب</h3>
     {showItems && rows.map((r: any) => <div class="row" style="font-size:13px"><span>{r.title_ar.slice(0, 30)}… × {r.qty}</span><span>{fmt(r.line)}</span></div>)}
     <div class="row"><span>المجموع</span><span>{fmt(t.subtotal)}</span></div>
+    <div class="row"><span>الشحن من الصين ({t.mode === 'sea' ? 'بحري' : 'جوي'})</span><span style="color:#1a9c5b">مشمول في السعر</span></div>
+    <div class="row" style="font-size:12.5px;color:#767676"><span>مدة الوصول المتوقعة</span><span>{t.shipDays}</span></div>
     {t.discount > 0 && <div class="row" style="color:#1a9c5b"><span>خصم الكوبون {t.coupon?.code}</span><span>−{fmt(t.discount)}</span></div>}
     {usePointsToggle && u.points > 0 && <label class="row" style="cursor:pointer"><span><input type="checkbox" name="use_points" value="1" checked={t.pointsUsed > 0} onchange="location.href='/checkout?use_points='+(this.checked?1:0)" /> استخدام نقاطي ({u.points} نقطة)</span><span style="color:#1a9c5b">{t.pointsUsed > 0 ? `−${fmt(t.pointsLyd)}` : `حتى ${fmt(t.maxPts * t.ptsValue)}`}</span></label>}
     {!usePointsToggle && t.pointsUsed > 0 && <div class="row" style="color:#1a9c5b"><span>نقاط ({t.pointsUsed})</span><span>−{fmt(t.pointsLyd)}</span></div>}
@@ -506,7 +562,7 @@ store.get('/cart', async (c) => {
   const u = c.get('user');
   const b = await base(c);
   if (!u) return c.html(<Layout {...b} title="السلة"><div class="empty"><div class="big">🛒</div><a class="btn" href="/login?next=/cart">سجّلي الدخول لعرض السلة</a></div></Layout>);
-  const rows = await cartRows(c.env.DB, u.id);
+  const rows = await cartRows(c.env.DB, u.id, shipMode(c));
   const t = await cartTotals(c, rows, false);
   const unavailable = rows.some(r => !r.in_stock || r.status !== 'active');
   return c.html(
@@ -535,7 +591,7 @@ store.get('/cart', async (c) => {
           </div>
           <div>
             <CouponBox c={c} t={t} back="/cart" />
-            <Summary t={t} u={u} rows={rows} />
+            <div><ShipPicker t={t} back="/cart" /><Summary t={t} u={u} rows={rows} /></div>
             <a class={`btn brand ${unavailable ? 'disabled' : ''}`} href={unavailable ? '#' : '/checkout'} style="display:block;text-align:center;margin-top:12px" aria-disabled={unavailable}>إتمام الطلب</a>
             <p style="font-size:12px;color:#888;margin:10px 0 0">الأسعار شاملة الشحن الدولي والجمارك. لن تُطالبي بأي مبلغ إضافي عند الاستلام.</p>
           </div>
@@ -548,7 +604,7 @@ store.get('/cart', async (c) => {
 // ---------- الدفع ----------
 store.get('/checkout', async (c) => {
   const u = c.get('user'); if (!u) return c.redirect('/login?next=/checkout');
-  const rows = await cartRows(c.env.DB, u.id);
+  const rows = await cartRows(c.env.DB, u.id, shipMode(c));
   if (!rows.length) return c.redirect('/cart');
   const t = await cartTotals(c, rows, c.req.query('use_points') === '1');
   const addrs = await c.env.DB.prepare('SELECT * FROM addresses WHERE user_id=? ORDER BY is_default DESC,id DESC').bind(u.id).all<any>();
@@ -589,7 +645,7 @@ store.get('/checkout', async (c) => {
         </div>
         <div>
           <CouponBox c={c} t={t} back="/checkout" />
-          <Summary t={t} u={u} rows={rows} showItems usePointsToggle />
+          <div><ShipPicker t={t} back="/checkout" /><Summary t={t} u={u} rows={rows} showItems usePointsToggle /></div>
           <button class="btn brand" type="submit" style="width:100%;margin-top:12px;font-size:16px">تأكيد الطلب {t.total > 0 ? `· ${fmt(t.total)}` : ''}</button>
           <p style="font-size:12px;color:#888;margin:10px 0 0">بتأكيد الطلب توافقين على <a href="/pages/terms" style="color:#b5124f">الشروط</a> و<a href="/pages/returns" style="color:#b5124f">سياسة الإرجاع</a>.</p>
         </div>
@@ -602,7 +658,7 @@ store.post('/checkout', async (c) => {
   const u = c.get('user'); if (!u) return c.redirect('/login');
   const db = c.env.DB;
   const f = await c.req.parseBody();
-  const rows = await cartRows(db, u.id);
+  const rows = await cartRows(db, u.id, shipMode(c));
   if (!rows.length) return c.redirect('/cart');
   if (rows.some(r => !r.in_stock || r.status !== 'active')) return c.redirect('/cart');
   const t = await cartTotals(c, rows, f.use_points === '1');
@@ -627,21 +683,21 @@ store.post('/checkout', async (c) => {
      (SELECT COUNT(*) FROM orders o WHERE o.partner_id=p.id AND o.status IN ('paid','purchasing')) ASC LIMIT 1`,
   ).first<{ id: number }>();
   const ins = await db.prepare(
-    `INSERT INTO orders(code,user_id,partner_id,status,payment_method,subtotal_lyd,shipping_lyd,total_lyd,fx_rate_used,ship_name,ship_phone,ship_city,ship_address,note,coupon_code,discount_lyd,points_used,points_lyd)
-     VALUES('tmp',?,?,'pending_payment',?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    `INSERT INTO orders(code,user_id,partner_id,status,payment_method,subtotal_lyd,shipping_lyd,total_lyd,fx_rate_used,ship_name,ship_phone,ship_city,ship_address,note,coupon_code,discount_lyd,points_used,points_lyd,ship_method)
+     VALUES('tmp',?,?,'pending_payment',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
   ).bind(u.id, partner?.id ?? null, method, t.subtotal, t.delivery, t.total, parseFloat(t.s.fx_cny_lyd),
-    ship.name, ship.phone, ship.city, ship.address, f.note ? String(f.note) : null, t.coupon?.code ?? null, t.discount, t.pointsUsed, t.pointsLyd).run();
+    ship.name, ship.phone, ship.city, ship.address, f.note ? String(f.note) : null, t.coupon?.code ?? null, t.discount, t.pointsUsed, t.pointsLyd, t.mode).run();
   const oid = ins.meta.last_row_id as number;
   const code = orderCode(oid);
   const stmts = [
     db.prepare('UPDATE orders SET code=? WHERE id=?').bind(code, oid),
     // لقطة التكلفة لحظة البيع: تبقى ثابتة في التقارير مهما تغيّرت إعدادات التسعير لاحقًا
     ...rows.map(r => {
-      const br = computePrice(t.s, r.source_price_cny ?? 0, r.weight_g ?? r.est_weight_g ?? 300, r.markup_percent, r.volume_cm3);
+      const br = computePrice(t.s, r.source_price_cny ?? 0, r.weight_g ?? r.est_weight_g ?? 300, r.markup_percent, r.volume_cm3, t.mode);
       return db.prepare(
-        `INSERT INTO order_items(order_id,product_id,variant_id,title_ar,color,size,qty,unit_price_lyd,source_offer_id,source_url,unit_cost_lyd,unit_ship_lyd,unit_goods_lyd) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        `INSERT INTO order_items(order_id,product_id,variant_id,title_ar,color,size,qty,unit_price_lyd,source_offer_id,source_url,unit_cost_lyd,unit_ship_lyd,unit_goods_lyd,ship_method) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       ).bind(oid, r.product_id, r.variant_id, r.title_ar, r.color, r.size, r.qty, r.unit, r.source_offer_id, r.source_url,
-        br.cost_lyd, br.intl_ship_lyd + br.domestic_ship_lyd, br.goods_lyd);
+        br.cost_lyd, br.intl_ship_lyd + br.domestic_ship_lyd, br.goods_lyd, t.mode);
     }),
     db.prepare("INSERT INTO order_events(order_id,status,note,by_user_id) VALUES(?,'pending_payment','تم إنشاء الطلب',?)").bind(oid, u.id),
     db.prepare('DELETE FROM cart_items WHERE user_id=?').bind(u.id),
@@ -686,6 +742,9 @@ store.get('/orders/:code', async (c) => {
       <Flash type="err" msg={c.req.query('pay') === 'cancelled' ? 'أُلغيت عملية الدفع. يمكنك المحاولة مرة أخرى.' : c.req.query('pay') === 'failed' ? 'فشلت عملية الدفع. تحققي من الرصيد وحاولي مجددًا أو اختاري طريقة أخرى.' : c.req.query('err') === 'cancel' ? 'لا يمكن إلغاء الطلب بعد الدفع — افتحي تذكرة إلغاء.' : undefined} />
       <div class="crumbs"><a href="/account">حسابي</a> › <a href="/account/orders">طلباتي</a> › {o.code}</div>
       <div class="sec-h"><h2>الطلب {o.code}</h2><span class={`status ${ORDER_STATUS[o.status]?.color}`}>{ORDER_STATUS[o.status]?.ar}</span></div>
+      <p style="margin:-6px 0 14px;font-size:13.5px;color:var(--ink-2)">
+        {o.ship_method === 'sea' ? '🚢 شحن بحري' : '✈️ شحن جوي'} · مدة الوصول المتوقعة <b>{o.ship_method === 'sea' ? (s.sea_days || '٣٠ — ٤٥ يومًا') : (s.air_days || '١٢ — ١٨ يومًا')}</b>
+      </p>
       <div class="two">
         <div>
           {o.status === 'pending_payment' && (
@@ -741,7 +800,7 @@ const PAGES: Record<string, [string, string]> = {
   returns: ['سياسة الإرجاع والتعويض', 'لا يمكن إرجاع البضاعة إلى الصين. لذلك نفحص كل قطعة ونصوّرها قبل الشحن.\n\n• منتج تالف أو مختلف جوهريًا عن الوصف: تعويض كامل (استرجاع للمحفظة أو نقاط أو بديل) — افتحي تذكرة خلال 7 أيام من التسليم مع صورة.\n• منتج نفد عند المورد: تُعاد قيمته كاملة تلقائيًا.\n• المقاسات مسؤولية الزبونة — راجعي دليل المقاسات ورأي الزبونات في المقاس على صفحة المنتج.\n• إلغاء الطلب مجاني قبل الدفع، وبعد الدفع وقبل الشراء عبر تذكرة إلغاء.'],
   contact: ['تواصل معنا', 'واتساب: +218 91 000 0000\nبريد: hello@dlal.ly\nساعات العمل: السبت–الخميس 10ص–8م\nأو افتحي تذكرة من حسابك ويرد فريق الدعم خلال 24 ساعة.'],
   faq: ['الأسئلة الشائعة', 'هل السعر نهائي؟ نعم، شامل الشحن والجمارك، تدفعين التوصيل المحلي فقط.\n\nكيف أدفع؟ بطاقة مصرفية محلية عبر معاملات، سداد، إدفعلي، موبي كاش (فوري عبر ماي باي)، أو تحويل مصرفي، أو عربون 30%.\n\nمتى يصل طلبي؟ 15–25 يومًا من تأكيد الدفع.\n\nماذا لو نفد المنتج؟ يُخبرك فريقنا فورًا وتختارين بديلًا أو استرجاعًا كاملًا.\n\nكيف أكسب النقاط؟ نقطة لكل دينار عند التسليم، ونقاط إضافية للتقييمات. كل 100 نقطة = دينار.\n\nهل أستطيع الإلغاء؟ نعم قبل الدفع مباشرة، وبعده عبر تذكرة قبل بدء الشراء.'],
-  terms: ['الشروط والأحكام', 'بإتمام الطلب توافقين على: أن دلال وسيط شراء يشتري المنتج نيابة عنك من المورد؛ أن الصور والمواصفات من المورد وقد تختلف الألوان قليلًا؛ أن مدة التوصيل تقديرية؛ أن الطلب يبدأ شراؤه بعد تأكيد الدفع؛ وأن سياسة الإرجاع والتعويض المنشورة هي المرجع لأي خلاف.'],
+  terms: ['الشروط والأحكام', 'بإتمام الطلب توافقين على: أن تالين وكيل شراء يشتري المنتج نيابة عنك من المورد؛ أن الصور والمواصفات من المورد وقد تختلف الألوان قليلًا؛ أن مدة التوصيل تقديرية؛ أن الطلب يبدأ شراؤه بعد تأكيد الدفع؛ وأن سياسة الإرجاع والتعويض المنشورة هي المرجع لأي خلاف.'],
   privacy: ['الخصوصية', 'نستخدم رقم هاتفك وعنوانك لتنفيذ الطلب والتواصل بشأنه فقط. بيانات الدفع تُعالج لدى بوابة ماي باي ولا نخزّن أرقام البطاقات. لا نبيع بياناتك لأي طرف.'],
 };
 store.get('/pages/:key', async (c) => {

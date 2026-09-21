@@ -650,3 +650,16 @@ body{background:#fff}
 .doc-nav{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 26px;justify-content:center}
 .doc-nav a{border:1px solid var(--line);padding:7px 14px;font-size:13px;font-weight:600;color:var(--ink-2)}
 .doc-nav a:hover,.doc-nav a.on{border-color:var(--ink);background:var(--ink);color:#fff}
+
+/* سعر الشحن البحري على البطاقة */
+.card .ship.sea{color:#1f5fa8;border-color:#cfe0f5;background:#f2f7fd}
+/* اختيار طريقة الشحن */
+.shipsel{display:grid;gap:10px;margin:0 0 6px}
+.shipsel label{display:flex;gap:11px;align-items:flex-start;border:1px solid var(--line);padding:12px 14px;cursor:pointer}
+.shipsel label:hover{border-color:var(--ink-2)}
+.shipsel label.on{border-color:var(--ink);background:var(--soft-2);box-shadow:inset 0 0 0 1px var(--ink)}
+.shipsel input{margin-top:3px;flex:none}
+.shipsel .t{font-weight:800;font-size:14.5px;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.shipsel .d{font-size:12.5px;color:var(--mut);margin-top:3px;line-height:1.7}
+.shipsel .save{background:#0b8a4b;color:#fff;font-size:11.5px;font-weight:800;padding:1px 7px}
+.shipsel .fast{background:var(--ink);color:#fff;font-size:11.5px;font-weight:800;padding:1px 7px}

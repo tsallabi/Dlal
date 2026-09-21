@@ -199,9 +199,9 @@ admin.get('/import', async (c) => {
         <div>
           <div class="card-box"><h3>الطريقة 1 — زر الاستيراد في متصفحك (موصى بها)</h3>
             <ol style="font-size:14px;line-height:1.9">
-              <li>اسحب هذا الزر إلى شريط المفضلة في Chrome: <a href={bookmarklet} class="btn sm brand" onclick="return false" draggable="true">⬇️ استورد إلى دلال</a></li>
+              <li>اسحب هذا الزر إلى شريط المفضلة في Chrome: <a href={bookmarklet} class="btn sm brand" onclick="return false" draggable="true">⬇️ استورد إلى تالين</a></li>
               <li>افتح <a href="https://www.1688.com" target="_blank" class="src-link">1688.com</a> وسجّل الدخول بحسابك، وابحث عن أي منتج أو افتح صفحة قسم.</li>
-              <li>اضغط الزر من شريط المفضلة: تظهر نافذة تعرض منتجات الصفحة، تختار القسم في دلال وتضغط "استيراد".</li>
+              <li>اضغط الزر من شريط المفضلة: تظهر نافذة تعرض منتجات الصفحة، تختار القسم في تالين وتضغط "استيراد".</li>
               <li>في صفحة منتج واحد يستورد الزر المنتج بكل صوره ومقاساته وألوانه.</li>
             </ol>
             <p style="font-size:13px;color:#666">الزبون لا يرى أبدًا رابط المصدر أو السعر الأصلي. السعر يُحسب تلقائيًا بقواعد التسعير.</p>
@@ -276,9 +276,10 @@ export async function importProducts(db: D1Database, arr: any[], categoryId: num
     const weight = it.weightG ?? ex?.weight_g ?? useCat?.est_weight_g ?? 300;
     const volume = it.volumeCm3 ?? ex?.volume_cm3 ?? null;
     const pr = computePrice(s, price, weight, useCat?.markup_percent, volume);
+    const prSea = computePrice(s, price, weight, useCat?.markup_percent, volume, 'sea');
     if (ex) {
-      await db.prepare("UPDATE products SET source_price_cny=?,price_lyd=?,in_stock=?,last_checked_at=datetime('now'),updated_at=datetime('now') WHERE id=?")
-        .bind(price, pr.total_lyd, it.inStock === false ? 0 : 1, ex.id).run();
+      await db.prepare("UPDATE products SET source_price_cny=?,price_lyd=?,price_sea_lyd=?,in_stock=?,last_checked_at=datetime('now'),updated_at=datetime('now') WHERE id=?")
+        .bind(price, pr.total_lyd, prSea.total_lyd, it.inStock === false ? 0 : 1, ex.id).run();
       // إثراء: منتج استُورد من صفحة قائمة (صورة واحدة، بلا مقاسات) ثم وصلت تفاصيله من صفحة المنتج
       const enrich: D1PreparedStatement[] = [];
       const cur = await db.prepare('SELECT (SELECT COUNT(*) FROM product_images WHERE product_id=?) imgs,(SELECT COUNT(*) FROM variants WHERE product_id=?) vars,title_ar,min_qty,supplier_name FROM products WHERE id=?').bind(ex.id, ex.id, ex.id).first<any>();
@@ -311,10 +312,10 @@ export async function importProducts(db: D1Database, arr: any[], categoryId: num
     }
     const slug = `${offerId}-${Math.random().toString(36).slice(2, 6)}`;
     const ins = await db.prepare(
-      `INSERT OR IGNORE INTO products(source,source_offer_id,source_url,slug,title_ar,title_src,description_ar,category_id,source_price_cny,price_lyd,compare_price_lyd,weight_g,volume_cm3,min_qty,in_stock,status,supplier_name,last_checked_at,sales,rating,home_ok,fingerprint)
-       VALUES('1688',?,?,?,?,?,?,?,?,?,?,?,?,?,?,'active',?,datetime('now'),?,?,?,?)`,
+      `INSERT OR IGNORE INTO products(source,source_offer_id,source_url,slug,title_ar,title_src,description_ar,category_id,source_price_cny,price_lyd,compare_price_lyd,price_sea_lyd,weight_g,volume_cm3,min_qty,in_stock,status,supplier_name,last_checked_at,sales,rating,home_ok,fingerprint)
+       VALUES('1688',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'active',?,datetime('now'),?,?,?,?)`,
     ).bind(offerId, it.url ?? `https://detail.1688.com/offer/${offerId}.html`, slug, titleAr, it.title ?? null, it.descriptionAr ?? null,
-      targetCat, price, pr.total_lyd, Math.random() < 0.4 ? Math.ceil(pr.total_lyd * 1.25 / 5) * 5 : null, it.weightG ?? null, it.volumeCm3 ?? null,
+      targetCat, price, pr.total_lyd, Math.random() < 0.4 ? Math.ceil(pr.total_lyd * 1.25 / 5) * 5 : null, prSea.total_lyd, it.weightG ?? null, it.volumeCm3 ?? null,
       Math.max(1, parseInt(it.minQty ?? 1) || 1), it.inStock === false ? 0 : 1, supplierAr, parseInt(it.sales ?? 0) || 0, 4.5 + Math.random() * 0.5, homeOk, fp || null).run();
     const pid = ins.meta.last_row_id as number;
     if (!pid || !ins.meta.changes) { skipped++; continue; }   // تجاهل صفّ لم يُدرج (تعارض مع استيراد متزامن)
@@ -497,6 +498,7 @@ admin.get('/pricing', async (c) => {
   const exVol = parseFloat(s.default_volume_cm3 || '3000');
   const ex = computePrice(s, 25, 300, null, exVol);
   const exBig = computePrice(s, 25, 300, null, 30000);   // صندوق كبير خفيف: يُظهر أثر الحجم
+  const exSea = computePrice(s, 25, 300, null, exVol, 'sea');   // نفس القطعة بالبحري
   const F = (k: string, l: string, step = '0.01') => <><label>{l}</label><input type="number" step={step} name={k} value={s[k]} /></>;
   const S = (k: string, l: string, opts: [string, string][]) => <><label>{l}</label><select name={k}>{opts.map(([v, t]) => <option value={v} selected={(s[k] || opts[0][0]) === v}>{t}</option>)}</select></>;
   return shell(c, 'pricing', 'التسعير وسعر الصرف', (
@@ -513,6 +515,13 @@ admin.get('/pricing', async (c) => {
         {F('ship_usd_per_cbm', 'سعر المتر المكعب من شركة الشحن ($)')}
         {F('volumetric_divisor', 'مُقسِّم الوزن الحجمي (6000 جوي، 5000 أسرع)', '100')}
         {F('default_volume_cm3', 'حجم افتراضي للقطعة إذا لم يذكره المورد (سم³)', '100')}
+        <h3 style="margin-top:16px">الشحن البحري — أرخص وأبطأ</h3>
+        <p style="font-size:13px;color:#666">الزبونة تختار بين الجوي والبحري في السلة، وسعر كل منتج يتغيّر تلقائيًا. اضبط «مخفي» لإخفاء الخيار.</p>
+        {S('sea_enabled', 'إظهار خيار الشحن البحري', [['1', 'مفعّل'], ['0', 'مخفي']])}
+        {F('ship_usd_per_kg_sea', 'سعر الكيلو بحرًا ($)')}
+        {F('ship_usd_per_cbm_sea', 'سعر المتر المكعب بحرًا ($)')}
+        <label>مدة الوصول جوًّا</label><input type="text" name="air_days" value={s.air_days ?? '١٢ — ١٨ يومًا'} />
+        <label>مدة الوصول بحرًا</label><input type="text" name="sea_days" value={s.sea_days ?? '٣٠ — ٤٥ يومًا'} />
         <h3 style="margin-top:16px">التوصيل داخل ليبيا</h3>
         {F('delivery_lyd', 'رسوم التوصيل (د.ل)')}{F('free_ship_over_lyd', 'توصيل مجاني فوق (د.ل)')}
         <button class="btn" style="margin-top:12px">حفظ</button>
@@ -524,6 +533,16 @@ admin.get('/pricing', async (c) => {
           <div><span>ربحنا من القطعة</span><span><b style="color:#0b6b66">{fmt(ex.profit_lyd)}</b></span></div>
           <div><span>الوزن المحاسبي</span><span>{ex.chargeable_kg} كغ (بالـ{ex.ship_basis})</span></div>
         </div></div>
+        <div class="card-box"><h3>نفس المنتج بالشحن البحري</h3>
+          <p style="font-size:13px;color:#666">الفرق الذي تراه الزبونة بين الطريقتين على القطعة الواحدة.</p>
+          <div class="breakdown">
+            <div><span>شحن دولي (بحري)</span><span>{fmt(exSea.intl_ship_lyd)}</span></div>
+            <div><span>مقابل الجوي</span><span>{fmt(ex.intl_ship_lyd)}</span></div>
+            <div class="t"><span>سعر البيع بحرًا</span><span>{fmt(exSea.total_lyd)}</span></div>
+            <div><span>توفير الزبونة</span><span><b style="color:#0b8a4b">{fmt(ex.total_lyd - exSea.total_lyd)}</b></span></div>
+            <div><span>ربحنا من القطعة بحرًا</span><span><b style="color:#0b6b66">{fmt(exSea.profit_lyd)}</b></span></div>
+          </div>
+        </div>
         <div class="card-box"><h3>نفس المنتج في صندوق كبير (30,000 سم³)</h3>
           <p style="font-size:13px;color:#666">يوضح لماذا يجب إدخال سعر المتر المكعب: البضاعة نفسها والوزن نفسه، لكن الحجم يرفع أجرة الشحن.</p>
           <div class="breakdown">
@@ -541,7 +560,7 @@ admin.get('/pricing', async (c) => {
 });
 admin.post('/pricing', async (c) => {
   const f = await c.req.parseBody();
-  const keys = ['fx_cny_lyd', 'fx_usd_lyd', 'markup_percent', 'safety_percent', 'ship_usd_per_kg', 'customs_percent', 'domestic_cn_ship_cny', 'delivery_lyd', 'free_ship_over_lyd', 'ship_mode', 'ship_usd_per_cbm', 'volumetric_divisor', 'default_volume_cm3'];
+  const keys = ['fx_cny_lyd', 'fx_usd_lyd', 'markup_percent', 'safety_percent', 'ship_usd_per_kg', 'customs_percent', 'domestic_cn_ship_cny', 'delivery_lyd', 'free_ship_over_lyd', 'ship_mode', 'ship_usd_per_cbm', 'volumetric_divisor', 'default_volume_cm3', 'sea_enabled', 'ship_usd_per_kg_sea', 'ship_usd_per_cbm_sea', 'air_days', 'sea_days'];
   await c.env.DB.batch(keys.filter(k => f[k] !== undefined).map(k => c.env.DB.prepare("INSERT INTO settings(key,value,updated_at) VALUES(?,?,datetime('now')) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at").bind(k, String(f[k]))));
   return c.redirect('/admin/pricing?ok=1');
 });
@@ -564,7 +583,13 @@ admin.post('/pricing/backfill-costs', async (c) => {
 admin.post('/pricing/reprice-all', async (c) => {
   const db = c.env.DB; const s = await loadSettings(db); const cats = await getCategories(db);
   const { results } = await db.prepare('SELECT id,source_price_cny,weight_g,volume_cm3,category_id FROM products').all<any>();
-  const stmts = results.map(p => { const cat = cats.find(x => x.id === p.category_id); const pr = computePrice(s, p.source_price_cny, p.weight_g ?? cat?.est_weight_g ?? 300, cat?.markup_percent, p.volume_cm3); return db.prepare('UPDATE products SET price_lyd=? WHERE id=?').bind(pr.total_lyd, p.id); });
+  const stmts = results.map(p => {
+    const cat = cats.find(x => x.id === p.category_id);
+    const w = p.weight_g ?? cat?.est_weight_g ?? 300;
+    const air = computePrice(s, p.source_price_cny, w, cat?.markup_percent, p.volume_cm3);
+    const sea = computePrice(s, p.source_price_cny, w, cat?.markup_percent, p.volume_cm3, 'sea');
+    return db.prepare('UPDATE products SET price_lyd=?,price_sea_lyd=? WHERE id=?').bind(air.total_lyd, sea.total_lyd, p.id);
+  });
   for (let i = 0; i < stmts.length; i += 100) await db.batch(stmts.slice(i, i + 100));
   return c.redirect('/admin/pricing?ok=1');
 });

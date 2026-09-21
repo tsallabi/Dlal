@@ -14,6 +14,12 @@ const shot = async (page, name) => { await page.screenshot({ path: `${OUT}/${Str
 let passed = 0;
 const expect = (cond, msg) => { if (!cond) { problems.push(msg); console.log('❌', msg); } else { passed++; console.log('✅', msg); } };
 const has = async (page, t) => (await page.content()).includes(t);
+// ar-LY يكتب العشور بفاصلة، و«د.ل» فيها نقطة تُربك أي تنظيف أعمى: نأخذ أول رقم فقط
+const num = (t) => {
+  const m = String(t).match(/[\d.,٫،]*\d/);            // أول رقم فقط — «د.ل» فيها نقطة تُربك التنظيف الأعمى
+  if (!m) return NaN;
+  return parseFloat(m[0].replace(/\.(?=\d{3}(\D|$))/g, '').replace(/[,٫،]/g, '.'));   // ar-LY: النقطة للآلاف والفاصلة للعشور
+};
 const login = async (page, phone, pw) => { await page.goto(BASE + '/logout'); await page.goto(BASE + '/login'); await page.fill('input[name=phone]', phone); await page.fill('input[name=password]', pw); await page.click('button:has-text("دخول")'); await page.waitForLoadState('networkidle'); };
 
 // المتصفح: نسخة Playwright المثبّتة على الجهاز (ويندوز/ماك) أو نسخة الخادم إن وُجدت. PW_CHROMIUM يتقدّم عليهما.
@@ -165,7 +171,7 @@ await page.goto(BASE + '/admin/coupons');
 await page.fill('input[name=code]', 'test' + String(Date.now()).slice(-4)); await page.fill('input[name=value]', '15'); await page.click('button:has-text("إنشاء")'); await page.waitForLoadState('networkidle');
 expect(await has(page, 'TEST'), 'إنشاء كوبون جديد من الإدارة'); await shot(page, 'admin-coupons');
 for (const [path, name, check] of [
-  ['/admin/import', 'admin-import', 'استورد إلى دلال'], ['/admin/products', 'admin-products', 'offerId'], ['/admin/categories', 'admin-categories', 'الوزن التقديري'],
+  ['/admin/import', 'admin-import', 'استورد إلى تالين'], ['/admin/products', 'admin-products', 'offerId'], ['/admin/categories', 'admin-categories', 'الوزن التقديري'],
   ['/admin/stock', 'admin-stock', 'فحص المخزون'], ['/admin/pricing', 'admin-pricing', 'سعر الصرف'], ['/admin/partners', 'admin-partners', 'شاهين'], ['/admin/staff', 'admin-staff', 'مصفوفة الصلاحيات'], ['/admin/customers', 'admin-customers', 'منى'],
   ['/admin/reports', 'admin-reports', 'المبيعات اليومية'], ['/admin/activity', 'admin-activity', 'سجل النشاط'], ['/admin/tickets', 'admin-tickets', 'التذاكر'], ['/admin/reviews', 'admin-reviews', 'بانتظار المراجعة'],
 ]) { await page.goto(BASE + path); expect(await has(page, check), `صفحة ${path} تعمل`); await shot(page, name); }
@@ -342,8 +348,8 @@ await page.goto(BASE + '/account/orders?stage=cancelled'); expect(await has(page
 
 // ---------- صفحات المساعدة والسياسات بالعربية ----------
 const HELP = [
-  ['/pages/how', 'كيف تعمل دلال؟', 'شحن جوي إلى ليبيا'],
-  ['/pages/how-to-order', 'كيف أطلب من دلال؟', 'أكّدي الطلب وادفعي'],
+  ['/pages/how', 'كيف تعمل تالين؟', 'شحن جوي إلى ليبيا'],
+  ['/pages/how-to-order', 'كيف أطلب من تالين؟', 'أكّدي الطلب وادفعي'],
   ['/pages/shipping', 'معلومات الشحن', 'التوصيل داخل ليبيا'],
   ['/pages/returns', 'سياسة الإرجاع والاسترداد', 'متى تستحقين تعويضًا كاملًا'],
   ['/pages/payment', 'طرق الدفع والرسوم', 'الدفع كاش في أحد فروعنا'],
@@ -455,6 +461,61 @@ await page.locator('.card .add').first().click();
 await page.waitForLoadState('networkidle');
 expect(page.url().includes('/p/') || (await page.locator('.hdr-icons a[href="/cart"] b').count()) > 0, 'زر «+» إما يضيف للسلة أو يفتح المنتج لاختيار اللون والمقاس');
 await shot(page, 'quick-add');
+
+// ---------- الشحن البحري: أرخص وأبطأ ----------
+await login(page, PHONE, 'secret456');
+await page.goto(BASE + '/c/dresses');
+expect((await page.locator('.card .ship.sea').count()) > 0, 'البطاقة تعرض سعر الشحن البحري بجانب الجوي');
+const airCard = num(await page.locator('.card .p').first().textContent());
+const seaCard = num(await page.locator('.card .ship.sea').first().textContent());
+expect(seaCard < airCard, `السعر البحري أرخص من الجوي على البطاقة (${seaCard} < ${airCard})`);
+// أفرغي السلة ثم أضيفي منتجًا بلا متغيرات لضبط المقارنة
+await page.goto(BASE + '/cart');
+for (const b of await page.locator('form[action="/cart/update"] button:has-text("حذف")').all()) { await b.click(); await page.waitForLoadState('networkidle'); }
+await openProductWithVariants('dresses');
+const chipsSea = await page.locator('.chips[data-opt] .chip:not(.off)').count();
+if (chipsSea) { for (const g of await page.locator('.chips[data-opt]').all()) await g.locator('.chip:not(.off)').first().click(); }
+await page.click('#addForm button[type=submit]'); await page.waitForLoadState('networkidle');
+await page.goto(BASE + '/cart');
+expect(await page.locator('.shipsel').isVisible(), 'السلة تعرض اختيار طريقة الشحن');
+expect(await has(page, 'شحن جوي') && await has(page, 'شحن بحري'), 'الخياران معروضان بالاسم');
+expect(await has(page, 'وفّري'), 'يظهر للزبونة كم توفّر بالبحري');
+const totalAir = num(await page.locator('.summary .row.tot span').last().textContent());
+await shot(page, 'cart-ship-air');
+// التبديل إلى البحري يخفض الإجمالي
+await page.check('.shipsel input[value=sea]'); await page.waitForLoadState('networkidle');
+expect(await page.locator('.shipsel label.on').textContent().then(t => t.includes('بحري')), 'اختيار البحري يُحفظ ويظهر محدّدًا');
+const totalSea = num(await page.locator('.summary .row.tot span').last().textContent());
+expect(totalSea < totalAir, `إجمالي السلة بالبحري أقل (${totalSea} < ${totalAir})`);
+expect(await has(page, '٣٠ — ٤٥'), 'مدة الوصول البحرية معروضة في الملخص');
+await shot(page, 'cart-ship-sea');
+// الطلب يحفظ الطريقة ويعرضها في التتبع
+await page.goto(BASE + '/checkout');
+expect(await page.locator('.shipsel label.on').textContent().then(t => t.includes('بحري')), 'صفحة الدفع تتذكر اختيار البحري');
+await page.check('input[value=mypay_sadad]');
+await page.click('button:has-text("تأكيد الطلب")'); await page.waitForLoadState('networkidle');
+const seaOrder = page.url().match(/DL-\d{4}-\d{6}/);
+if (page.url().includes('/pay/mock/')) { await page.click('button:has-text("تأكيد الدفع")'); await page.waitForLoadState('networkidle'); }
+expect(await has(page, 'شحن بحري'), 'صفحة الطلب تعرض أنه شحن بحري');
+expect(await has(page, '٣٠ — ٤٥'), 'صفحة الطلب تعرض مدة الوصول البحرية');
+await shot(page, 'order-sea');
+// لوحة الإدارة: إعدادات البحري تعمل
+await login(page, '0910000000', 'admin123');
+await page.goto(BASE + '/admin/pricing');
+expect(await has(page, 'الشحن البحري'), 'لوحة التسعير فيها قسم الشحن البحري');
+expect(await page.locator('input[name=ship_usd_per_cbm_sea]').isVisible(), 'حقل سعر المتر المكعب بحرًا موجود');
+const seaShipBefore = num(await page.locator('.card-box', { hasText: 'بالشحن البحري' }).locator('.breakdown div', { hasText: 'شحن دولي' }).first().textContent());
+// المثال (300غ في 3000سم³) يُحاسب بالحجم لأن الوزن الحجمي أكبر، فسعر المتر المكعب هو المؤثّر
+await page.fill('input[name=ship_usd_per_cbm_sea]', '240');
+await page.click('form button:has-text("حفظ")'); await page.waitForLoadState('networkidle');
+const seaShipAfter = num(await page.locator('.card-box', { hasText: 'بالشحن البحري' }).locator('.breakdown div', { hasText: 'شحن دولي' }).first().textContent());
+expect(seaShipAfter > seaShipBefore, `رفع سعر المتر المكعب بحرًا يرفع أجرة الشحن البحري (${seaShipBefore} → ${seaShipAfter})`);
+const seaSell = num(await page.locator('.card-box', { hasText: 'بالشحن البحري' }).locator('.breakdown div.t').first().textContent());
+const airSell = num(await page.locator('.card-box', { hasText: 'منتج بـ 25' }).locator('.breakdown div.t').first().textContent());
+expect(seaSell < airSell, `سعر البيع بحرًا يبقى أقل من الجوي حتى بعد الرفع (${seaSell} < ${airSell})`);
+await page.fill('input[name=ship_usd_per_cbm_sea]', '120');
+await page.click('form button:has-text("حفظ")'); await page.waitForLoadState('networkidle');
+await shot(page, 'admin-pricing-sea');
 
 // ---------- المال: التسعير بالحجم، الربح، والمستحق لشركة الشحن ----------
 await login(page, '0910000000', 'admin123');

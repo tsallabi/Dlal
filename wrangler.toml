@@ -22,7 +22,7 @@ database_id = "b45c2ed9-976b-4c4f-a9ae-162b8664fdaf"
 binding = "AI"
 
 [vars]
-SITE_NAME = "دلال"
+SITE_NAME = "تالين"
 SITE_URL = "https://dlal.ly"
 DEFAULT_CURRENCY = "LYD"
 

@@ -1,4 +1,4 @@
-// استيراد منتج حقيقي من 1688 إلى دلال من سطر الأوامر (يُشغَّل من GitHub Actions حيث يتوفر الوصول إلى 1688 والموقع الحي)
+// استيراد منتج حقيقي من 1688 إلى تالين من سطر الأوامر (يُشغَّل من GitHub Actions حيث يتوفر الوصول إلى 1688 والموقع الحي)
 // الاستخدام: BASE=https://dlal.tsallabi.workers.dev IMPORT_TOKEN=... node scripts/import-1688.mjs <رابط منتج أو كلمة بحث> [slug القسم]
 import { chromium } from 'playwright';
 
@@ -70,7 +70,7 @@ if (!detail) { log('❌ 1688 لم يعرض بيانات المنتج في أي �
 log('📦 المستخرج:', JSON.stringify({ ...detail, images: detail.images.length, variants: detail.variants.length }, null, 0));
 detail.images.slice(0, 3).forEach(u => log('   صورة:', u));
 
-// إرسال إلى دلال كما يفعل زر الاستيراد
+// إرسال إلى تالين كما يفعل زر الاستيراد
 const cats = await (await fetch(BASE + '/api/categories')).json();
 const cat = cats.find(c => c.slug === catSlug) || cats[0];
 const r = await fetch(BASE + '/api/import', { method: 'POST', headers: { 'content-type': 'application/json', 'x-import-token': TOKEN }, body: JSON.stringify({ category_id: cat.id, page_url: offerUrl, items: [{ ...detail, titleAr: detail.title }] }) });

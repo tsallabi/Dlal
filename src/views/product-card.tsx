@@ -30,7 +30,10 @@ export const ProductCard: FC<{ p: ProductRow; fav?: boolean }> = ({ p, fav }) =>
         <div class="t">{p.title_ar}</div>
         {p.sales > 200 && <span class="best-pill">الأكثر مبيعًا في {p.cat_name ?? 'القسم'} ›</span>}
         <div class="meta"><span class="star">★ {p.rating.toFixed(1)}</span><span>({p.sales > 0 ? `${p.sales}+` : 'جديد'})</span></div>
-        <span class="ship">يصل خلال ١٢–١٨ يومًا</span>
+        <span class="ship">جوي · يصل خلال ١٢ — ١٨ يومًا</span>
+        {p.price_sea_lyd && p.price_sea_lyd < p.price_lyd
+          ? <span class="ship sea">🚢 بحري {fmt(p.price_sea_lyd)} · ٣٠ — ٤٥ يومًا</span>
+          : null}
         <div class="buy">
           <div class={`p ${off ? 'deal' : ''}`}><Price v={p.price_lyd} />{off > 0 && <s>{fmt(p.compare_price_lyd!)}</s>}</div>
           <button class="add" type="button" data-add={p.id} aria-label="أضيفي إلى السلة" title="أضيفي إلى السلة">+</button>

@@ -20,11 +20,22 @@ export type PriceBreakdown = {
   volume_cm3: number;
   chargeable_kg: number;     // الوزن المحاسبي الذي تحاسبنا به شركة الشحن
   ship_basis: 'وزن' | 'حجم';
+  mode: ShipMode;
   cost_lyd: number;          // تكلفتنا الحقيقية (بلا هامش ولا احتياطي)
   profit_lyd: number;        // الربح المتوقع من القطعة
 };
 
-// الشحن الجوي يُحاسب بالوزن أو بالحجم أيهما أكبر (الوزن الحجمي = السم³ ÷ المقسوم)
+export type ShipMode = 'air' | 'sea';
+
+// معدّلات الشحن حسب الطريقة: الجوي أسرع وأغلى، والبحري أرخص وأبطأ
+export function shipRates(s: Settings, mode: ShipMode) {
+  return mode === 'sea'
+    ? { perKg: parseFloat(s.ship_usd_per_kg_sea || '2.3'), perCbm: parseFloat(s.ship_usd_per_cbm_sea || '120'), days: s.sea_days || '٣٠ — ٤٥ يومًا', ar: 'بحري' as const }
+    : { perKg: parseFloat(s.ship_usd_per_kg || '9'), perCbm: parseFloat(s.ship_usd_per_cbm || '260'), days: s.air_days || '١٢ — ١٨ يومًا', ar: 'جوي' as const };
+}
+export const seaOn = (s: Settings) => (s.sea_enabled ?? '1') === '1';
+
+// الشحن يُحاسب بالوزن أو بالحجم أيهما أكبر (الوزن الحجمي = السم³ ÷ المقسوم)
 export function chargeableKg(s: Settings, weightG: number, volumeCm3: number) {
   const mode = s.ship_mode || 'max';
   const divisor = parseFloat(s.volumetric_divisor || '6000') || 6000;
@@ -41,17 +52,19 @@ export function computePrice(
   weightG: number,
   categoryMarkup?: number | null,
   volumeCm3?: number | null,
+  mode: ShipMode = 'air',
 ): PriceBreakdown {
   const fx = parseFloat(s.fx_cny_lyd || '0.95');
   const usd = parseFloat(s.fx_usd_lyd || '6.9');
   const markup = (categoryMarkup ?? parseInt(s.markup_percent || '35')) / 100;
   const safety = parseInt(s.safety_percent || '7') / 100;
-  const shipPerKg = parseFloat(s.ship_usd_per_kg || '9');
+  const rates = shipRates(s, mode);
+  const shipPerKg = rates.perKg;
   const customs = parseInt(s.customs_percent || '5') / 100;
   const domestic = parseFloat(s.domestic_cn_ship_cny || '6');
 
   // سعر المتر المكعب من شركة الشحن ⟵ سعر الكيلو المحاسبي (1 م³ = 1,000,000 سم³)
-  const perCbm = parseFloat(s.ship_usd_per_cbm || '0');
+  const perCbm = rates.perCbm;
   const divisor = parseFloat(s.volumetric_divisor || '6000') || 6000;
   const vol = Math.max(0, volumeCm3 ?? parseFloat(s.default_volume_cm3 || '0') ?? 0);
   const ch = chargeableKg(s, weightG, vol);
@@ -71,7 +84,7 @@ export function computePrice(
     goods_lyd: r2(goods), domestic_ship_lyd: r2(domesticShip), intl_ship_lyd: r2(intlShip),
     customs_lyd: r2(customsFee), safety_lyd: r2(safetyFee), markup_lyd: r2(markupFee),
     total_lyd: total, weight_g: weightG, volume_cm3: vol, chargeable_kg: Math.round(ch.kg * 1000) / 1000,
-    ship_basis: ch.basis, cost_lyd: r2(cost), profit_lyd: r2(total - cost),
+    ship_basis: ch.basis, mode, cost_lyd: r2(cost), profit_lyd: r2(total - cost),
   };
 }
 
