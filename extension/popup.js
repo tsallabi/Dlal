@@ -10,6 +10,14 @@ async function refresh() {
 }
 $('#save').onclick = async () => { await chrome.storage.local.set({ api: $('#api').value.trim(), token: $('#token').value.trim() }); refresh(); };
 $('#run').onclick = async () => { $('#st').textContent = 'جارٍ التشغيل…'; chrome.runtime.sendMessage({ type: 'runNow' }); setTimeout(refresh, 1500); };
+$('#test').onclick = async () => {
+  const box = $('#testres'); box.style.display = 'block'; box.textContent = 'جارٍ الاختبار…';
+  const r = await chrome.runtime.sendMessage({ type: 'test' });
+  box.innerHTML = r.ok
+    ? `<b style="color:#1a9c5b">الاتصال يعمل ✓</b><br>الموقع: <span dir="ltr">${r.site}</span><br>المهام: ${r.all} · المستحقة الآن: ${r.due}`
+    : `<b style="color:#d3262b">فشل الاتصال</b><br>${r.error}`;
+  refresh();
+};
 $('#pause').onclick = async () => { const c = await chrome.storage.local.get('paused'); await chrome.storage.local.set({ paused: !c.paused }); refresh(); };
 $('#open').onclick = async () => { const c = await chrome.storage.local.get('api'); chrome.tabs.create({ url: (c.api || '') + '/admin/crawler' }); };
 refresh(); setInterval(refresh, 3000);

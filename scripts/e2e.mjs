@@ -148,6 +148,13 @@ for (const [path, name, check] of [
   ['/admin/stock', 'admin-stock', 'فحص المخزون'], ['/admin/pricing', 'admin-pricing', 'سعر الصرف'], ['/admin/partners', 'admin-partners', 'شاهين'], ['/admin/staff', 'admin-staff', 'مصفوفة الصلاحيات'], ['/admin/customers', 'admin-customers', 'منى'],
   ['/admin/reports', 'admin-reports', 'المبيعات اليومية'], ['/admin/activity', 'admin-activity', 'سجل النشاط'], ['/admin/tickets', 'admin-tickets', 'التذاكر'], ['/admin/reviews', 'admin-reviews', 'بانتظار المراجعة'],
 ]) { await page.goto(BASE + path); expect(await has(page, check), `صفحة ${path} تعمل`); await shot(page, name); }
+// لوحة الزاحف تحمل بيانات الضبط التلقائي للإضافة
+await page.goto(BASE + '/admin/crawler');
+expect(await has(page, 'id="dlal-ext-config"'), 'لوحة الزاحف تعرض بيانات الضبط التلقائي للإضافة');
+expect(await has(page, 'data-token="dev-import-token"'), 'بيانات الضبط تحمل رمز الاستيراد الصحيح');
+expect(await has(page, '/dlal-extension.zip'), 'رابط تنزيل الإضافة موجود في لوحة الزاحف');
+await shot(page, 'admin-crawler-config');
+
 await page.goto(BASE + '/admin/customers'); await page.click(`a:has-text("منى التجريبية")`); await page.waitForLoadState('networkidle');
 expect(await has(page, 'تعديل النقاط'), 'ملف الزبونة يفتح من قائمة الزبائن');
 await page.fill('input[name=delta]', '30'); await page.fill('input[name=reason]', 'هدية ترحيب'); await page.click('button:has-text("تطبيق")'); await page.waitForLoadState('networkidle');

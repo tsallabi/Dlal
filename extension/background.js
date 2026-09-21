@@ -109,7 +109,24 @@ async function tick(force = false) {
 chrome.runtime.onInstalled.addListener(() => { chrome.alarms.create('tick', { periodInMinutes: 15, delayInMinutes: 1 }); });
 chrome.runtime.onStartup.addListener(() => { chrome.alarms.create('tick', { periodInMinutes: 15, delayInMinutes: 1 }); });
 chrome.alarms.onAlarm.addListener(a => { if (a.name === 'tick') tick(); });
+// اختبار الاتصال بالموقع: يتحقق من العنوان والرمز ويعيد عدد المهام المستحقة
+async function testConn() {
+  try {
+    const c = await cfg();
+    if (!c.api || !c.token) return { ok: false, error: 'العنوان أو الرمز غير مضبوط. افتح لوحة الزاحف في موقع دلال ليُضبط تلقائيًا.' };
+    const j = await api('/api/crawl/jobs?v=' + VERSION);
+    const due = (j.jobs || []).length, all = (j.all || []).length;
+    await log(`اختبار الاتصال: نجح — ${all} مهمة، ${due} مستحقة الآن`);
+    return { ok: true, due, all, site: c.api };
+  } catch (e) {
+    const msg = /401|403/.test(e.message) ? 'الرمز غير صحيح (401/403)' : /Failed to fetch|NetworkError/i.test(e.message) ? 'تعذّر الوصول إلى الموقع — تحقق من العنوان' : e.message;
+    await log('اختبار الاتصال: فشل — ' + msg);
+    return { ok: false, error: msg };
+  }
+}
+
 chrome.runtime.onMessage.addListener((m, _s, reply) => {
   if (m.type === 'runNow') { tick(true).then(() => reply({ ok: true })); return true; }
   if (m.type === 'status') { cfg().then(c => reply({ running, ...c })); return true; }
+  if (m.type === 'test') { testConn().then(reply); return true; }
 });

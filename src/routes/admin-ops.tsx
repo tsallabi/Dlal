@@ -384,10 +384,12 @@ ops.get('/crawler', async (c) => {
             <div class="inline"><div><label>أقصى منتجات تُثرى/تُفحص</label><input type="number" name="max_new" value="40" min="1" /></div><div><label>جلب التفاصيل</label><select name="enrich"><option value="1">نعم (صور+مقاسات)</option><option value="0">لا (سريع)</option></select></div></div>
             <button class="btn sm" style="margin-top:10px">إضافة</button></form>
           <div class="card-box"><h3>تثبيت الإضافة (مرة واحدة)</h3>
+            <div id="dlal-ext-config" data-api={origin} data-token={c.env.IMPORT_TOKEN ?? ''} style="display:none"></div>
             <ol style="font-size:13px;line-height:1.9;padding-inline-start:18px">
               <li><a class="btn sm brand" href="/dlal-extension.zip">⬇️ تنزيل dlal-extension.zip</a> وفكّ الضغط في مجلد على حاسوب Chrome.</li>
               <li>افتح <span class="mono" style="display:inline">chrome://extensions</span> → فعّل "وضع المطوّر" → "تحميل غير مضغوط" → اختر المجلد.</li>
-              <li>اضغط أيقونة الإضافة وأدخل: العنوان <span class="mono" style="display:inline">{origin}</span> والرمز <span class="mono" style="display:inline">{c.env.IMPORT_TOKEN ?? '(IMPORT_TOKEN غير مضبوط)'}</span> ثم "حفظ" و"شغّل الآن".</li>
+              <li>أعد تحميل هذه الصفحة بعد التثبيت: تأخذ الإضافة العنوان والرمز تلقائيًا ويظهر شريط أخضر بالأعلى. (يدويًا عند الحاجة: العنوان <span class="mono" style="display:inline">{origin}</span> والرمز <span class="mono" style="display:inline">{c.env.IMPORT_TOKEN ?? '(IMPORT_TOKEN غير مضبوط)'}</span>.)</li>
+              <li>اضغط أيقونة الإضافة ثم "اختبار الاتصال"؛ يجب أن يظهر عدد المهام. بعدها "شغّل الآن".</li>
               <li>سجّل الدخول في 1688 مرة واحدة في نفس المتصفح، واتركه مفتوحًا. الإضافة تفحص المهام كل 15 دقيقة وتعمل في تبويب خلفي.</li>
             </ol>
             <p style="font-size:12px;color:#666">عند ظهور كابتشا من 1688 تتوقف الإضافة ساعتين وتُعلمك بإشعار؛ حلّ الكابتشا في التبويب ثم اضغط "شغّل الآن". لا تفتح أكثر من مهمة بحث كل ساعة في الأيام الأولى حتى لا يُقيَّد حساب 1688.</p>

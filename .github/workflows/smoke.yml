@@ -38,7 +38,9 @@ jobs:
           zsize=$(stat -c%s /tmp/ext.zip)
           echo "$zcode  /dlal-extension.zip  ${zsize} bytes"
           [ "$zcode" = "200" ] && [ "$zsize" -gt 8000 ] || fail=1
-          unzip -l /tmp/ext.zip | grep -q manifest.json && echo "extension zip OK" || fail=1
+          unzip -l /tmp/ext.zip | grep -q manifest.json && echo "extension zip has manifest" || fail=1
+          unzip -l /tmp/ext.zip | grep -q config.js && echo "extension zip has auto-config script" || fail=1
+          unzip -p /tmp/ext.zip manifest.json | grep -o '"version": *"[^"]*"' || fail=1
           echo "--- product page:"
           slug=$(grep -oE 'href="/p/[^"]+"' /tmp/home.html | head -1 | sed 's/href="\/p\/\(.*\)"/\1/')
           code=$(curl -s -o /tmp/p.html -w '%{http_code}' "$BASE/p/$slug"); echo "$code  /p/$slug"; [ "$code" = "200" ] || fail=1
