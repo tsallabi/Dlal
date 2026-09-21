@@ -336,6 +336,51 @@ const ptsFinal = parseInt((await page.locator('.acct-card b').first().textConten
 expect(ptsFinal === ptsAfter, `النقاط المستخدمة أُعيدت بعد الإلغاء (${ptsFinal})`);
 await page.goto(BASE + '/account/orders?stage=cancelled'); expect(await has(page, order2), 'فلتر الطلبات الملغاة يعمل');
 
+// ---------- الدردشة المباشرة وصندوق الرسائل ----------
+await page.goto(BASE + '/');
+expect(await page.locator('#chatFab').isVisible(), 'زر الدردشة المباشرة ظاهر في كل الصفحات');
+await page.click('#chatFab');
+expect(await page.locator('#chatPanel').isVisible(), 'لوحة الدردشة تُفتح بالنقر');
+const chatMsg = 'مرحبًا، متى يصل طلبي؟ ' + String(Date.now()).slice(-5);
+await page.fill('#chatInput', chatMsg);
+await page.click('#chatForm button[type=submit]');
+await page.waitForFunction(t => document.querySelector('#chatBody')?.textContent.includes(t), chatMsg, { timeout: 10000 });
+expect(true, 'رسالة الزبونة تظهر في الدردشة فور إرسالها');
+const chatCode = (await page.locator('.ch-h').textContent()).match(/TK-\d{4}-\d+/)?.[0];
+expect(!!chatCode, `الدردشة أنشأت تذكرة برقم ${chatCode}`);
+await shot(page, 'chat-customer');
+// الدردشة عن طلب محدد من صفحة الطلب
+await page.goto(BASE + '/orders/' + orderCode);
+expect(await page.locator('[data-chat-order]').count() === 1, 'زر مراسلة الفريق موجود في صفحة الطلب');
+await page.click('[data-chat-order]');
+expect(await page.locator('#chatPanel').isVisible(), 'زر الطلب يفتح الدردشة مربوطة بالطلب');
+const orderMsg = 'استفسار عن الطلب ' + orderCode;
+await page.fill('#chatInput', orderMsg); await page.click('#chatForm button[type=submit]');
+await page.waitForFunction(t => document.querySelector('#chatBody')?.textContent.includes(t), orderMsg, { timeout: 10000 });
+const orderChatCode = (await page.locator('.ch-h').textContent()).match(/TK-\d{4}-\d+/)?.[0];
+expect(!!orderChatCode && orderChatCode !== chatCode, 'محادثة الطلب منفصلة عن الدردشة العامة');
+await shot(page, 'chat-order');
+// الموظف يرى المحادثتين ويرد
+await login(page, '0910000000', 'admin123');
+await page.goto(BASE + '/admin/tickets');
+expect(await has(page, chatCode), 'محادثة الدردشة تظهر في تذاكر الإدارة');
+expect(await has(page, orderChatCode), 'محادثة الطلب تظهر في تذاكر الإدارة');
+await page.click(`a:has-text("${chatCode}")`); await page.waitForLoadState('networkidle');
+expect(await has(page, chatMsg), 'نص رسالة الزبونة يصل للموظف كاملًا');
+const staffReply = 'أهلًا بك، طلبك في الطريق ويصل خلال يومين.';
+await page.fill('form[action$="/reply"] textarea', staffReply); await page.click('button:has-text("إرسال الرد")'); await page.waitForLoadState('networkidle');
+await shot(page, 'chat-admin-reply');
+// الزبونة ترى الرد داخل نافذة الدردشة نفسها
+await login(page, PHONE, 'secret456');
+await page.goto(BASE + '/');
+await page.click('#chatFab');
+await page.waitForFunction(t => document.querySelector('#chatBody')?.textContent.includes(t), staffReply, { timeout: 15000 });
+expect(true, 'رد الفريق يظهر للزبونة داخل الدردشة');
+expect(await page.locator('#chatBody .ch-msg.staff').count() >= 1, 'رد الفريق يظهر بتنسيق رسالة موظف');
+await shot(page, 'chat-staff-reply');
+await page.goto(BASE + '/account/tickets/' + chatCode);
+expect(await has(page, staffReply), 'المحادثة نفسها محفوظة في صندوق الرسائل داخل الحساب');
+
 // ---------- جوال ----------
 const m = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, locale: 'ar' });
 const mp = await m.newPage();

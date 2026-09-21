@@ -72,6 +72,14 @@ export const Layout: FC<Props> = ({ title, user, cartCount = 0, categories = [],
         <a href="/cart"><span>🛒</span>السلة{cartCount > 0 && <i class="dot">{cartCount}</i>}</a>
         <a href={user ? '/account' : '/login'}><span>👤</span>حسابي</a>
       </nav>
+      <div class="chat-fab" id="chatFab" role="button" tabindex={0} aria-label="الدردشة المباشرة" title="تواصلي معنا">
+        <span class="ic">💬</span><span class="lbl">تواصلي معنا</span><i class="dot" id="chatDot" hidden></i>
+      </div>
+      <div class="chat-panel" id="chatPanel" hidden>
+        <div class="ch-h"><b>خدمة زبائن دلال</b><span id="chatSub">نرد خلال ساعات العمل</span><button type="button" id="chatClose" aria-label="إغلاق">✕</button></div>
+        <div class="ch-body" id="chatBody"><div class="ch-empty">اكتبي رسالتك وسيصلك الرد هنا وفي «التذاكر والإرجاع» داخل حسابك.</div></div>
+        <form class="ch-f" id="chatForm"><input id="chatInput" placeholder="اكتبي رسالتك…" autocomplete="off" maxlength={1000} /><button class="btn brand sm" type="submit">إرسال</button></form>
+      </div>
       <script src="/app.js"></script>
     </body>
   </html>

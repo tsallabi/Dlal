@@ -111,3 +111,63 @@ const proxyImg = (u) => (!u ? u : /(^|\.)(alicdn\.com|1688\.com|taobao\.com|tbcd
   dots.forEach(d => d.addEventListener('click', () => { go(+d.dataset.dot); auto(); }));
   auto();
 })();
+
+// ===== الدردشة المباشرة: محادثة واحدة مع خدمة الزبائن، ومحادثة لكل طلب =====
+(function () {
+  const fab = document.getElementById('chatFab');
+  const panel = document.getElementById('chatPanel');
+  if (!fab || !panel) return;
+  const body = document.getElementById('chatBody');
+  const form = document.getElementById('chatForm');
+  const input = document.getElementById('chatInput');
+  const sub = document.getElementById('chatSub');
+  const dot = document.getElementById('chatDot');
+  let lastId = 0, timer = null, order = null, opened = false;
+
+  const fmtTime = (iso) => { try { return new Date(iso.replace(' ', 'T') + 'Z').toLocaleString('ar-LY', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }); } catch { return ''; } };
+  const add = (m) => {
+    const el = document.createElement('div');
+    el.className = 'ch-msg ' + (m.is_staff ? 'staff' : 'me');
+    el.textContent = m.body;
+    const t = document.createElement('time'); t.textContent = (m.is_staff ? 'خدمة الزبائن · ' : '') + fmtTime(m.created_at);
+    el.appendChild(t); body.appendChild(el); body.scrollTop = body.scrollHeight;
+  };
+  async function poll(first) {
+    try {
+      const r = await fetch('/api/chat?since=' + lastId + (order ? '&order=' + encodeURIComponent(order) : ''));
+      const d = await r.json();
+      if (d.needLogin) { sub.textContent = 'سجّلي الدخول لبدء المحادثة'; return; }
+      if (d.ticket) sub.textContent = 'رقم المحادثة ' + d.ticket.code;
+      if (d.messages && d.messages.length) {
+        const empty = body.querySelector('.ch-empty'); if (empty) empty.remove();
+        d.messages.forEach(m => { add(m); lastId = Math.max(lastId, m.id); });
+        if (!opened && d.messages.some(m => m.is_staff)) dot.hidden = false;
+      }
+      if (first && !d.messages?.length) sub.textContent = d.ticket ? sub.textContent : 'نرد خلال ساعات العمل';
+    } catch (e) {}
+  }
+  function open() {
+    panel.hidden = false; opened = true; dot.hidden = true;
+    input.focus(); poll(true);
+    if (!timer) timer = setInterval(poll, 8000);
+  }
+  function close() { panel.hidden = true; if (timer) { clearInterval(timer); timer = null; } }
+  fab.addEventListener('click', () => (panel.hidden ? open() : close()));
+  fab.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); panel.hidden ? open() : close(); } });
+  document.getElementById('chatClose').addEventListener('click', close);
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const text = input.value.trim(); if (!text) return;
+    input.value = '';
+    const r = await fetch('/api/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ body: text, order }) });
+    if (r.status === 401) { sub.textContent = 'سجّلي الدخول أولًا'; location.href = '/login?next=' + encodeURIComponent(location.pathname); return; }
+    await poll();
+  });
+  // زر «راسلنا عن هذا الطلب» في صفحة الطلب يفتح المحادثة مربوطة بالطلب
+  document.querySelectorAll('[data-chat-order]').forEach(b => b.addEventListener('click', (e) => {
+    e.preventDefault(); order = b.getAttribute('data-chat-order'); lastId = 0; body.innerHTML = '';
+    if (panel.hidden) open(); else poll(true);
+  }));
+  // إشعار بردود جديدة حتى والنافذة مغلقة
+  setInterval(() => { if (panel.hidden) poll(); }, 45000);
+})();

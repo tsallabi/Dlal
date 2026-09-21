@@ -120,5 +120,51 @@ api.post('/crawl/probe', async (c) => {
     .bind('in', 'PROBE ' + url, 200, '', JSON.stringify(b).slice(0, 60000), 1).run();
   return c.json({ ok: true });
 });
+// ===== الدردشة المباشرة وصندوق الرسائل =====
+// مبنية على التذاكر نفسها: كل محادثة تذكرة، فيراها الموظف في /admin/tickets وترتبط بالطلب إن وُجد.
+const chatSubject = 'دردشة مباشرة';
+
+async function findOrCreateChat(c: Context<Env>, orderCode?: string | null) {
+  const db = c.env.DB; const u = c.get('user')!;
+  let orderId: number | null = null;
+  if (orderCode) {
+    const o = await db.prepare('SELECT id FROM orders WHERE code=? AND user_id=?').bind(orderCode, u.id).first<{ id: number }>();
+    orderId = o?.id ?? null;
+  }
+  const existing = await db.prepare(
+    `SELECT id,code FROM tickets WHERE user_id=? AND status IN ('open','in_progress') AND ${orderId ? 'order_id=?' : 'order_id IS NULL AND subject=?'} ORDER BY id DESC LIMIT 1`,
+  ).bind(u.id, orderId ?? chatSubject).first<{ id: number; code: string }>();
+  if (existing) return existing;
+  const code = 'TK-' + new Date().getFullYear() + '-' + String(Date.now()).slice(-6);
+  const r = await db.prepare("INSERT INTO tickets(code,user_id,order_id,type,subject,status) VALUES(?,?,?,'question',?,'open')")
+    .bind(code, u.id, orderId, orderCode ? `استفسار عن الطلب ${orderCode}` : chatSubject).run();
+  return { id: r.meta.last_row_id as number, code };
+}
+
+// قراءة المحادثة (وإنشاؤها كسولًا فقط عند أول رسالة)
+api.get('/chat', async (c) => {
+  const u = c.get('user'); if (!u) return c.json({ needLogin: true, messages: [] });
+  const db = c.env.DB;
+  const orderCode = c.req.query('order') ?? null;
+  const t = await db.prepare(
+    `SELECT t.id,t.code,t.status FROM tickets t WHERE t.user_id=? AND t.status IN ('open','in_progress') AND ${orderCode ? 't.order_id=(SELECT id FROM orders WHERE code=? AND user_id=t.user_id)' : 't.order_id IS NULL'} ORDER BY t.id DESC LIMIT 1`,
+  ).bind(u.id, ...(orderCode ? [orderCode] : [])).first<any>();
+  if (!t) return c.json({ ticket: null, messages: [] });
+  const since = Number(c.req.query('since') ?? 0);
+  const { results } = await db.prepare('SELECT id,is_staff,body,created_at FROM ticket_messages WHERE ticket_id=? AND id>? ORDER BY id LIMIT 100').bind(t.id, since).all<any>();
+  return c.json({ ticket: { code: t.code, status: t.status }, messages: results });
+});
+
+// إرسال رسالة (تُنشئ المحادثة إن لم توجد)
+api.post('/chat', async (c) => {
+  const u = c.get('user'); if (!u) return c.json({ needLogin: true }, 401);
+  const b = await c.req.json<{ body?: string; order?: string }>();
+  const body = String(b.body ?? '').trim().slice(0, 1000);
+  if (!body) return c.json({ error: 'الرسالة فارغة' }, 400);
+  const t = await findOrCreateChat(c, b.order ?? null);
+  await c.env.DB.prepare('INSERT INTO ticket_messages(ticket_id,by_user_id,is_staff,body) VALUES(?,?,0,?)').bind(t.id, u.id, body).run();
+  await c.env.DB.prepare("UPDATE tickets SET status=CASE WHEN status='resolved' THEN 'open' ELSE status END,updated_at=datetime('now') WHERE id=?").bind(t.id).run();
+  return c.json({ ok: true, code: t.code });
+});
 
 export default api;
