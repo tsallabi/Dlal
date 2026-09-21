@@ -20,6 +20,10 @@ on:
         description: "re-translate N pending products with Workers AI (empty = skip)"
         default: ""
         required: false
+      stats:
+        description: "print live store stats per category (yes = print)"
+        default: "yes"
+        required: false
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -32,6 +36,7 @@ jobs:
           KW: ${{ github.event.inputs.keyword }}
           JOB: ${{ github.event.inputs.job_id }}
           TR: ${{ github.event.inputs.translate }}
+          ST: ${{ github.event.inputs.stats }}
         run: |
           set -e
           post() { curl -s -o out.json -w '%{http_code}' -X POST -H 'content-type: application/json' -H "x-import-token: $TOKEN" -d "$1" "$BASE/api/source/$2"; }
@@ -50,6 +55,10 @@ jobs:
               python3 -c "import json;d=json.load(open('out.json'));r=(d.get('results') or [{}])[0];print(' ',r.get('job'),'|',r.get('status'),'| صفحات',r.get('pages'),'| وُجد',r.get('found'),'| جديد',r.get('imported'),'| مُثرى',r.get('enriched'),'|',r.get('note',''))" 2>/dev/null || cat out.json
               sleep 5
             done
+          fi
+          if [ -n "$ST" ] && [ "$ST" != "no" ]; then
+            echo "=== store stats"; code=$(post '{}' stats); echo "HTTP $code"
+            python3 -c "import json;d=json.load(open('out.json'));t=d.get('totals') or {};print('products',t.get('products'),'| active',t.get('active'),'| from 1688',t.get('from1688'),'| provider calls logged',t.get('providerCalls'));print('--- categories (fewest first)');[print(f\"{c['active'] or 0:5} active {c['total'] or 0:5} total {c['chinese'] or 0:4} chinese  {c['slug']:28} {c['name_ar']}\") for c in d.get('categories') or []];print('--- jobs');[print(f\"{j['id']:3} {'on ' if j['active'] else 'off'} {j['type']:6} {j['runner']:9} pages={j['max_pages']} new={j['max_new']} every={j['interval_hours']}h last={j['last_run_at']} {(j['name'] or '')[:30]} | {(j['last_summary'] or '')[:60]}\") for j in d.get('jobs') or []]"
           fi
           if [ -n "$TR" ]; then
             echo "=== translate $TR"; code=$(post "{\"limit\":$TR}" translate); echo "HTTP $code"; cat out.json; echo
