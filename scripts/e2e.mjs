@@ -40,10 +40,10 @@ expect((await page.locator('.cat-tiles a').count()) >= 10, 'الرئيسية ت�
 await shot(page, 'home');
 await page.click('.cats a:has-text("فساتين")'); await page.waitForLoadState('networkidle');
 expect(page.url().includes('/c/dresses'), 'الضغط على قسم فساتين يفتح صفحة القسم');
-await Promise.all([page.waitForURL(/size=M/), page.selectOption('select[name=size]', 'M')]);
+await page.click('.fsizes a:has-text("M")'); await page.waitForLoadState('networkidle');
 expect(page.url().includes('size=M'), 'فلتر المقاس يعمل');
-await page.click('.tabs a:has-text("السعر ↑")'); await page.waitForLoadState('networkidle');
-const prices = await page.$$eval('.card .p', els => els.map(e => parseFloat((e.firstChild?.textContent || '').replace(/[^\d.]/g, ''))));
+await page.click('.sortbar a:has-text("السعر: من الأقل")'); await page.waitForLoadState('networkidle');
+const prices = await page.$$eval('.card .p', els => els.map(e => parseFloat(e.textContent.replace(/[^\d٫.]/g, '').replace('٫', '.'))));
 expect(prices.every((v, i) => i === 0 || v >= prices[i - 1]), 'الترتيب بالسعر تصاعدي صحيح');
 await page.fill('.search input', 'حقيبة'); await page.press('.search input', 'Enter'); await page.waitForLoadState('networkidle');
 expect((await page.locator('.card').count()) >= 3, 'البحث عن "حقيبة" يعيد نتائج');
@@ -335,6 +335,40 @@ await page.goto(BASE + '/account/points');
 const ptsFinal = parseInt((await page.locator('.acct-card b').first().textContent()).replace(/\D/g, ''));
 expect(ptsFinal === ptsAfter, `النقاط المستخدمة أُعيدت بعد الإلغاء (${ptsFinal})`);
 await page.goto(BASE + '/account/orders?stage=cancelled'); expect(await has(page, order2), 'فلتر الطلبات الملغاة يعمل');
+
+// ---------- صفحة القسم: الفلاتر الجانبية وشريط الترتيب ----------
+await page.goto(BASE + '/logout');
+await page.goto(BASE + '/c/dresses'); await page.waitForLoadState('networkidle');
+expect(await page.locator('.crumbs').textContent().then(t => t.includes('الرئيسية')), 'فتات الخبز يظهر فوق القسم');
+expect(await page.locator('.filters h3').isVisible(), 'لوحة التصفية الجانبية ظاهرة');
+const groups = await page.locator('.filters .fgroup').count();
+expect(groups >= 3, `لوحة التصفية فيها ${groups} مجموعات (قسم/مقاس/لون/سعر/عروض)`);
+expect((await page.locator('.filters .fgroup a').filter({ hasText: 'فساتين' }).count()) > 0, 'قائمة الأقسام داخل الفلاتر');
+expect(await page.locator('.sortbar .chip.on').textContent().then(t => t.includes('رواجًا')), 'شريط الترتيب يبدأ بالأكثر رواجًا');
+const before = await page.locator('.card').count();
+// فلتر السعر بالنطاقات الجاهزة
+await page.click('.filters .fgroup a:has-text("أقل من")'); await page.waitForLoadState('networkidle');
+expect(page.url().includes('max='), 'النقر على نطاق سعري يطبّقه في الرابط');
+const capped = await page.$$eval('.card .p', els => els.map(e => parseFloat(e.textContent.replace(/[^\d٫.]/g, '').replace('٫', '.'))));
+expect(capped.length === 0 || capped.every(v => v <= 50), `كل النتائج ضمن النطاق السعري (${capped.length} منتج)`);
+expect(await has(page, 'السعر:'), 'رقاقة الفلتر المطبّق تظهر فوق النتائج');
+await page.click('.filters a:has-text("مسح كل الفلاتر")'); await page.waitForLoadState('networkidle');
+expect((await page.locator('.card').count()) === before, `مسح الفلاتر يعيد كل النتائج (${before})`);
+await shot(page, 'category-filters');
+// فلتر اللون بالنقطة الملونة
+const colorLinks = await page.locator('.fcolors a').count();
+if (colorLinks) {
+  const cname = (await page.locator('.fcolors a').first().textContent()).trim();
+  await page.locator('.fcolors a').first().click(); await page.waitForLoadState('networkidle');
+  expect(page.url().includes('color='), `فلتر اللون «${cname}» يعمل`);
+  expect(await has(page, 'اللون:'), 'رقاقة اللون المطبّق تظهر');
+  await page.goto(BASE + '/c/dresses');
+}
+expect(colorLinks > 0, `فلتر الألوان يعرض ${colorLinks} لونًا بنقاط ملونة`);
+// الترتيب بالسعر
+await page.click('.sortbar a:has-text("السعر: من الأقل")'); await page.waitForLoadState('networkidle');
+const asc = await page.$$eval('.card .p', els => els.map(e => parseFloat(e.textContent.replace(/[^\d٫.]/g, '').replace('٫', '.'))));
+expect(asc.every((v, i) => i === 0 || v >= asc[i - 1]), 'الترتيب بالسعر تصاعديًا صحيح');
 
 // ---------- هيكل المتجر: الرأس والقائمة الكبيرة والتذييل وبطاقة المنتج ----------
 await page.goto(BASE + '/logout'); await page.goto(BASE + '/');

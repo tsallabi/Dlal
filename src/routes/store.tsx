@@ -137,30 +137,118 @@ async function listPage(c: Context<Env>, opts: { title: string; where: string; b
   const total = cnt?.n ?? 0;
   const pages = Math.ceil(total / per);
   const link = (k: string, v: string | null) => { const u = new URL(c.req.url); if (v) u.searchParams.set(k, v); else u.searchParams.delete(k); u.searchParams.delete('page'); return u.pathname + u.search; };
-  const b = await base(c);
+  const clearAll = () => { const u = new URL(c.req.url); ['min', 'max', 'size', 'color', 'page'].forEach(k => u.searchParams.delete(k)); return u.pathname + u.search; };
+  const bb = await base(c);
+  const active = bb.categories.find(x => x.slug === opts.active);
+  const hasFilter = !!(min || max || size || color);
+  const SORTS: [string, string][] = [['popular', 'الأكثر رواجًا'], ['new', 'الأحدث'], ['rating', 'الأعلى تقييمًا'], ['price_asc', 'السعر: من الأقل'], ['price_desc', 'السعر: من الأعلى']];
   return c.html(
-    <Layout {...b} title={opts.title} active={opts.active} q={opts.q}>
-      <div class="sec-h"><h2>{opts.title} <small style="color:#888;font-weight:400">({total})</small></h2></div>
-      <div class="tabs">
-        {[['popular', 'الأكثر رواجًا'], ['new', 'الأحدث'], ['rating', 'الأعلى تقييمًا'], ['price_asc', 'السعر ↑'], ['price_desc', 'السعر ↓']].map(([k, l]) =>
-          <a href={link('sort', k)} class={sort === k ? 'on' : ''}>{l}</a>)}
+    <Layout {...bb} title={opts.title} active={opts.active} q={opts.q}>
+      <nav class="crumbs"><a href="/">الرئيسية</a> / <span>{opts.title}</span></nav>
+      <div class="shop">
+        {/* الفلاتر الجانبية */}
+        <aside class="filters">
+          <h3>تصفية</h3>
+          {hasFilter && <a href={clearAll()} style="font-size:12.5px;color:var(--brand);font-weight:700">مسح كل الفلاتر ✕</a>}
+          <details class="fgroup" open>
+            <summary>القسم</summary>
+            <div class="fbody">
+              <a href="/c/all" class={!opts.active ? 'on' : ''}>كل الأقسام</a>
+              {bb.categories.map(cat => <a href={`/c/${cat.slug}`} class={opts.active === cat.slug ? 'on' : ''}>{cat.icon} {cat.name_ar}</a>)}
+            </div>
+          </details>
+          {sizes.results.length > 0 && (
+            <details class="fgroup" open>
+              <summary>المقاس</summary>
+              <div class="fbody"><div class="fsizes">
+                {sizes.results.map(x => <a href={link('size', size === x.size ? null : x.size)} class={size === x.size ? 'on' : ''}>{x.size}</a>)}
+              </div></div>
+            </details>
+          )}
+          {colors.results.length > 0 && (
+            <details class="fgroup" open>
+              <summary>اللون</summary>
+              <div class="fbody"><div class="fcolors">
+                {colors.results.map(x => (
+                  <a href={link('color', color === x.color ? null : x.color)} class={color === x.color ? 'on' : ''}>
+                    <span class="sw" style={`background:${cssColor(x.color)}`}></span>{x.color}
+                  </a>
+                ))}
+              </div></div>
+            </details>
+          )}
+          <details class="fgroup" open>
+            <summary>السعر (د.ل)</summary>
+            <div class="fbody">
+              <form class="fprice" method="get">
+                {[...url.searchParams].filter(([k]) => !['min', 'max', 'page'].includes(k)).map(([k, v]) => <input type="hidden" name={k} value={v} />)}
+                <input type="number" name="min" placeholder="من" value={min ?? ''} inputmode="numeric" />
+                <span>—</span>
+                <input type="number" name="max" placeholder="إلى" value={max ?? ''} inputmode="numeric" />
+                <button type="submit">تطبيق</button>
+              </form>
+              <div class="fbody" style="padding-top:4px">
+                {[[0, 50], [50, 150], [150, 300], [300, 0]].map(([lo, hi]) => {
+                  const u = new URL(c.req.url);
+                  u.searchParams.delete('page');
+                  if (lo) u.searchParams.set('min', String(lo)); else u.searchParams.delete('min');
+                  if (hi) u.searchParams.set('max', String(hi)); else u.searchParams.delete('max');
+                  const on = (min ?? 0) === lo && (max ?? 0) === hi;
+                  return <a href={u.pathname + u.search} class={on ? 'on' : ''}>{hi ? (lo ? `${lo} — ${hi}` : `أقل من ${hi}`) : `أكثر من ${lo}`}</a>;
+                })}
+              </div>
+            </div>
+          </details>
+          <details class="fgroup" open>
+            <summary>العروض</summary>
+            <div class="fbody">
+              <a href="/sale">عليها خصم</a>
+              <a href={link('sort', 'new')}>وصل حديثًا</a>
+              <a href={link('sort', 'rating')}>الأعلى تقييمًا</a>
+            </div>
+          </details>
+        </aside>
+
+        {/* النتائج */}
+        <section>
+          <h2 style="margin:0 0 12px;font-size:21px">{opts.title} <small style="color:var(--mut);font-weight:400;font-size:14px">({total} منتج)</small></h2>
+          <div class="sortbar">
+            <span class="lbl">ترتيب حسب</span>
+            {SORTS.map(([k, l]) => <a href={link('sort', k)} class={`chip ${sort === k ? 'on' : ''}`}>{l}</a>)}
+            <span class="count">الصفحة {page} من {Math.max(1, pages)}</span>
+          </div>
+          {hasFilter && (
+            <div class="sortbar" style="padding-top:0">
+              {size && <a href={link('size', null)} class="chip on">المقاس: {size} ✕</a>}
+              {color && <a href={link('color', null)} class="chip on">اللون: {color} ✕</a>}
+              {(min || max) && <a href={link('min', null).replace(/([?&])max=[^&]*/, '$1')} class="chip on">السعر: {min ?? 0}—{max ?? '∞'} ✕</a>}
+            </div>
+          )}
+          <Grid items={rows.results} favs={f} />
+          {pages > 1 && page < pages && <a class="more-btn" href={link('page', String(page + 1))}>عرض المزيد</a>}
+          {pages > 1 && (
+            <div class="sortbar" style="justify-content:center;padding-top:18px">
+              {Array.from({ length: pages }, (_, i) => i + 1).slice(0, 12).map(n => <a href={link('page', String(n))} class={`chip ${n === page ? 'on' : ''}`}>{n}</a>)}
+            </div>
+          )}
+        </section>
       </div>
-      <form class="inline filters" method="get">
-        {[...url.searchParams].filter(([k]) => !['min', 'max', 'page'].includes(k)).map(([k, v]) => <input type="hidden" name={k} value={v} />)}
-        السعر: <input type="number" name="min" placeholder="من" value={min ?? ''} style="width:80px" /> — <input type="number" name="max" placeholder="إلى" value={max ?? ''} style="width:80px" />
-        <button class="btn sm ghost" type="submit">تطبيق</button>
-        {sizes.results.length > 0 && <select name="size" onchange="this.form.submit()"><option value="">المقاس</option>{sizes.results.map(s => <option value={s.size} selected={size === s.size}>{s.size}</option>)}</select>}
-        {colors.results.length > 0 && <select name="color" onchange="this.form.submit()"><option value="">اللون</option>{colors.results.map(s => <option value={s.color} selected={color === s.color}>{s.color}</option>)}</select>}
-        {(min || max || size || color) && <a href={link('min', null).split('?')[0]} style="color:#b5124f">مسح الفلاتر ✕</a>}
-      </form>
-      <Grid items={rows.results} favs={f} />
-      {pages > 1 && (
-        <div class="tabs" style="justify-content:center;margin-top:20px">
-          {Array.from({ length: pages }, (_, i) => i + 1).map(n => <a href={link('page', String(n))} class={n === page ? 'on' : ''}>{n}</a>)}
-        </div>
-      )}
     </Layout>,
   );
+}
+
+// لون تقريبي للنقطة في فلتر الألوان
+function cssColor(name: string): string {
+  const M: [RegExp, string][] = [
+    [/أسود|اسود/, '#111'], [/أبيض|ابيض/, '#fff'], [/رمادي|رمادى/, '#9a9a9a'], [/فضي|فضى/, '#c8ccd0'],
+    [/ذهبي|ذهبى/, '#d4af37'], [/بيج|بيچ/, '#e8d9c0'], [/بني|بنى/, '#7a4b2a'], [/كحلي|كحلى|نيلي/, '#1f2d54'],
+    [/أزرق|ازرق/, '#2563c9'], [/سماوي|تركواز|فيروزي/, '#40b6c6'], [/أخضر|اخضر/, '#2f9e5e'], [/زيتي/, '#6b7a3a'],
+    [/أحمر|احمر/, '#d3262b'], [/عنابي|خمري|نبيتي/, '#7b1b33'], [/وردي|وردى|زهري/, '#ee7fa5'], [/فوشيا/, '#d4247f'],
+    [/بنفسجي|موف|ليلكي/, '#8a5cc7'], [/أصفر|اصفر/, '#f2c53d'], [/برتقالي|برتقالى/, '#ef7f2e'], [/كريمي|عاجي/, '#f5efe0'],
+    [/شفاف/, 'linear-gradient(135deg,#eee,#fff)'], [/متعدد|ملون/, 'linear-gradient(135deg,#ef7f2e,#2563c9,#2f9e5e)'],
+  ];
+  for (const [r, v] of M) if (r.test(name)) return v;
+  return '#d8d8d8';
 }
 
 store.get('/c/all', async (c) => {
