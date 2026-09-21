@@ -422,3 +422,18 @@ body{background:#fff}
 .tbl tr:nth-child(even) td.acts{background:var(--soft-2,#fafafa)}
 .tbl td.sum{max-width:260px}
 .tbl td.sum small{display:block;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.35}
+
+/* ===== لوحة الإدارة على الشاشات العريضة: استخدام عرض الشاشة وتضييق الجداول ===== */
+.admin-body .wrap{max-width:1700px}
+.admin-body .dash{grid-template-columns:210px 1fr;gap:16px}
+.admin-body .tbl{font-size:13.5px}
+.admin-body .tbl th,.admin-body .tbl td{padding:7px 8px;vertical-align:middle}
+.admin-body .tbl th{white-space:nowrap}
+/* أزرار الصف في سطر واحد بدل ثلاثة */
+.tbl td.acts .inline{display:flex;gap:6px;align-items:center;flex-wrap:nowrap}
+.tbl td.acts .btn.sm{white-space:nowrap;padding:5px 10px;font-size:12px}
+/* نص المصدر الطويل (كلمات البحث الصينية) لا يمدّد الصف */
+.tbl .job-q{display:block;max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--mut)}
+.tbl td.sum{max-width:230px}
+.two{gap:16px}
+@media(min-width:1500px){.admin-body .two{grid-template-columns:1fr 380px}}
