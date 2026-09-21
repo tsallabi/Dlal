@@ -17,13 +17,30 @@ export type PriceBreakdown = {
   markup_lyd: number;
   total_lyd: number;
   weight_g: number;
+  volume_cm3: number;
+  chargeable_kg: number;     // الوزن المحاسبي الذي تحاسبنا به شركة الشحن
+  ship_basis: 'وزن' | 'حجم';
+  cost_lyd: number;          // تكلفتنا الحقيقية (بلا هامش ولا احتياطي)
+  profit_lyd: number;        // الربح المتوقع من القطعة
 };
+
+// الشحن الجوي يُحاسب بالوزن أو بالحجم أيهما أكبر (الوزن الحجمي = السم³ ÷ المقسوم)
+export function chargeableKg(s: Settings, weightG: number, volumeCm3: number) {
+  const mode = s.ship_mode || 'max';
+  const divisor = parseFloat(s.volumetric_divisor || '6000') || 6000;
+  const real = weightG / 1000;
+  const vol = volumeCm3 > 0 ? volumeCm3 / divisor : 0;
+  if (mode === 'kg' || !vol) return { kg: real, basis: 'وزن' as const };
+  if (mode === 'cbm') return { kg: vol, basis: 'حجم' as const };
+  return vol > real ? { kg: vol, basis: 'حجم' as const } : { kg: real, basis: 'وزن' as const };
+}
 
 export function computePrice(
   s: Settings,
   sourcePriceCny: number,
   weightG: number,
   categoryMarkup?: number | null,
+  volumeCm3?: number | null,
 ): PriceBreakdown {
   const fx = parseFloat(s.fx_cny_lyd || '0.95');
   const usd = parseFloat(s.fx_usd_lyd || '6.9');
@@ -33,18 +50,28 @@ export function computePrice(
   const customs = parseInt(s.customs_percent || '5') / 100;
   const domestic = parseFloat(s.domestic_cn_ship_cny || '6');
 
+  // سعر المتر المكعب من شركة الشحن ⟵ سعر الكيلو المحاسبي (1 م³ = 1,000,000 سم³)
+  const perCbm = parseFloat(s.ship_usd_per_cbm || '0');
+  const divisor = parseFloat(s.volumetric_divisor || '6000') || 6000;
+  const vol = Math.max(0, volumeCm3 ?? parseFloat(s.default_volume_cm3 || '0') ?? 0);
+  const ch = chargeableKg(s, weightG, vol);
+  // إن حُدّد سعر المتر المكعب استُخدم للحصة الحجمية، وإلا فسعر الكيلو
+  const usdPerKg = ch.basis === 'حجم' && perCbm > 0 ? perCbm / (1000000 / divisor) : shipPerKg;
+
   const goods = sourcePriceCny * fx;
   const domesticShip = domestic * fx;
-  const intlShip = (weightG / 1000) * shipPerKg * usd;
+  const intlShip = ch.kg * usdPerKg * usd;
   const customsFee = goods * customs;
   const safetyFee = goods * safety;
   const base = goods + domesticShip + intlShip + customsFee + safetyFee;
   const markupFee = base * markup;
   const total = roundPrice(base + markupFee);
+  const cost = goods + domesticShip + intlShip + customsFee;
   return {
     goods_lyd: r2(goods), domestic_ship_lyd: r2(domesticShip), intl_ship_lyd: r2(intlShip),
     customs_lyd: r2(customsFee), safety_lyd: r2(safetyFee), markup_lyd: r2(markupFee),
-    total_lyd: total, weight_g: weightG,
+    total_lyd: total, weight_g: weightG, volume_cm3: vol, chargeable_kg: Math.round(ch.kg * 1000) / 1000,
+    ship_basis: ch.basis, cost_lyd: r2(cost), profit_lyd: r2(total - cost),
   };
 }
 

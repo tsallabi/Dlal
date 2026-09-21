@@ -235,18 +235,59 @@ ops.post('/payments/test', requirePerm('payments.manage'), async (c) => {
 ops.use('/reports*', requirePerm('reports.view'));
 ops.get('/reports', async (c) => {
   const db = c.env.DB;
-  const [daily, top, cities, methods, funnel] = await Promise.all([
+  // الأرباح والمستحق لشركة الشحن: من لقطة التكلفة المحفوظة في كل سطر طلب
+  const SOLD = "o.status NOT IN ('pending_payment','cancelled','refunded')";
+  const [daily, top, cities, methods, funnel, pnl, byProduct, owed] = await Promise.all([
     db.prepare("SELECT date(created_at) d,COUNT(*) n,COALESCE(SUM(total_lyd),0) s FROM orders WHERE status NOT IN ('cancelled','refunded') AND created_at>datetime('now','-30 day') GROUP BY d ORDER BY d").all<any>(),
     db.prepare("SELECT oi.title_ar,SUM(oi.qty) q,SUM(oi.qty*oi.unit_price_lyd) s FROM order_items oi JOIN orders o ON o.id=oi.order_id WHERE o.status NOT IN ('pending_payment','cancelled','refunded') GROUP BY oi.product_id ORDER BY q DESC LIMIT 10").all<any>(),
     db.prepare("SELECT ship_city,COUNT(*) n,COALESCE(SUM(total_lyd),0) s FROM orders WHERE status NOT IN ('cancelled','refunded') GROUP BY ship_city ORDER BY n DESC LIMIT 10").all<any>(),
     db.prepare("SELECT payment_method,COUNT(*) n,COALESCE(SUM(total_lyd),0) s FROM orders WHERE status NOT IN ('pending_payment','cancelled','refunded') GROUP BY payment_method ORDER BY n DESC").all<any>(),
     db.prepare("SELECT status,COUNT(*) n FROM orders GROUP BY status").all<any>(),
+    db.prepare(`SELECT COALESCE(SUM(oi.qty*oi.unit_price_lyd),0) sales,
+       COALESCE(SUM(oi.qty*COALESCE(oi.unit_cost_lyd,0)),0) cost,
+       COALESCE(SUM(oi.qty*COALESCE(oi.unit_ship_lyd,0)),0) ship,
+       COALESCE(SUM(oi.qty*COALESCE(oi.unit_goods_lyd,0)),0) goods,
+       COUNT(DISTINCT o.id) orders, COALESCE(SUM(oi.qty),0) pieces
+       FROM order_items oi JOIN orders o ON o.id=oi.order_id WHERE ${SOLD}`).first<any>(),
+    db.prepare(`SELECT oi.title_ar,SUM(oi.qty) q,SUM(oi.qty*oi.unit_price_lyd) sales,
+       SUM(oi.qty*COALESCE(oi.unit_cost_lyd,0)) cost
+       FROM order_items oi JOIN orders o ON o.id=oi.order_id WHERE ${SOLD}
+       GROUP BY oi.product_id ORDER BY (SUM(oi.qty*oi.unit_price_lyd)-SUM(oi.qty*COALESCE(oi.unit_cost_lyd,0))) DESC LIMIT 10`).all<any>(),
+    db.prepare(`SELECT p.id,p.name,
+       COALESCE(SUM(CASE WHEN o.status IN ('delivered','ready','arrived','customs','shipped') THEN oi.qty*COALESCE(oi.unit_ship_lyd,0) END),0) shipped_due,
+       COALESCE(SUM(oi.qty*COALESCE(oi.unit_ship_lyd,0)),0) all_due,
+       COALESCE(SUM(oi.qty*COALESCE(oi.unit_goods_lyd,0)),0) goods_due,
+       COUNT(DISTINCT o.id) orders
+       FROM partners p LEFT JOIN orders o ON o.partner_id=p.id AND ${SOLD}
+       LEFT JOIN order_items oi ON oi.order_id=o.id GROUP BY p.id ORDER BY p.id`).all<any>(),
   ]);
+  const profit = (pnl?.sales ?? 0) - (pnl?.cost ?? 0);
+  const margin = pnl?.sales ? Math.round(profit / pnl.sales * 100) : 0;
   const maxS = Math.max(1, ...daily.results.map(r => r.s));
   const tot = daily.results.reduce((a, r) => a + r.s, 0), cnt = daily.results.reduce((a, r) => a + r.n, 0);
   return shell(c, 'reports', 'التقارير', (
     <>
+      <Flash msg={c.req.query('filled') ? `حُسبت تكلفة ${c.req.query('filled')} سطر طلب.` : undefined} />
       <div class="kpis"><div class="kpi"><b>{fmt(tot)}</b><span>مبيعات 30 يومًا</span></div><div class="kpi"><b>{cnt}</b><span>طلبات 30 يومًا</span></div><div class="kpi"><b>{fmt(cnt ? tot / cnt : 0)}</b><span>متوسط قيمة الطلب</span></div></div>
+      <div class="kpis">
+        <div class="kpi"><b>{fmt(pnl?.sales ?? 0)}</b><span>مبيعات مؤكدة (كل الفترات)</span></div>
+        <div class="kpi"><b>{fmt(pnl?.cost ?? 0)}</b><span>تكلفتنا (بضاعة + شحن + جمارك)</span></div>
+        <div class="kpi" style="border-color:#0b6b66"><b style="color:#0b6b66">{fmt(profit)}</b><span>صافي الربح · هامش {margin}%</span></div>
+        <div class="kpi"><b>{fmt(pnl?.pieces ?? 0)}</b><span>قطعة مباعة</span></div>
+      </div>
+      <div class="card-box">
+        <h3>المستحق لشركات الشحن</h3>
+        <p style="font-size:13px;color:#666">«مستحق الآن» = شحن البضائع التي خرجت من الصين فعلًا. «إجمالي متوقع» يشمل الطلبات المدفوعة التي لم تُشحن بعد. ثمن البضاعة عند المورد معروض منفصلًا لأن الشريك يشتريه نيابةً عنا.</p>
+        <table class="tbl"><tr><th>الشريك</th><th>طلبات</th><th>ثمن البضاعة</th><th>مستحق الشحن الآن</th><th>إجمالي الشحن المتوقع</th><th>المجموع المستحق الآن</th></tr>
+          {owed.results.map(r => <tr><td><b>{r.name}</b></td><td>{r.orders}</td><td>{fmt(r.goods_due)}</td><td><b style="color:#d3262b">{fmt(r.shipped_due)}</b></td><td>{fmt(r.all_due)}</td><td><b>{fmt(r.goods_due + r.shipped_due)}</b></td></tr>)}
+        </table>
+      </div>
+      <div class="card-box"><h3>الأعلى ربحًا</h3>
+        <table class="tbl"><tr><th>المنتج</th><th>قطع</th><th>مبيعات</th><th>تكلفة</th><th>ربح</th><th>هامش</th></tr>
+          {byProduct.results.map(r => <tr><td>{r.title_ar}</td><td>{r.q}</td><td>{fmt(r.sales)}</td><td>{fmt(r.cost)}</td><td><b style="color:#0b6b66">{fmt(r.sales - r.cost)}</b></td><td>{r.sales ? Math.round((r.sales - r.cost) / r.sales * 100) : 0}%</td></tr>)}
+        </table>
+        {byProduct.results.length === 0 && <p style="color:#888">لا مبيعات مؤكدة بعد.</p>}
+      </div>
       <div class="card-box"><h3>المبيعات اليومية (30 يومًا)</h3><div class="bars">{daily.results.map(r => <div class="bar" title={`${r.d}: ${fmt(r.s)} (${r.n})`}><i style={`height:${Math.round(r.s / maxS * 100)}%`}></i><small>{r.d.slice(5)}</small></div>)}</div>{daily.results.length === 0 && <p style="color:#888">لا بيانات بعد.</p>}</div>
       <div class="two" style="grid-template-columns:1fr 1fr">
         <div class="card-box"><h3>الأكثر مبيعًا</h3><table class="tbl"><tr><th>المنتج</th><th>قطع</th><th>مبيعات</th></tr>{top.results.map(r => <tr><td>{r.title_ar}</td><td>{r.q}</td><td>{fmt(r.s)}</td></tr>)}</table></div>

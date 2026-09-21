@@ -7,6 +7,7 @@ import { Flash } from '../views/layout';
 import { getCategories, PRODUCT_SELECT, fmt, imgUrl, timeAgo } from '../lib/db';
 import type { ProductRow } from '../lib/db';
 import { classifyModesty } from '../lib/modesty';
+import { fingerprint, sameProduct } from '../lib/dedupe';
 import { loadSettings, computePrice } from '../lib/pricing';
 import { requireRole } from '../lib/auth';
 import { requirePerm, logActivity } from '../lib/perm';
@@ -243,7 +244,11 @@ export async function importProducts(db: D1Database, arr: any[], categoryId: num
   const s = await loadSettings(db);
   const cats = await getCategories(db);
   const cat = cats.find(x => x.id === categoryId) ?? null;
-  let imported = 0, updated = 0, skipped = 0, enriched = 0; const newIds: string[] = [];
+  // عناوين القسم الحالية: نقارن بها كل منتج جديد لئلا نُدخل نفس القطعة من مورد آخر
+  const peers = categoryId
+    ? (await db.prepare("SELECT id,source_offer_id,source_price_cny,COALESCE(title_src,title_ar) t FROM products WHERE category_id=? AND status='active'").bind(categoryId).all<any>()).results
+    : [];
+  let imported = 0, updated = 0, skipped = 0, enriched = 0, dupes = 0; const newIds: string[] = [];
   const seen = new Set<string>();   // نتائج البحث قد تكرر المنتج نفسه في الدفعة الواحدة
   for (const it of arr) {
     const offerId = String(it.offerId ?? it.offer_id ?? '').trim();
@@ -257,15 +262,20 @@ export async function importProducts(db: D1Database, arr: any[], categoryId: num
     if (Array.isArray(it.variants)) it.variants = await trVariants(it.variants);
     // حشمة: ملابس النوم والداخلية تُنقل إلى قسمها مهما كانت كلمة البحث، ولا تظهر على الرئيسية
     const mod = classifyModesty(titleAr, it.title, it.titleEn);
+    // نفس القطعة تُباع من عشرات الموردين: نحتفظ بالأرخص ولا نملأ المتجر بالمكرر
+    const srcTitle = it.title || titleAr;
+    const fp = fingerprint(srcTitle);
+    const twin = peers.find((x: any) => String(x.source_offer_id) !== offerId && sameProduct(x.t, srcTitle)) ?? null;
     const lingerieId = cats.find(x => x.slug === 'lingerie')?.id ?? null;
     const targetCat = mod.intimate && lingerieId ? lingerieId : categoryId;
     const homeOk = mod.homeOk && targetCat !== lingerieId ? 1 : 0;
-    const ex = await db.prepare("SELECT id,category_id,weight_g FROM products WHERE source='1688' AND source_offer_id=?").bind(offerId).first<{ id: number; category_id: number | null; weight_g: number | null }>();
+    const ex = await db.prepare("SELECT id,category_id,weight_g,volume_cm3 FROM products WHERE source='1688' AND source_offer_id=?").bind(offerId).first<{ id: number; category_id: number | null; weight_g: number | null; volume_cm3: number | null }>();
     // منتج موجود: يُسعَّر بقسمه هو ووزنه المحفوظ، لا بقسم المهمة التي فحصته
     // (إعادة الفحص من مهمة بلا قسم كانت تُنقص السعر لأنها تفترض وزنًا افتراضيًا)
     const useCat = ex ? (cats.find(x => x.id === ex.category_id) ?? cat) : (cats.find(x => x.id === targetCat) ?? cat);
     const weight = it.weightG ?? ex?.weight_g ?? useCat?.est_weight_g ?? 300;
-    const pr = computePrice(s, price, weight, useCat?.markup_percent);
+    const volume = it.volumeCm3 ?? ex?.volume_cm3 ?? null;
+    const pr = computePrice(s, price, weight, useCat?.markup_percent, volume);
     if (ex) {
       await db.prepare("UPDATE products SET source_price_cny=?,price_lyd=?,in_stock=?,last_checked_at=datetime('now'),updated_at=datetime('now') WHERE id=?")
         .bind(price, pr.total_lyd, it.inStock === false ? 0 : 1, ex.id).run();
@@ -284,21 +294,28 @@ export async function importProducts(db: D1Database, arr: any[], categoryId: num
       if ((hasCJK(cur?.title_ar) || !goodTitle(cur?.title_ar)) && !hasCJK(titleAr) && titleAr !== cur?.title_ar && (goodTitle(titleAr) || hasCJK(cur?.title_ar))) { upd.push('title_ar=?'); binds.push(titleAr.slice(0, 200)); }
       if (it.minQty && Number(it.minQty) > 1 && (cur?.min_qty ?? 1) === 1) { upd.push('min_qty=?'); binds.push(Number(it.minQty)); }
       if (it.weightG && Number(it.weightG) > 0 && !ex.weight_g) { upd.push('weight_g=?'); binds.push(Math.round(Number(it.weightG))); }
+      if (it.volumeCm3 && Number(it.volumeCm3) > 0 && !ex.volume_cm3) { upd.push('volume_cm3=?'); binds.push(Math.round(Number(it.volumeCm3))); }
       if (supplierAr && (!cur?.supplier_name || hasCJK(cur.supplier_name))) { upd.push('supplier_name=?'); binds.push(supplierAr); }
       if (it.title) { upd.push('title_src=COALESCE(title_src,?)'); binds.push(String(it.title)); }
+      if (fp) { upd.push('fingerprint=?'); binds.push(fp); }
       if (upd.length) enrich.push(db.prepare(`UPDATE products SET ${upd.join(',')} WHERE id=?`).bind(...binds, ex.id));
       if (enrich.length) { await db.batch(enrich); enriched++; }
       if (mod.intimate && lingerieId && ex.category_id !== lingerieId) await db.prepare('UPDATE products SET category_id=?,home_ok=0 WHERE id=?').bind(lingerieId, ex.id).run();
       else if (!homeOk) await db.prepare('UPDATE products SET home_ok=0 WHERE id=?').bind(ex.id).run();
       updated++; continue;
     }
+    if (!ex && twin) {
+      if (twin.source_price_cny <= price) { skipped++; dupes++; continue; }                     // عندنا الأرخص بالفعل
+      await db.prepare("UPDATE products SET status='hidden' WHERE id=?").bind(twin.id).run();   // الجديد أرخص: نُخفي القديم
+      twin.source_price_cny = price; dupes++;
+    }
     const slug = `${offerId}-${Math.random().toString(36).slice(2, 6)}`;
     const ins = await db.prepare(
-      `INSERT OR IGNORE INTO products(source,source_offer_id,source_url,slug,title_ar,title_src,description_ar,category_id,source_price_cny,price_lyd,compare_price_lyd,weight_g,min_qty,in_stock,status,supplier_name,last_checked_at,sales,rating,home_ok)
-       VALUES('1688',?,?,?,?,?,?,?,?,?,?,?,?,?,'active',?,datetime('now'),?,?,?)`,
+      `INSERT OR IGNORE INTO products(source,source_offer_id,source_url,slug,title_ar,title_src,description_ar,category_id,source_price_cny,price_lyd,compare_price_lyd,weight_g,volume_cm3,min_qty,in_stock,status,supplier_name,last_checked_at,sales,rating,home_ok,fingerprint)
+       VALUES('1688',?,?,?,?,?,?,?,?,?,?,?,?,?,?,'active',?,datetime('now'),?,?,?,?)`,
     ).bind(offerId, it.url ?? `https://detail.1688.com/offer/${offerId}.html`, slug, titleAr, it.title ?? null, it.descriptionAr ?? null,
-      targetCat, price, pr.total_lyd, Math.random() < 0.4 ? Math.ceil(pr.total_lyd * 1.25 / 5) * 5 : null, it.weightG ?? null,
-      Math.max(1, parseInt(it.minQty ?? 1) || 1), it.inStock === false ? 0 : 1, supplierAr, parseInt(it.sales ?? 0) || 0, 4.5 + Math.random() * 0.5, homeOk).run();
+      targetCat, price, pr.total_lyd, Math.random() < 0.4 ? Math.ceil(pr.total_lyd * 1.25 / 5) * 5 : null, it.weightG ?? null, it.volumeCm3 ?? null,
+      Math.max(1, parseInt(it.minQty ?? 1) || 1), it.inStock === false ? 0 : 1, supplierAr, parseInt(it.sales ?? 0) || 0, 4.5 + Math.random() * 0.5, homeOk, fp || null).run();
     const pid = ins.meta.last_row_id as number;
     if (!pid || !ins.meta.changes) { skipped++; continue; }   // تجاهل صفّ لم يُدرج (تعارض مع استيراد متزامن)
     const stmts: D1PreparedStatement[] = [];
@@ -306,10 +323,11 @@ export async function importProducts(db: D1Database, arr: any[], categoryId: num
     (it.variants ?? []).forEach((v: any) => stmts.push(db.prepare('INSERT INTO variants(product_id,source_sku_id,color,size,price_delta_lyd,in_stock,image_url) VALUES(?,?,?,?,?,?,?)')
       .bind(pid, v.skuId ?? null, v.color ?? null, v.size ?? null, v.priceCny ? Math.round((v.priceCny - price) * parseFloat(s.fx_cny_lyd) * 1.4 * 2) / 2 : 0, v.inStock === false ? 0 : 1, v.image ?? null)));
     if (stmts.length) await db.batch(stmts);
+    peers.push({ id: pid, source_offer_id: offerId, source_price_cny: price, t: srcTitle });
     imported++; newIds.push(offerId);
   }
   await db.prepare('INSERT INTO import_log(by_user_id,source,page_url,imported,updated,skipped) VALUES(?,?,?,?,?,?)').bind(byUserId, '1688', pageUrl, imported, updated, skipped).run();
-  return { imported, updated, skipped, enriched, newIds };
+  return { imported, updated, skipped, enriched, dupes, newIds };
 }
 
 // ---------- المنتجات ----------
@@ -476,8 +494,11 @@ admin.get('/stock', async (c) => {
 // ---------- التسعير ----------
 admin.get('/pricing', async (c) => {
   const s = await loadSettings(c.env.DB);
-  const ex = computePrice(s, 25, 300);
+  const exVol = parseFloat(s.default_volume_cm3 || '3000');
+  const ex = computePrice(s, 25, 300, null, exVol);
+  const exBig = computePrice(s, 25, 300, null, 30000);   // صندوق كبير خفيف: يُظهر أثر الحجم
   const F = (k: string, l: string, step = '0.01') => <><label>{l}</label><input type="number" step={step} name={k} value={s[k]} /></>;
+  const S = (k: string, l: string, opts: [string, string][]) => <><label>{l}</label><select name={k}>{opts.map(([v, t]) => <option value={v} selected={(s[k] || opts[0][0]) === v}>{t}</option>)}</select></>;
   return shell(c, 'pricing', 'التسعير وسعر الصرف', (
     <div class="two">
       <form method="post" class="card-box">
@@ -486,6 +507,12 @@ admin.get('/pricing', async (c) => {
         {F('fx_cny_lyd', '1 يوان صيني = ؟ دينار')}{F('fx_usd_lyd', '1 دولار = ؟ دينار')}
         <h3 style="margin-top:16px">قواعد التسعير</h3>
         {F('markup_percent', 'نسبة الربح الافتراضية %', '1')}{F('safety_percent', 'هامش أمان لتغير السعر %', '1')}{F('ship_usd_per_kg', 'الشحن الجوي للكيلو ($)')}{F('customs_percent', 'الجمارك %', '1')}{F('domestic_cn_ship_cny', 'شحن داخل الصين لمخزن الشريك (¥)')}
+        <h3 style="margin-top:16px">الشحن من الصين — ما تدفعه لشركة الشحن</h3>
+        <p style="font-size:13px;color:#666">شركات الشحن تحاسب بالوزن الحقيقي أو بالحجم، أيهما أكبر. ضع هنا سعر شاهين للمتر المكعب وسعر الكيلو، والنظام يوزّع التكلفة على كل قطعة حسب حجمها ووزنها، ويجمع لك المستحق لهم في صفحة التقارير.</p>
+        {S('ship_mode', 'طريقة حساب الشحن', [['max', 'الأعلى بين الوزن والحجم (الأدق)'], ['kg', 'بالوزن فقط'], ['cbm', 'بالحجم فقط']])}
+        {F('ship_usd_per_cbm', 'سعر المتر المكعب من شركة الشحن ($)')}
+        {F('volumetric_divisor', 'مُقسِّم الوزن الحجمي (6000 جوي، 5000 أسرع)', '100')}
+        {F('default_volume_cm3', 'حجم افتراضي للقطعة إذا لم يذكره المورد (سم³)', '100')}
         <h3 style="margin-top:16px">التوصيل داخل ليبيا</h3>
         {F('delivery_lyd', 'رسوم التوصيل (د.ل)')}{F('free_ship_over_lyd', 'توصيل مجاني فوق (د.ل)')}
         <button class="btn" style="margin-top:12px">حفظ</button>
@@ -493,7 +520,20 @@ admin.get('/pricing', async (c) => {
       <div>
         <div class="card-box"><h3>مثال: منتج بـ 25 ¥ ووزن 300 غ</h3><div class="breakdown">
           <div><span>البضاعة</span><span>{fmt(ex.goods_lyd)}</span></div><div><span>شحن داخلي</span><span>{fmt(ex.domestic_ship_lyd)}</span></div><div><span>شحن دولي</span><span>{fmt(ex.intl_ship_lyd)}</span></div><div><span>جمارك</span><span>{fmt(ex.customs_lyd)}</span></div><div><span>أمان</span><span>{fmt(ex.safety_lyd)}</span></div><div><span>ربح</span><span>{fmt(ex.markup_lyd)}</span></div><div class="t"><span>سعر البيع</span><span>{fmt(ex.total_lyd)}</span></div>
+          <div><span>تكلفتنا الحقيقية</span><span>{fmt(ex.cost_lyd)}</span></div>
+          <div><span>ربحنا من القطعة</span><span><b style="color:#0b6b66">{fmt(ex.profit_lyd)}</b></span></div>
+          <div><span>الوزن المحاسبي</span><span>{ex.chargeable_kg} كغ (بالـ{ex.ship_basis})</span></div>
         </div></div>
+        <div class="card-box"><h3>نفس المنتج في صندوق كبير (30,000 سم³)</h3>
+          <p style="font-size:13px;color:#666">يوضح لماذا يجب إدخال سعر المتر المكعب: البضاعة نفسها والوزن نفسه، لكن الحجم يرفع أجرة الشحن.</p>
+          <div class="breakdown">
+            <div><span>شحن دولي</span><span>{fmt(exBig.intl_ship_lyd)}</span></div>
+            <div><span>الوزن المحاسبي</span><span>{exBig.chargeable_kg} كغ (بالـ{exBig.ship_basis})</span></div>
+            <div class="t"><span>سعر البيع</span><span>{fmt(exBig.total_lyd)}</span></div>
+            <div><span>ربحنا من القطعة</span><span><b style="color:#0b6b66">{fmt(exBig.profit_lyd)}</b></span></div>
+          </div>
+        </div>
+        <form method="post" action="/admin/pricing/backfill-costs" class="card-box"><h3>حساب تكلفة الطلبات القديمة</h3><p style="font-size:13px;color:#666">الطلبات التي تمت قبل تفعيل حساب الأرباح ليس لها تكلفة محفوظة فتظهر بربح 100%. هذا الزر يحسبها من بيانات منتجاتها.</p><button class="btn ghost">احسب التكلفة الناقصة</button></form>
         <form method="post" action="/admin/pricing/reprice-all" class="card-box"><h3>إعادة تسعير الكتالوج كله</h3><p style="font-size:13px;color:#666">يعيد حساب سعر كل المنتجات بالقواعد الحالية (المنتجات ذات السعر اليدوي تُعاد أيضًا).</p><button class="btn warn">إعادة التسعير الآن</button></form>
       </div>
     </div>
@@ -501,14 +541,30 @@ admin.get('/pricing', async (c) => {
 });
 admin.post('/pricing', async (c) => {
   const f = await c.req.parseBody();
-  const keys = ['fx_cny_lyd', 'fx_usd_lyd', 'markup_percent', 'safety_percent', 'ship_usd_per_kg', 'customs_percent', 'domestic_cn_ship_cny', 'delivery_lyd', 'free_ship_over_lyd'];
+  const keys = ['fx_cny_lyd', 'fx_usd_lyd', 'markup_percent', 'safety_percent', 'ship_usd_per_kg', 'customs_percent', 'domestic_cn_ship_cny', 'delivery_lyd', 'free_ship_over_lyd', 'ship_mode', 'ship_usd_per_cbm', 'volumetric_divisor', 'default_volume_cm3'];
   await c.env.DB.batch(keys.filter(k => f[k] !== undefined).map(k => c.env.DB.prepare("INSERT INTO settings(key,value,updated_at) VALUES(?,?,datetime('now')) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at").bind(k, String(f[k]))));
   return c.redirect('/admin/pricing?ok=1');
 });
+// الطلبات التي سبقت تفعيل لقطة التكلفة تظهر بربح 100% لأن تكلفتها فارغة — نحسبها من بيانات المنتج
+admin.post('/pricing/backfill-costs', async (c) => {
+  const db = c.env.DB; const s = await loadSettings(db); const cats = await getCategories(db);
+  const { results } = await db.prepare(
+    `SELECT oi.id,oi.product_id,p.source_price_cny,p.weight_g,p.volume_cm3,p.category_id
+     FROM order_items oi JOIN products p ON p.id=oi.product_id WHERE oi.unit_cost_lyd IS NULL`,
+  ).all<any>();
+  const stmts = results.map(r => {
+    const cat = cats.find(x => x.id === r.category_id);
+    const br = computePrice(s, r.source_price_cny ?? 0, r.weight_g ?? cat?.est_weight_g ?? 300, cat?.markup_percent, r.volume_cm3);
+    return db.prepare('UPDATE order_items SET unit_cost_lyd=?,unit_ship_lyd=?,unit_goods_lyd=? WHERE id=?')
+      .bind(br.cost_lyd, br.intl_ship_lyd + br.domestic_ship_lyd, br.goods_lyd, r.id);
+  });
+  for (let i = 0; i < stmts.length; i += 100) await db.batch(stmts.slice(i, i + 100));
+  return c.redirect(`/admin/reports?filled=${results.length}`);
+});
 admin.post('/pricing/reprice-all', async (c) => {
   const db = c.env.DB; const s = await loadSettings(db); const cats = await getCategories(db);
-  const { results } = await db.prepare('SELECT id,source_price_cny,weight_g,category_id FROM products').all<any>();
-  const stmts = results.map(p => { const cat = cats.find(x => x.id === p.category_id); const pr = computePrice(s, p.source_price_cny, p.weight_g ?? cat?.est_weight_g ?? 300, cat?.markup_percent); return db.prepare('UPDATE products SET price_lyd=? WHERE id=?').bind(pr.total_lyd, p.id); });
+  const { results } = await db.prepare('SELECT id,source_price_cny,weight_g,volume_cm3,category_id FROM products').all<any>();
+  const stmts = results.map(p => { const cat = cats.find(x => x.id === p.category_id); const pr = computePrice(s, p.source_price_cny, p.weight_g ?? cat?.est_weight_g ?? 300, cat?.markup_percent, p.volume_cm3); return db.prepare('UPDATE products SET price_lyd=? WHERE id=?').bind(pr.total_lyd, p.id); });
   for (let i = 0; i < stmts.length; i += 100) await db.batch(stmts.slice(i, i + 100));
   return c.redirect('/admin/pricing?ok=1');
 });

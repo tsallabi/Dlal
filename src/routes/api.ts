@@ -3,7 +3,9 @@ import type { Context } from 'hono';
 import type { Env } from '../types';
 import { getCategories } from '../lib/db';
 import { importProducts } from './admin';
-import { loadSettings } from '../lib/pricing';
+import { classifyModesty } from '../lib/modesty';
+import { fingerprint, sameProduct } from '../lib/dedupe';
+import { computePrice, loadSettings } from '../lib/pricing';
 import { getProvider } from '../lib/source-providers';
 import { runServerJobs } from '../lib/crawl';
 import { retranslatePending } from '../lib/translate';
@@ -89,6 +91,27 @@ api.post('/crawl/report', async (c) => {
 });
 
 // اختبار مزوّد API الخارجي (OTAPI/TMAPI) بالرمز نفسه — للفحص الآلي من GitHub Actions
+// فحص منطق الحشمة والبصمة والشحن على الكود الحقيقي (scripts/logic-test)
+api.get('/logic-check', async (c) => {
+  if (!tokenOk(c)) return c.json({ error: 'رمز غير صحيح' }, 401);
+  const s = await loadSettings(c.env.DB);
+  const titles = ['بيجامة نسائية شتاء', '跨境速卖通女式长款睡衣家居服', 'عباية سوداء بتطريز ذهبي', 'فستان مفتوح الخلف', 'حافظة هاتف شفافة'];
+  const modesty: Record<string, any> = {};
+  for (const t of titles) modesty[t] = classifyModesty(t);
+  const w1 = '跨境外贸商务石英表皮带腕表日内瓦三眼六针潮流watch男士手表';
+  const w2 = '厂家现货跨境石英表男士手表批发watch皮带腕表日内瓦三眼六针';
+  const bag = '新款女士单肩包时尚百搭大容量手提包';
+  return c.json({
+    modesty,
+    dedupe: { same: sameProduct(w1, w2), different: sameProduct(w1, bag), noiseOnly: sameProduct('跨境 批发 新款', '外贸 现货 爆款'), fp: fingerprint(w1) },
+    pricing: {
+      light: computePrice(s, 25, 800, null, 1500),                       // صغيرة وثقيلة
+      bulky: computePrice(s, 25, 300, null, 40000),                      // كبيرة وخفيفة
+      byKg: computePrice({ ...s, ship_mode: 'kg' }, 25, 300, null, 40000),
+    },
+  });
+});
+
 api.post('/source/test', async (c) => {
   if (!tokenOk(c)) return c.json({ error: 'رمز غير صحيح' }, 401);
   const b = await c.req.json<{ id?: string; kw?: string; provider?: string; base_url?: string; key?: string; lang?: string }>();

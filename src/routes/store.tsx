@@ -8,7 +8,7 @@ import { Grid } from '../views/product-card';
 import { Stars } from '../views/account';
 import { getCategories, PRODUCT_SELECT, fmt, imgUrl, orderCode, timeAgo, notify } from '../lib/db';
 import type { ProductRow } from '../lib/db';
-import { loadSettings } from '../lib/pricing';
+import { loadSettings, computePrice } from '../lib/pricing';
 import { checkCoupon } from '../lib/coupons';
 import { loadMyPay } from '../lib/mypay';
 
@@ -345,9 +345,10 @@ store.post('/cart/coupon', async (c) => {
 async function cartRows(db: D1Database, uid: number) {
   const { results } = await db.prepare(
     `SELECT ci.id,ci.qty,ci.variant_id,p.id AS product_id,p.slug,p.title_ar,p.price_lyd,p.in_stock,p.status,p.source_offer_id,p.source_url,
+            p.source_price_cny,p.weight_g,p.volume_cm3,p.category_id,c.est_weight_g,c.markup_percent,
             v.color,v.size,COALESCE(v.price_delta_lyd,0) AS delta,
             COALESCE(v.image_url,(SELECT url FROM product_images i WHERE i.product_id=p.id ORDER BY sort LIMIT 1)) AS image
-     FROM cart_items ci JOIN products p ON p.id=ci.product_id LEFT JOIN variants v ON v.id=ci.variant_id WHERE ci.user_id=?`,
+     FROM cart_items ci JOIN products p ON p.id=ci.product_id LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN variants v ON v.id=ci.variant_id WHERE ci.user_id=?`,
   ).bind(uid).all<any>();
   return results.map(r => ({ ...r, unit: r.price_lyd + r.delta, line: (r.price_lyd + r.delta) * r.qty }));
 }
@@ -529,9 +530,14 @@ store.post('/checkout', async (c) => {
   const code = orderCode(oid);
   const stmts = [
     db.prepare('UPDATE orders SET code=? WHERE id=?').bind(code, oid),
-    ...rows.map(r => db.prepare(
-      `INSERT INTO order_items(order_id,product_id,variant_id,title_ar,color,size,qty,unit_price_lyd,source_offer_id,source_url) VALUES(?,?,?,?,?,?,?,?,?,?)`,
-    ).bind(oid, r.product_id, r.variant_id, r.title_ar, r.color, r.size, r.qty, r.unit, r.source_offer_id, r.source_url)),
+    // لقطة التكلفة لحظة البيع: تبقى ثابتة في التقارير مهما تغيّرت إعدادات التسعير لاحقًا
+    ...rows.map(r => {
+      const br = computePrice(t.s, r.source_price_cny ?? 0, r.weight_g ?? r.est_weight_g ?? 300, r.markup_percent, r.volume_cm3);
+      return db.prepare(
+        `INSERT INTO order_items(order_id,product_id,variant_id,title_ar,color,size,qty,unit_price_lyd,source_offer_id,source_url,unit_cost_lyd,unit_ship_lyd,unit_goods_lyd) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      ).bind(oid, r.product_id, r.variant_id, r.title_ar, r.color, r.size, r.qty, r.unit, r.source_offer_id, r.source_url,
+        br.cost_lyd, br.intl_ship_lyd + br.domestic_ship_lyd, br.goods_lyd);
+    }),
     db.prepare("INSERT INTO order_events(order_id,status,note,by_user_id) VALUES(?,'pending_payment','تم إنشاء الطلب',?)").bind(oid, u.id),
     db.prepare('DELETE FROM cart_items WHERE user_id=?').bind(u.id),
     db.prepare('UPDATE users SET city=?,address=? WHERE id=?').bind(ship.city, ship.address, u.id),

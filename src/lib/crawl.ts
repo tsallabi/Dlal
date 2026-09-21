@@ -18,7 +18,7 @@ export async function runServerJobs(env: { DB: D1Database; AI?: any }, opts: { l
   const out: any[] = [];
   for (const job of jobs) {
     const started = new Date().toISOString();
-    const rep = { status: 'ok', pages: 0, found: 0, imported: 0, updated: 0, enriched: 0, checked: 0, note: '' };
+    const rep = { status: 'ok', pages: 0, found: 0, imported: 0, updated: 0, enriched: 0, checked: 0, dupes: 0, note: '' };
     try {
       if (job.type === 'stock') {
         // الأقدم فحصًا أولًا؛ فقط منتجات لها معرف 1688 حقيقي (رقمي)
@@ -54,7 +54,7 @@ export async function runServerJobs(env: { DB: D1Database; AI?: any }, opts: { l
           rep.pages++; rep.found += r.data.length;
           if (!r.data.length) { rep.note += ` صفحة ${p} فارغة.`; break; }
           const res = await importProducts(db, r.data.map(x => ({ ...x, titleAr: x.titleEn && !/[一-鿿]/.test(x.titleEn) ? undefined : undefined })), job.category_id, opts.byUserId ?? null, `api:${prov.name}:${kw}#${p}`, env.AI);
-          rep.imported += res.imported; rep.updated += res.updated; newIds.push(...res.newIds);
+          rep.imported += res.imported; rep.updated += res.updated; rep.dupes += res.dupes ?? 0; newIds.push(...res.newIds);
         }
         if (job.enrich) for (const id of newIds.slice(0, job.max_new || 40)) {
           const r = await prov.item(id); await logRaw(db, 'in', r.url, r.status, r.raw, r.ok);
@@ -65,7 +65,7 @@ export async function runServerJobs(env: { DB: D1Database; AI?: any }, opts: { l
     if (job.type === 'stock' && rep.status === 'ok' && rep.checked === 0 && !rep.note.includes(':')) { out.push({ job: job.name, ...rep, skipped: true }); continue; }
     await db.batch([
       db.prepare('INSERT INTO crawl_runs(job_id,started_at,status,pages,found,imported,updated,enriched,checked,note) VALUES(?,?,?,?,?,?,?,?,?,?)').bind(job.id, started, rep.status, rep.pages, rep.found, rep.imported, rep.updated, rep.enriched, rep.checked, (`[خادم/${prov.name}]` + rep.note).slice(0, 500)),
-      db.prepare("UPDATE crawl_jobs SET run_now=0,last_run_at=datetime('now'),last_summary=? WHERE id=?").bind(`${rep.status} (خادم): صفحات ${rep.pages} · وُجد ${rep.found} · جديد ${rep.imported} · محدّث ${rep.updated} · مُثرى ${rep.enriched} · مفحوص ${rep.checked}`, job.id),
+      db.prepare("UPDATE crawl_jobs SET run_now=0,last_run_at=datetime('now'),last_summary=? WHERE id=?").bind(`${rep.status} (خادم): صفحات ${rep.pages} · وُجد ${rep.found} · جديد ${rep.imported} · محدّث ${rep.updated} · مُثرى ${rep.enriched} · مكرر ${rep.dupes} · مفحوص ${rep.checked}`, job.id),
     ]);
     out.push({ job: job.name, ...rep });
   }

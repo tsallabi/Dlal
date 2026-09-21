@@ -2,7 +2,7 @@
 // المدعومان: OTAPI (otapi.net) و TMAPI (tmapi.top). كل رد خام يُعاد مع النتيجة ليُعرض في لوحة الإدارة.
 import type { Settings } from './pricing';
 
-export type NormItem = { offerId: string; url: string; title: string; titleEn?: string; priceCny: number; images: string[]; sales?: number; minQty: number; inStock: boolean; supplier?: string; weightG?: number; variants: { skuId?: string; color?: string; size?: string; colorEn?: string; sizeEn?: string; priceCny?: number; inStock?: boolean; image?: string }[] };
+export type NormItem = { offerId: string; url: string; title: string; titleEn?: string; priceCny: number; images: string[]; sales?: number; minQty: number; inStock: boolean; supplier?: string; weightG?: number; volumeCm3?: number; variants: { skuId?: string; color?: string; size?: string; colorEn?: string; sizeEn?: string; priceCny?: number; inStock?: boolean; image?: string }[] };
 export type ProviderResult<T> = { ok: boolean; data: T; raw: string; url: string; status: number; error?: string };
 export interface Provider { name: string; search(keyword: string, page: number): Promise<ProviderResult<NormItem[]>>; item(offerId: string): Promise<ProviderResult<NormItem | null>>; }
 
@@ -96,6 +96,13 @@ class Tmapi implements Provider {
       supplier: g(it, 'seller_info.shop_name', 'shop_info.shop_name', 'seller_name', 'company_name'),
       // الوزن: skus[].package_info.weight بالكيلوغرام، أو delivery_info.unit_weight
       weightG: Math.round(1000 * (arr(g(it, 'skus')).map((k: any) => num(g(k, 'package_info.weight'))).find((w: number) => w > 0) ?? num(g(it, 'delivery_info.unit_weight')))) || undefined,
+      // الحجم: من أبعاد الطرد (سم) أو الحقل volume — يُحاسب عليه الشحن الجوي
+      volumeCm3: (() => {
+        const pk = arr(g(it, 'skus')).map((k: any) => g(k, 'package_info')).find((x: any) => x && (num(x.volume) > 0 || num(x.length) > 0));
+        if (!pk) return undefined;
+        const v = num(pk.volume) > 0 ? num(pk.volume) : num(pk.length) * num(pk.width) * num(pk.height);
+        return v > 0 ? Math.round(v) : undefined;
+      })(),
       variants,
     };
   }

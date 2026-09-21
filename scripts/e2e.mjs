@@ -336,6 +336,39 @@ const ptsFinal = parseInt((await page.locator('.acct-card b').first().textConten
 expect(ptsFinal === ptsAfter, `النقاط المستخدمة أُعيدت بعد الإلغاء (${ptsFinal})`);
 await page.goto(BASE + '/account/orders?stage=cancelled'); expect(await has(page, order2), 'فلتر الطلبات الملغاة يعمل');
 
+// ---------- المال: التسعير بالحجم، الربح، والمستحق لشركة الشحن ----------
+await login(page, '0910000000', 'admin123');
+await page.goto(BASE + '/admin/pricing');
+expect(await has(page, 'سعر المتر المكعب من شركة الشحن'), 'صفحة التسعير فيها سعر المتر المكعب');
+expect(await has(page, 'طريقة حساب الشحن'), 'اختيار طريقة حساب الشحن موجود');
+expect(await has(page, 'الوزن المحاسبي'), 'المثال يعرض الوزن المحاسبي');
+expect(await has(page, 'ربحنا من القطعة'), 'المثال يعرض ربحنا من القطعة');
+const shipBefore = parseFloat((await page.locator('.breakdown div', { hasText: 'شحن دولي' }).first().textContent()).replace(/[^\d.]/g, ''));
+await page.fill('input[name=ship_usd_per_cbm]', '520');
+await page.click('form button:has-text("حفظ")'); await page.waitForLoadState('networkidle');
+expect(await has(page, 'تم الحفظ'), 'حفظ إعدادات الشحن بالمتر المكعب');
+const bulkyShip = parseFloat((await page.locator('.card-box', { hasText: 'صندوق كبير' }).locator('.breakdown div', { hasText: 'شحن دولي' }).first().textContent()).replace(/[^\d.]/g, ''));
+expect(bulkyShip > shipBefore, `رفع سعر المتر المكعب رفع أجرة شحن الصندوق الكبير (${shipBefore} → ${bulkyShip})`);
+await shot(page, 'admin-pricing-cbm');
+// الطلبات القديمة بلا تكلفة محفوظة: نحسبها ثم نتأكد أن الهامش صار واقعيًا
+await page.goto(BASE + '/admin/pricing');
+await page.click('button:has-text("احسب التكلفة الناقصة")'); await page.waitForLoadState('networkidle');
+expect(await has(page, 'حُسبت تكلفة'), 'زر حساب تكلفة الطلبات القديمة يعمل');
+await page.goto(BASE + '/admin/reports');
+expect(await has(page, 'صافي الربح'), 'التقارير تعرض صافي الربح');
+expect(await has(page, 'المستحق لشركات الشحن'), 'التقارير تعرض المستحق لشركات الشحن');
+expect(await has(page, 'شاهين للشحن'), 'شاهين للشحن يظهر في جدول المستحقات');
+expect(await has(page, 'الأعلى ربحًا'), 'جدول الأعلى ربحًا موجود');
+const owedTxt = await page.locator('.card-box', { hasText: 'المستحق لشركات الشحن' }).textContent();
+expect(/\d/.test(owedTxt), 'جدول المستحقات يعرض أرقامًا');
+const profitTxt = await page.locator('.kpi', { hasText: 'صافي الربح' }).textContent();
+expect(parseFloat(profitTxt.replace(/[^\d.]/g, '')) > 0, `صافي الربح محسوب من الطلبات الحقيقية: ${profitTxt.trim().split('\n')[0]}`);
+const marginPct = parseInt((profitTxt.match(/هامش\s*(\d+)/) ?? [0, '0'])[1]);
+expect(marginPct > 5 && marginPct < 70, `الهامش واقعي بعد حساب التكلفة: ${marginPct}%`);
+const costTxt = await page.locator('.kpi', { hasText: 'تكلفتنا' }).textContent();
+expect(parseFloat(costTxt.replace(/[^\d.]/g, '')) > 0, 'تكلفتنا محسوبة وليست صفرًا');
+await shot(page, 'admin-reports-profit');
+
 // ---------- الحشمة: لا ملابس نوم ولا داخلية على الرئيسية ----------
 await login(page, '0910000000', 'admin123');
 await page.goto(BASE + '/admin/categories');
