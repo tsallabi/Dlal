@@ -250,13 +250,16 @@ export async function importProducts(db: D1Database, arr: any[], categoryId: num
     if (!offerId || !price) { skipped++; continue; }
     if (seen.has(offerId)) { skipped++; continue; }
     seen.add(offerId);
-    const weight = it.weightG ?? cat?.est_weight_g ?? 300;
-    const pr = computePrice(s, price, weight, cat?.markup_percent);
     let titleAr: string = it.titleAr ?? it.title_ar ?? it.title ?? 'منتج';
     if (hasCJK(titleAr)) titleAr = (await tr.t(titleAr, 'title', it.titleEn)) ?? titleAr;
     const supplierAr = it.supplier ? ((await tr.t(String(it.supplier))) ?? it.supplier) : null;
     if (Array.isArray(it.variants)) it.variants = await trVariants(it.variants);
-    const ex = await db.prepare("SELECT id FROM products WHERE source='1688' AND source_offer_id=?").bind(offerId).first<{ id: number }>();
+    const ex = await db.prepare("SELECT id,category_id,weight_g FROM products WHERE source='1688' AND source_offer_id=?").bind(offerId).first<{ id: number; category_id: number | null; weight_g: number | null }>();
+    // منتج موجود: يُسعَّر بقسمه هو ووزنه المحفوظ، لا بقسم المهمة التي فحصته
+    // (إعادة الفحص من مهمة بلا قسم كانت تُنقص السعر لأنها تفترض وزنًا افتراضيًا)
+    const useCat = ex ? (cats.find(x => x.id === ex.category_id) ?? cat) : cat;
+    const weight = it.weightG ?? ex?.weight_g ?? useCat?.est_weight_g ?? 300;
+    const pr = computePrice(s, price, weight, useCat?.markup_percent);
     if (ex) {
       await db.prepare("UPDATE products SET source_price_cny=?,price_lyd=?,in_stock=?,last_checked_at=datetime('now'),updated_at=datetime('now') WHERE id=?")
         .bind(price, pr.total_lyd, it.inStock === false ? 0 : 1, ex.id).run();
@@ -274,6 +277,7 @@ export async function importProducts(db: D1Database, arr: any[], categoryId: num
       const upd: string[] = []; const binds: any[] = [];
       if ((hasCJK(cur?.title_ar) || !goodTitle(cur?.title_ar)) && !hasCJK(titleAr) && titleAr !== cur?.title_ar && (goodTitle(titleAr) || hasCJK(cur?.title_ar))) { upd.push('title_ar=?'); binds.push(titleAr.slice(0, 200)); }
       if (it.minQty && Number(it.minQty) > 1 && (cur?.min_qty ?? 1) === 1) { upd.push('min_qty=?'); binds.push(Number(it.minQty)); }
+      if (it.weightG && Number(it.weightG) > 0 && !ex.weight_g) { upd.push('weight_g=?'); binds.push(Math.round(Number(it.weightG))); }
       if (supplierAr && (!cur?.supplier_name || hasCJK(cur.supplier_name))) { upd.push('supplier_name=?'); binds.push(supplierAr); }
       if (it.title) { upd.push('title_src=COALESCE(title_src,?)'); binds.push(String(it.title)); }
       if (upd.length) enrich.push(db.prepare(`UPDATE products SET ${upd.join(',')} WHERE id=?`).bind(...binds, ex.id));

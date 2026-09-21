@@ -195,6 +195,14 @@ await page.click('button:has-text("استيراد")'); await page.waitForLoadSta
 expect(await has(page, 'فستان تجريبي مستورد'), 'استيراد JSON أضاف المنتج');
 const r = await ctx.request.post(BASE + '/api/import', { headers: { 'x-import-token': 'dev-import-token' }, data: { category_id: 1, page_url: 'test', items: [{ offerId: '999000111', priceCny: 45, inStock: true }] } });
 expect((await r.json()).updated === 1, 'API الاستيراد يحدّث منتجًا موجودًا بدل تكراره');
+// إعادة فحص منتج من مهمة بلا قسم يجب ألا تغيّر سعره (يُسعَّر بقسمه هو)
+await page.goto(BASE + '/admin/products');
+const priceBefore = await page.locator('table.tbl tr:has-text("فستان تجريبي مستورد") td').nth(4).textContent();
+const again = await ctx.request.post(BASE + '/api/import', { headers: { 'x-import-token': 'dev-import-token' }, data: { category_id: null, page_url: 'ext:stock', items: [{ offerId: '999000111', url: 'https://detail.1688.com/offer/999000111.html', title: 'فستان تجريبي مستورد', priceCny: 45, images: [], variants: [], inStock: true }] } });
+expect(again.ok(), 'إعادة الفحص بلا قسم تنجح');
+await page.goto(BASE + '/admin/products');
+const priceAfter = await page.locator('table.tbl tr:has-text("فستان تجريبي مستورد") td').nth(4).textContent();
+expect(priceBefore === priceAfter, `سعر المنتج لا يتغير عند إعادة الفحص بلا قسم (${priceBefore} → ${priceAfter})`);
 
 // ---------- الأدوار والصلاحيات ----------
 await login(page, '0950000000', 'staff123');   // دعم الزبائن
