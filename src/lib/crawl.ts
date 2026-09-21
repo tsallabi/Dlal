@@ -22,13 +22,15 @@ export async function runServerJobs(env: { DB: D1Database; AI?: any }, opts: { l
     try {
       if (job.type === 'stock') {
         // الأقدم فحصًا أولًا؛ فقط منتجات لها معرف 1688 حقيقي (رقمي)
-        const { results } = await db.prepare("SELECT source_offer_id,source_price_cny,category_id FROM products WHERE status='active' AND source='1688' AND source_offer_id GLOB '[0-9]*' AND length(source_offer_id)>=9 AND (last_checked_at IS NULL OR last_checked_at < datetime('now', '-' || ? || ' hours')) ORDER BY last_checked_at ASC, (sales*10+views) DESC LIMIT ?").bind(job.interval_hours || 12, Math.min(job.max_new || 100, maxItems)).all<any>();
+        const { results } = await db.prepare("SELECT source_offer_id,source_price_cny,category_id FROM products WHERE status='active' AND source='1688' AND source_offer_id GLOB '[0-9]*' AND length(source_offer_id)>=9 AND (last_checked_at IS NULL OR last_checked_at < datetime('now', '-' || ? || ' hours')) ORDER BY last_checked_at ASC, (sales*10+views) DESC LIMIT ?").bind(job.interval_hours || 12, opts.maxItems ? maxItems : Math.min(job.max_new || 100, maxItems)).all<any>();
         if (!results.length) { rep.note += ' لا منتجات مستحقة للفحص الآن.'; }
         for (const p of results) {
           const r = await prov.item(p.source_offer_id); await logRaw(db, 'in', r.url, r.status, r.raw, r.ok);
           if (!r.ok) { rep.note += ` ${p.source_offer_id}: ${r.error}`; if (/NotFound/i.test(r.error ?? '')) await db.prepare("UPDATE products SET in_stock=0,last_checked_at=datetime('now') WHERE source='1688' AND source_offer_id=?").bind(p.source_offer_id).run(); continue; }
           const it = r.data!; const big = it.priceCny && Math.abs(it.priceCny - p.source_price_cny) / p.source_price_cny > 0.15;
-          await db.prepare("UPDATE products SET in_stock=?,status=CASE WHEN ?=1 THEN 'hidden' ELSE status END,source_price_cny=COALESCE(?,source_price_cny),last_checked_at=datetime('now') WHERE source='1688' AND source_offer_id=?").bind(it.inStock ? 1 : 0, big ? 1 : 0, it.priceCny || null, p.source_offer_id).run();
+          // السعر يُعاد حسابه في importProducts أدناه، فلا داعي لإخفاء المنتج؛ نسجّل القفزة فقط
+          if (big) rep.note += ` ${p.source_offer_id}: السعر ${p.source_price_cny}→${it.priceCny}.`;
+          await db.prepare("UPDATE products SET in_stock=?,source_price_cny=COALESCE(?,source_price_cny),last_checked_at=datetime('now') WHERE source='1688' AND source_offer_id=?").bind(it.inStock ? 1 : 0, it.priceCny || null, p.source_offer_id).run();
           rep.checked++;
           // إثراء بالتفاصيل الكاملة (صور، مقاسات/ألوان، عنوان عربي، حد أدنى) إن كانت ناقصة
           if (it.priceCny && (it.variants.length || it.images.length > 1)) { const res = await importProducts(db, [it], p.category_id ?? null, opts.byUserId ?? null, `api:${prov.name}:stock`, env.AI); rep.enriched += res.enriched; }
