@@ -16,8 +16,8 @@ export const PRODUCT_SELECT = `
   c.slug AS cat_slug, c.name_ar AS cat_name`;
 
 export async function getCategories(db: D1Database) {
-  const { results } = await db.prepare('SELECT id,slug,name_ar,icon,parent_id,est_weight_g,markup_percent FROM categories ORDER BY sort,id').all<any>();
-  return results as { id: number; slug: string; name_ar: string; icon: string | null; parent_id: number | null; est_weight_g: number; markup_percent: number | null }[];
+  const { results } = await db.prepare('SELECT id,slug,name_ar,icon,parent_id,est_weight_g,markup_percent,show_home FROM categories ORDER BY sort,id').all<any>();
+  return results as { id: number; slug: string; name_ar: string; icon: string | null; parent_id: number | null; est_weight_g: number; markup_percent: number | null; show_home: number }[];
 }
 
 export async function cartCount(c: Context<Env>) {

@@ -336,6 +336,34 @@ const ptsFinal = parseInt((await page.locator('.acct-card b').first().textConten
 expect(ptsFinal === ptsAfter, `النقاط المستخدمة أُعيدت بعد الإلغاء (${ptsFinal})`);
 await page.goto(BASE + '/account/orders?stage=cancelled'); expect(await has(page, order2), 'فلتر الطلبات الملغاة يعمل');
 
+// ---------- الحشمة: لا ملابس نوم ولا داخلية على الرئيسية ----------
+await login(page, '0910000000', 'admin123');
+await page.goto(BASE + '/admin/categories');
+expect(await has(page, 'في الرئيسية'), 'لوحة الأقسام فيها مفتاح «في الرئيسية»');
+const lingerieRow = page.locator('tr', { hasText: 'lingerie' });
+expect(!(await lingerieRow.locator('input[name=show_home]').isChecked()), 'قسم الملابس الداخلية والنوم مُخرَج من الرئيسية');
+await shot(page, 'admin-categories-modesty');
+await page.goto(BASE + '/logout');
+await page.goto(BASE + '/');
+const homeText = await page.locator('.card').allTextContents();
+const naughty = /بيجام|ملابس نوم|قميص نوم|لانجي?ري|حمالة صدر|سوتيان|كيلوت|بيكيني|مايوه|مفتوح الخلف|شفاف/;
+const leaked = homeText.filter(t => naughty.test(t));
+expect(leaked.length === 0, `لا ملابس نوم أو داخلية على الرئيسية (تسرّب ${leaked.length}: ${leaked.slice(0, 2).join(' | ')})`);
+const homeCats = await page.locator('.home-floor h3, .floor h3, section h3').allTextContents();
+expect(!homeCats.some(t => t.includes('ملابس داخلية ونوم')), 'لا طابق للملابس الداخلية والنوم على الرئيسية');
+expect(await has(page, 'ملابس داخلية ونوم'), 'القسم يبقى في قائمة الأقسام تدخله الزبونة بنفسها');
+await shot(page, 'home-modest');
+// القسم نفسه يعمل عند الدخول إليه
+const rl = await page.goto(BASE + '/c/lingerie');
+expect(rl.status() === 200, 'صفحة قسم الملابس الداخلية والنوم تفتح لمن دخلتها');
+expect((await page.locator('.card').count()) > 0, 'القسم الخاص يعرض منتجاته داخله');
+await shot(page, 'category-lingerie');
+// صفحة العروض عامة أيضًا
+await page.goto(BASE + '/sale');
+const saleText = await page.locator('.card').allTextContents();
+expect(saleText.filter(t => naughty.test(t)).length === 0, 'صفحة العروض بلا ملابس نوم أو داخلية');
+await login(page, PHONE, 'secret456');   // نعود بحساب الزبونة لفحوصات الدردشة
+
 // ---------- الدردشة المباشرة وصندوق الرسائل ----------
 await page.goto(BASE + '/');
 expect(await page.locator('#chatFab').isVisible(), 'زر الدردشة المباشرة ظاهر في كل الصفحات');

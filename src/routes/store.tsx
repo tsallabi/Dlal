@@ -29,13 +29,15 @@ const base = async (c: Context<Env>) => ({
 store.get('/', async (c) => {
   const db = c.env.DB; const u = c.get('user');
   const b = await base(c);
-  const floorCats = b.categories.slice(0, 8);
+  // حشمة: طوابق الرئيسية من الأقسام العامة فقط؛ الملابس الداخلية والنوم تبقى في قائمة الأقسام تدخلها الزبونة بنفسها
+  const publicCats = b.categories.filter(x => x.show_home !== 0);
+  const floorCats = publicCats.slice(0, 8);
   const [trend, newest, sale, f, floors, stats] = await Promise.all([
-    db.prepare(`SELECT ${PRODUCT_SELECT} FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE p.status='active' ORDER BY p.sales DESC, p.views DESC LIMIT 10`).all<ProductRow>(),
-    db.prepare(`SELECT ${PRODUCT_SELECT} FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE p.status='active' ORDER BY p.id DESC LIMIT 10`).all<ProductRow>(),
-    db.prepare(`SELECT ${PRODUCT_SELECT} FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE p.status='active' AND p.compare_price_lyd > p.price_lyd ORDER BY (p.compare_price_lyd-p.price_lyd)/p.compare_price_lyd DESC LIMIT 10`).all<ProductRow>(),
+    db.prepare(`SELECT ${PRODUCT_SELECT} FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE p.status='active' AND p.home_ok=1 ORDER BY p.sales DESC, p.views DESC LIMIT 10`).all<ProductRow>(),
+    db.prepare(`SELECT ${PRODUCT_SELECT} FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE p.status='active' AND p.home_ok=1 ORDER BY p.id DESC LIMIT 10`).all<ProductRow>(),
+    db.prepare(`SELECT ${PRODUCT_SELECT} FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE p.status='active' AND p.home_ok=1 AND p.compare_price_lyd > p.price_lyd ORDER BY (p.compare_price_lyd-p.price_lyd)/p.compare_price_lyd DESC LIMIT 10`).all<ProductRow>(),
     favs(c),
-    floorCats.length ? db.prepare(`SELECT * FROM (SELECT ${PRODUCT_SELECT}, ROW_NUMBER() OVER (PARTITION BY p.category_id ORDER BY p.sales DESC, p.views DESC) rn FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE p.status='active' AND p.category_id IN (${floorCats.map(() => '?').join(',')})) WHERE rn<=5`).bind(...floorCats.map(x => x.id)).all<ProductRow & { rn: number }>() : Promise.resolve({ results: [] as any[] }),
+    floorCats.length ? db.prepare(`SELECT * FROM (SELECT ${PRODUCT_SELECT}, ROW_NUMBER() OVER (PARTITION BY p.category_id ORDER BY p.sales DESC, p.views DESC) rn FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE p.status='active' AND p.home_ok=1 AND p.category_id IN (${floorCats.map(() => '?').join(',')})) WHERE rn<=5`).bind(...floorCats.map(x => x.id)).all<ProductRow & { rn: number }>() : Promise.resolve({ results: [] as any[] }),
     db.prepare("SELECT (SELECT COUNT(*) FROM products WHERE status='active') p,(SELECT COUNT(*) FROM orders WHERE status='delivered') d,(SELECT COUNT(*) FROM users WHERE role='customer') u").first<any>(),
   ]);
   const recent = await recentlyViewed(c);
@@ -70,7 +72,7 @@ store.get('/', async (c) => {
           <div class="uc-stats"><span><b>{stats?.p ?? 0}</b> منتج</span><span><b>{stats?.d ?? 0}</b> طلب مُسلَّم</span><span><b>{stats?.u ?? 0}</b> زبونة</span></div>
         </div>
       </section>
-      <div class="cat-tiles mobile-only">{b.categories.slice(0, 12).map(cat => <a href={`/c/${cat.slug}`}><span>{cat.icon}</span>{cat.name_ar}</a>)}</div>
+      <div class="cat-tiles mobile-only">{publicCats.slice(0, 12).map(cat => <a href={`/c/${cat.slug}`}><span>{cat.icon}</span>{cat.name_ar}</a>)}</div>
       <div class="flash-sale">
         ⚡ <b>فلاش سيل</b> ينتهي خلال <span class="timer" data-countdown="6h">06:00:00</span>
         <a href="/sale" style="margin-inline-start:auto;color:#ffcf3f">عرض الكل ›</a>
@@ -183,7 +185,7 @@ store.get('/search', async (c) => {
   if (!q) return c.redirect('/');
   return listPage(c, { title: `نتائج البحث: ${q}`, where: "p.status='active' AND (p.title_ar LIKE ? OR p.description_ar LIKE ?)", binds: [`%${q}%`, `%${q}%`], q });
 });
-store.get('/sale', (c) => listPage(c, { title: 'عروض وتخفيضات', where: "p.status='active' AND p.compare_price_lyd > p.price_lyd", binds: [] }));
+store.get('/sale', (c) => listPage(c, { title: 'عروض وتخفيضات', where: "p.status='active' AND p.home_ok=1 AND p.compare_price_lyd > p.price_lyd", binds: [] }));
 store.get('/trending', (c) => listPage(c, { title: 'الأكثر رواجًا', where: "p.status='active' AND p.sales>0", binds: [] }));
 store.get('/new', (c) => listPage(c, { title: 'وصل حديثًا', where: "p.status='active'", binds: [] }));
 

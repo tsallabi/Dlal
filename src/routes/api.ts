@@ -91,8 +91,11 @@ api.post('/crawl/report', async (c) => {
 // اختبار مزوّد API الخارجي (OTAPI/TMAPI) بالرمز نفسه — للفحص الآلي من GitHub Actions
 api.post('/source/test', async (c) => {
   if (!tokenOk(c)) return c.json({ error: 'رمز غير صحيح' }, 401);
-  const b = await c.req.json<{ id?: string; kw?: string }>();
-  const prov = getProvider(await loadSettings(c.env.DB));
+  const b = await c.req.json<{ id?: string; kw?: string; provider?: string; base_url?: string; key?: string; lang?: string }>();
+  // تجاوز الإعدادات المحفوظة: لتجربة مزوّد أو مفتاح جديد قبل حفظه (ولفحص المحوّل بخادم وهمي)
+  const saved = await loadSettings(c.env.DB);
+  const s2 = b.provider ? { ...saved, src_provider: b.provider, src_base_url: b.base_url ?? saved.src_base_url, src_key: b.key ?? saved.src_key, src_lang: b.lang ?? saved.src_lang } : saved;
+  const prov = getProvider(s2);
   if (!prov) return c.json({ error: 'لا يوجد مزوّد مضبوط' }, 400);
   const r = b.kw ? await prov.search(String(b.kw), 1) : await prov.item(String(b.id ?? '').replace(/\D/g, ''));
   const url = r.url.replace(/(instanceKey|apiToken)=[^&]+/g, '$1=***');
@@ -114,7 +117,9 @@ api.post('/source/stats', async (c) => {
        COUNT(p.id) AS total,
        SUM(CASE WHEN p.status='active' THEN 1 ELSE 0 END) AS active,
        SUM(CASE WHEN p.source='1688' THEN 1 ELSE 0 END) AS from1688,
-       SUM(CASE WHEN p.title_ar GLOB '*[\u4e00-\u9fff]*' THEN 1 ELSE 0 END) AS chinese
+       SUM(CASE WHEN p.title_ar GLOB '*[\u4e00-\u9fff]*' THEN 1 ELSE 0 END) AS chinese,
+       SUM(CASE WHEN p.home_ok=0 THEN 1 ELSE 0 END) AS hidden_home,
+       MAX(c.show_home) AS show_home
      FROM categories c LEFT JOIN products p ON p.category_id=c.id
      GROUP BY c.id ORDER BY active ASC`,
   ).all<any>();

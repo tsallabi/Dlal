@@ -6,6 +6,7 @@ import { AdminShell } from '../views/dash';
 import { Flash } from '../views/layout';
 import { getCategories, PRODUCT_SELECT, fmt, imgUrl, timeAgo } from '../lib/db';
 import type { ProductRow } from '../lib/db';
+import { classifyModesty } from '../lib/modesty';
 import { loadSettings, computePrice } from '../lib/pricing';
 import { requireRole } from '../lib/auth';
 import { requirePerm, logActivity } from '../lib/perm';
@@ -254,10 +255,15 @@ export async function importProducts(db: D1Database, arr: any[], categoryId: num
     if (hasCJK(titleAr)) titleAr = (await tr.t(titleAr, 'title', it.titleEn)) ?? titleAr;
     const supplierAr = it.supplier ? ((await tr.t(String(it.supplier))) ?? it.supplier) : null;
     if (Array.isArray(it.variants)) it.variants = await trVariants(it.variants);
+    // حشمة: ملابس النوم والداخلية تُنقل إلى قسمها مهما كانت كلمة البحث، ولا تظهر على الرئيسية
+    const mod = classifyModesty(titleAr, it.title, it.titleEn);
+    const lingerieId = cats.find(x => x.slug === 'lingerie')?.id ?? null;
+    const targetCat = mod.intimate && lingerieId ? lingerieId : categoryId;
+    const homeOk = mod.homeOk && targetCat !== lingerieId ? 1 : 0;
     const ex = await db.prepare("SELECT id,category_id,weight_g FROM products WHERE source='1688' AND source_offer_id=?").bind(offerId).first<{ id: number; category_id: number | null; weight_g: number | null }>();
     // منتج موجود: يُسعَّر بقسمه هو ووزنه المحفوظ، لا بقسم المهمة التي فحصته
     // (إعادة الفحص من مهمة بلا قسم كانت تُنقص السعر لأنها تفترض وزنًا افتراضيًا)
-    const useCat = ex ? (cats.find(x => x.id === ex.category_id) ?? cat) : cat;
+    const useCat = ex ? (cats.find(x => x.id === ex.category_id) ?? cat) : (cats.find(x => x.id === targetCat) ?? cat);
     const weight = it.weightG ?? ex?.weight_g ?? useCat?.est_weight_g ?? 300;
     const pr = computePrice(s, price, weight, useCat?.markup_percent);
     if (ex) {
@@ -282,15 +288,17 @@ export async function importProducts(db: D1Database, arr: any[], categoryId: num
       if (it.title) { upd.push('title_src=COALESCE(title_src,?)'); binds.push(String(it.title)); }
       if (upd.length) enrich.push(db.prepare(`UPDATE products SET ${upd.join(',')} WHERE id=?`).bind(...binds, ex.id));
       if (enrich.length) { await db.batch(enrich); enriched++; }
+      if (mod.intimate && lingerieId && ex.category_id !== lingerieId) await db.prepare('UPDATE products SET category_id=?,home_ok=0 WHERE id=?').bind(lingerieId, ex.id).run();
+      else if (!homeOk) await db.prepare('UPDATE products SET home_ok=0 WHERE id=?').bind(ex.id).run();
       updated++; continue;
     }
     const slug = `${offerId}-${Math.random().toString(36).slice(2, 6)}`;
     const ins = await db.prepare(
-      `INSERT OR IGNORE INTO products(source,source_offer_id,source_url,slug,title_ar,title_src,description_ar,category_id,source_price_cny,price_lyd,compare_price_lyd,weight_g,min_qty,in_stock,status,supplier_name,last_checked_at,sales,rating)
-       VALUES('1688',?,?,?,?,?,?,?,?,?,?,?,?,?,'active',?,datetime('now'),?,?)`,
+      `INSERT OR IGNORE INTO products(source,source_offer_id,source_url,slug,title_ar,title_src,description_ar,category_id,source_price_cny,price_lyd,compare_price_lyd,weight_g,min_qty,in_stock,status,supplier_name,last_checked_at,sales,rating,home_ok)
+       VALUES('1688',?,?,?,?,?,?,?,?,?,?,?,?,?,'active',?,datetime('now'),?,?,?)`,
     ).bind(offerId, it.url ?? `https://detail.1688.com/offer/${offerId}.html`, slug, titleAr, it.title ?? null, it.descriptionAr ?? null,
-      categoryId, price, pr.total_lyd, Math.random() < 0.4 ? Math.ceil(pr.total_lyd * 1.25 / 5) * 5 : null, it.weightG ?? null,
-      Math.max(1, parseInt(it.minQty ?? 1) || 1), it.inStock === false ? 0 : 1, supplierAr, parseInt(it.sales ?? 0) || 0, 4.5 + Math.random() * 0.5).run();
+      targetCat, price, pr.total_lyd, Math.random() < 0.4 ? Math.ceil(pr.total_lyd * 1.25 / 5) * 5 : null, it.weightG ?? null,
+      Math.max(1, parseInt(it.minQty ?? 1) || 1), it.inStock === false ? 0 : 1, supplierAr, parseInt(it.sales ?? 0) || 0, 4.5 + Math.random() * 0.5, homeOk).run();
     const pid = ins.meta.last_row_id as number;
     if (!pid || !ins.meta.changes) { skipped++; continue; }   // تجاهل صفّ لم يُدرج (تعارض مع استيراد متزامن)
     const stmts: D1PreparedStatement[] = [];
@@ -428,15 +436,23 @@ admin.get('/categories', async (c) => {
     <>
       <Flash msg={c.req.query('ok') ? 'تم الحفظ ✓' : undefined} />
       <p style="font-size:13px;color:#666">الوزن التقديري يُستخدم لحساب الشحن حين لا يعرف المصدر وزن المنتج. يصححه شريك الشحن بالوزن الفعلي عند الوصول.</p>
-      <div class="tbl-wrap"><table class="tbl"><tr><th>الأيقونة</th><th>الاسم</th><th>slug</th><th>الوزن التقديري (غ)</th><th>ربح خاص %</th><th>منتجات</th><th></th></tr>
-        {cats.map(ct => <tr><form method="post" action={`/admin/categories/${ct.id}`}><td><input type="text" name="icon" value={ct.icon ?? ''} style="width:50px" /></td><td><input type="text" name="name_ar" value={ct.name_ar} /></td><td class="mono">{ct.slug}</td><td><input type="number" name="est_weight_g" value={ct.est_weight_g} style="width:90px" /></td><td><input type="number" name="markup_percent" value={ct.markup_percent ?? ''} placeholder="افتراضي" style="width:90px" /></td><td>{cm[ct.id] ?? 0}</td><td><button class="btn sm ghost">حفظ</button></td></form></tr>)}
+      <p style="font-size:13px;color:#666">«في الرئيسية» يتحكم بظهور منتجات القسم على الصفحة الأولى. أزِل العلامة عن الأقسام الخاصة (ملابس النوم والداخلية) فتبقى في قائمة الأقسام تدخلها الزبونة بنفسها ولا تظهر صورها لكل زائر.</p>
+      <div class="tbl-wrap"><table class="tbl"><tr><th>الأيقونة</th><th>الاسم</th><th>slug</th><th>الوزن التقديري (غ)</th><th>ربح خاص %</th><th>في الرئيسية</th><th>منتجات</th><th></th></tr>
+        {cats.map(ct => <tr><form method="post" action={`/admin/categories/${ct.id}`}><td><input type="text" name="icon" value={ct.icon ?? ''} style="width:50px" /></td><td><input type="text" name="name_ar" value={ct.name_ar} /></td><td class="mono">{ct.slug}</td><td><input type="number" name="est_weight_g" value={ct.est_weight_g} style="width:90px" /></td><td><input type="number" name="markup_percent" value={ct.markup_percent ?? ''} placeholder="افتراضي" style="width:90px" /></td><td style="text-align:center"><input type="checkbox" name="show_home" value="1" checked={ct.show_home !== 0} /></td><td>{cm[ct.id] ?? 0}</td><td><button class="btn sm ghost">حفظ</button></td></form></tr>)}
       </table></div>
       <form method="post" action="/admin/categories/new" class="card-box inline" style="margin-top:14px"><input type="text" name="icon" placeholder="🎀" style="width:60px" /><input type="text" name="name_ar" placeholder="اسم القسم" required /><input type="text" name="slug" placeholder="slug-en" required /><input type="number" name="est_weight_g" value="300" style="width:90px" /><button class="btn sm">+ إضافة قسم</button></form>
     </>
   ));
 });
 admin.post('/categories/new', async (c) => { const f = await c.req.parseBody(); await c.env.DB.prepare('INSERT INTO categories(slug,name_ar,icon,est_weight_g,sort) VALUES(?,?,?,?,99)').bind(String(f.slug), String(f.name_ar), String(f.icon ?? ''), Number(f.est_weight_g) || 300).run(); return c.redirect('/admin/categories?ok=1'); });
-admin.post('/categories/:id', async (c) => { const f = await c.req.parseBody(); await c.env.DB.prepare('UPDATE categories SET name_ar=?,icon=?,est_weight_g=?,markup_percent=? WHERE id=?').bind(String(f.name_ar), String(f.icon ?? ''), Number(f.est_weight_g) || 300, f.markup_percent ? Number(f.markup_percent) : null, Number(c.req.param('id'))).run(); return c.redirect('/admin/categories?ok=1'); });
+admin.post('/categories/:id', async (c) => {
+  const f = await c.req.parseBody(); const id = Number(c.req.param('id')); const showHome = f.show_home ? 1 : 0;
+  await c.env.DB.prepare('UPDATE categories SET name_ar=?,icon=?,est_weight_g=?,markup_percent=?,show_home=? WHERE id=?')
+    .bind(String(f.name_ar), String(f.icon ?? ''), Number(f.est_weight_g) || 300, f.markup_percent ? Number(f.markup_percent) : null, showHome, id).run();
+  // قسم أُخرج من الرئيسية ⟵ منتجاته تختفي منها أيضًا، وإعادته تُظهر إلا ما مُنع بعنوانه
+  if (!showHome) await c.env.DB.prepare('UPDATE products SET home_ok=0 WHERE category_id=?').bind(id).run();
+  return c.redirect('/admin/categories?ok=1');
+});
 
 // ---------- فحص المخزون ----------
 admin.get('/stock', async (c) => {

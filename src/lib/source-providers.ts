@@ -2,7 +2,7 @@
 // المدعومان: OTAPI (otapi.net) و TMAPI (tmapi.top). كل رد خام يُعاد مع النتيجة ليُعرض في لوحة الإدارة.
 import type { Settings } from './pricing';
 
-export type NormItem = { offerId: string; url: string; title: string; titleEn?: string; priceCny: number; images: string[]; sales?: number; minQty: number; inStock: boolean; supplier?: string; variants: { skuId?: string; color?: string; size?: string; colorEn?: string; sizeEn?: string; priceCny?: number; inStock?: boolean; image?: string }[] };
+export type NormItem = { offerId: string; url: string; title: string; titleEn?: string; priceCny: number; images: string[]; sales?: number; minQty: number; inStock: boolean; supplier?: string; weightG?: number; variants: { skuId?: string; color?: string; size?: string; colorEn?: string; sizeEn?: string; priceCny?: number; inStock?: boolean; image?: string }[] };
 export type ProviderResult<T> = { ok: boolean; data: T; raw: string; url: string; status: number; error?: string };
 export interface Provider { name: string; search(keyword: string, page: number): Promise<ProviderResult<NormItem[]>>; item(offerId: string): Promise<ProviderResult<NormItem | null>>; }
 
@@ -72,7 +72,7 @@ class Otapi implements Provider {
 class Tmapi implements Provider {
   name = 'tmapi';
   constructor(private base: string, private key: string, private lang: string) {}
-  private u(path: string, q: Record<string, string>) { const p = new URLSearchParams({ apiToken: this.key, ...q }); return `${this.base.replace(/\/+$/, '')}${path}?${p}`; }
+  private u(path: string, q: Record<string, string>) { const p = new URLSearchParams(q); return `${this.base.replace(/\/+$/, '')}${path}?${p}`; }
   private h() { return { apikey: this.key }; }
   private norm(it: any): NormItem {
     const id = idOf(g(it, 'item_id', 'itemId', 'num_iid', 'id', 'offerId'));
@@ -92,19 +92,23 @@ class Tmapi implements Provider {
       offerId: id, url: `https://detail.1688.com/offer/${id}.html`, title: String(g(it, 'title', 'subject', 'name') ?? ''), titleEn: g(it, 'title_en', 'title_translated'),
       priceCny: price, images: arr(g(it, 'main_imgs', 'images', 'item_imgs', 'pic_urls')).map(fixImg).filter(Boolean).slice(0, 8).concat(g(it, 'img', 'pic_url', 'main_pic') ? [fixImg(g(it, 'img', 'pic_url', 'main_pic'))] : []).filter((u, i, a) => a.indexOf(u) === i),
       sales: num(g(it, 'sale_info.sale_quantity_90days', 'sale_count', 'sale_info.sales', 'sales', 'sold')), minQty: Math.max(1, num(g(it, 'min_order_quantity', 'tiered_price_info.begin_num', 'sku_price_range.begin_num', 'sale_info.min_order', 'moq')) || 1),
-      inStock: variants.length ? variants.some(v => v.inStock) : num(g(it, 'stock', 'quantity')) !== 0, supplier: g(it, 'seller_info.shop_name', 'shop_info.shop_name', 'seller_name', 'company_name'), variants,
+      inStock: g(it, 'is_sold_out') === true ? false : variants.length ? variants.some(v => v.inStock) : num(g(it, 'stock', 'quantity')) !== 0,
+      supplier: g(it, 'seller_info.shop_name', 'shop_info.shop_name', 'seller_name', 'company_name'),
+      // الوزن: skus[].package_info.weight بالكيلوغرام، أو delivery_info.unit_weight
+      weightG: Math.round(1000 * (arr(g(it, 'skus')).map((k: any) => num(g(k, 'package_info.weight'))).find((w: number) => w > 0) ?? num(g(it, 'delivery_info.unit_weight')))) || undefined,
+      variants,
     };
   }
   async search(keyword: string, page: number) {
     const url = this.u('/1688/search/items', { keyword, page: String(page), ...(this.lang && this.lang !== 'zh' ? { language: this.lang } : {}) });
-    try { const r = await call(url, this.h()); const ok = r.status === 200 && (r.json?.code === 200 || r.json?.code === 0 || !!r.json?.data);
+    try { const r = await call(url, this.h()); const ok = r.status === 200 && (r.json?.code === 200 || r.json?.code === 0) && !!r.json?.data;
       const items = arr(g(r.json, 'data.items', 'data.list', 'data', 'items', 'result')).map(x => this.norm(x)).filter(x => x.offerId && x.priceCny);
       return { ok, data: items, raw: r.text, url, status: r.status, error: ok ? undefined : g(r.json, 'msg', 'message', 'error') ?? `HTTP ${r.status}` }; }
     catch (e: any) { return { ok: false, data: [], raw: '', url, status: 0, error: e.message }; }
   }
   async item(offerId: string) {
-    const url = this.u('/1688/item_detail', { item_id: offerId });
-    try { const r = await call(url, this.h()); const it = g(r.json, 'data.item', 'data', 'item', 'result'); const ok = r.status === 200 && !!it && typeof it === 'object';
+    const url = this.u('/1688/item_detail', { item_id: offerId, language: this.lang || 'zh' });
+    try { const r = await call(url, this.h()); const it = g(r.json, 'data.item', 'data', 'item', 'result'); const ok = r.status === 200 && r.json?.code === 200 && !!it && typeof it === 'object' && !!g(it, 'item_id', 'title');
       return { ok, data: ok ? this.norm(it) : null, raw: r.text, url, status: r.status, error: ok ? undefined : g(r.json, 'msg', 'message', 'error') ?? `HTTP ${r.status}` }; }
     catch (e: any) { return { ok: false, data: null, raw: '', url, status: 0, error: e.message }; }
   }

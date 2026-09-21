@@ -461,16 +461,35 @@ ops.get('/source', async (c) => {
     </>
   ));
 });
+// كل مزوّد وعنوانه: تبديل المزوّد وحده كان يترك العنوان القديم فيأتي HTTP 404
+const PROVIDER_HOME: Record<string, string> = { otapi: 'https://otapi.net', tmapi: 'https://api.tmapi.top' };
+const fixBase = (provider: string, base: string) => {
+  const home = PROVIDER_HOME[provider]; if (!home) return base.trim();
+  const b = base.trim();
+  // عنوان فارغ أو يخص مزوّدًا آخر ⟵ نصحّحه تلقائيًا إلى عنوان المزوّد المختار
+  if (!b) return home;
+  const other = Object.entries(PROVIDER_HOME).find(([k]) => k !== provider)?.[1] ?? '';
+  try { const h = new URL(b).hostname; const oh = other ? new URL(other).hostname.replace(/^api\./, '') : ''; if (oh && h.endsWith(oh)) return home; } catch { return home; }
+  return b;
+};
+
 ops.post('/source', async (c) => {
   const f = await c.req.parseBody(); const db = c.env.DB;
+  const provider = String(f.src_provider ?? '').trim();
+  const vals: Record<string, string> = {
+    src_provider: provider,
+    src_base_url: fixBase(provider, String(f.src_base_url ?? '')),
+    src_key: String(f.src_key ?? '').trim(),
+    src_lang: String(f.src_lang ?? '').trim(),
+  };
   const keys = ['src_provider', 'src_base_url', 'src_key', 'src_lang'];
-  await db.batch(keys.map(k => db.prepare("INSERT INTO settings(key,value,updated_at) VALUES(?,?,datetime('now')) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at").bind(k, String(f[k] ?? '').trim())));
+  await db.batch(keys.map(k => db.prepare("INSERT INTO settings(key,value,updated_at) VALUES(?,?,datetime('now')) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at").bind(k, vals[k])));
   await logActivity(db, c.get('user')!.id, 'source.settings', String(f.src_provider));
   return c.redirect('/admin/source?ok=1');
 });
 ops.post('/source/test', async (c) => {
   const f = await c.req.parseBody(); const db = c.env.DB;
-  const s = { ...(await loadSettings(db)), src_provider: String(f.src_provider), src_base_url: String(f.src_base_url), src_key: String(f.src_key), src_lang: String(f.src_lang) };
+  const s = { ...(await loadSettings(db)), src_provider: String(f.src_provider), src_base_url: fixBase(String(f.src_provider), String(f.src_base_url)), src_key: String(f.src_key), src_lang: String(f.src_lang) };
   const prov = getProvider(s); if (!prov) return c.redirect('/admin/source?test=fail&detail=' + encodeURIComponent('اختر مزوّدًا وأدخل المفتاح'));
   const r = f.test_kw ? await prov.search(String(f.test_kw), 1) : await prov.item(String(f.test_id).replace(/\D/g, ''));
   await db.prepare('INSERT INTO payment_log(payment_id,direction,url,status_code,request,response,ok) VALUES(NULL,?,?,?,?,?,?)').bind('in', 'SRC ' + r.url.replace(/(instanceKey|apiToken)=[^&]+/g, '$1=***'), r.status, '', r.raw.slice(0, 60000), r.ok ? 1 : 0).run();
