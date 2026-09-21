@@ -112,16 +112,16 @@ api.post('/source/stats', async (c) => {
   const { results: cats } = await db.prepare(
     `SELECT c.id,c.name_ar,c.slug,
        COUNT(p.id) AS total,
-       SUM(CASE WHEN p.active=1 THEN 1 ELSE 0 END) AS active,
+       SUM(CASE WHEN p.status='active' THEN 1 ELSE 0 END) AS active,
        SUM(CASE WHEN p.source='1688' THEN 1 ELSE 0 END) AS from1688,
-       SUM(CASE WHEN p.name_ar GLOB '*[\u4e00-\u9fff]*' THEN 1 ELSE 0 END) AS chinese
+       SUM(CASE WHEN p.title_ar GLOB '*[\u4e00-\u9fff]*' THEN 1 ELSE 0 END) AS chinese
      FROM categories c LEFT JOIN products p ON p.category_id=c.id
      GROUP BY c.id ORDER BY active ASC`,
   ).all<any>();
-  const tot = await db.prepare("SELECT COUNT(*) n, SUM(active) a, SUM(CASE WHEN source='1688' THEN 1 ELSE 0 END) s FROM products").first<any>();
-  const src = await db.prepare("SELECT COUNT(*) n FROM payment_log WHERE title LIKE 'SRC %'").first<any>();
+  const tot = await db.prepare("SELECT COUNT(*) n, SUM(CASE WHEN status='active' THEN 1 ELSE 0 END) a, SUM(CASE WHEN source='1688' THEN 1 ELSE 0 END) s, SUM(CASE WHEN in_stock=0 THEN 1 ELSE 0 END) oos FROM products").first<any>();
+  const src = await db.prepare("SELECT COUNT(*) n FROM payment_log WHERE url LIKE 'SRC %'").first<any>();
   const { results: jobs } = await db.prepare('SELECT id,name,type,query,runner,active,max_pages,max_new,interval_hours,last_run_at,last_summary FROM crawl_jobs ORDER BY id').all<any>();
-  return c.json({ totals: { products: tot?.n ?? 0, active: tot?.a ?? 0, from1688: tot?.s ?? 0, providerCalls: src?.n ?? 0 }, categories: cats, jobs });
+  return c.json({ totals: { products: tot?.n ?? 0, active: tot?.a ?? 0, from1688: tot?.s ?? 0, providerCalls: src?.n ?? 0, outOfStock: tot?.oos ?? 0 }, categories: cats, jobs });
 });
 
 api.post('/source/translate', async (c) => {
