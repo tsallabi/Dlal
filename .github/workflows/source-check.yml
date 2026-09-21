@@ -76,7 +76,9 @@ jobs:
               [ -n "$FP" ] && extra="$extra,\"from_page\":$FP"
               [ -n "$MI" ] && extra="$extra,\"max_items\":$MI"
               [ "$EO" = "yes" ] && extra="$extra,\"enrich_only\":true"
-              code=$(post "{\"job_id\":$j,\"limit\":1$extra}" run); echo "HTTP $code"
+              # دفعة واحدة قد تتجاوز مهلة الـ Worker (curl 56)؛ لا نوقف بقية الدفعات بسببها
+              code=$(post "{\"job_id\":$j,\"limit\":1$extra}" run) || { echo "انقطع الاتصال في هذه الدفعة، نكمل"; sleep 10; continue; }
+              echo "HTTP $code"
               python3 -c "import json;d=json.load(open('out.json'));r=(d.get('results') or [{}])[0];print(' ',r.get('job'),'|',r.get('status'),'| صفحات',r.get('pages'),'| وُجد',r.get('found'),'| جديد',r.get('imported'),'| مُثرى',r.get('enriched'),'|',r.get('note',''))" 2>/dev/null || cat out.json
               sleep 5
             done
