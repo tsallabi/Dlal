@@ -807,6 +807,33 @@ await mp.goto(BASE + '/account'); await mp.waitForLoadState('networkidle');
 expect(await mp.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'حسابي بلا تمرير أفقي في الجوال');
 await mp.screenshot({ path: `${OUT}/${String(++n).padStart(2, '0')}-mobile-account.png` });
 
+// ---------- شراء كامل من الجوال (الجهاز الذي تشتري منه أغلب الزبائن) ----------
+await mp.goto(BASE + '/c/dresses'); await mp.waitForLoadState('networkidle');
+await mp.locator('.card .t').first().click(); await mp.waitForLoadState('networkidle');
+expect(mp.url().includes('/p/'), 'النقر على بطاقة في الجوال يفتح المنتج');
+const mHasColor = await mp.locator('.chips[data-opt=color] .chip:not(.off)').count();
+if (mHasColor) await mp.locator('.chips[data-opt=color] .chip:not(.off)').first().click();
+const mHasSize = await mp.locator('.chips[data-opt=size] .chip:not(.off)').count();
+if (mHasSize) await mp.locator('.chips[data-opt=size] .chip:not(.off)').first().click();
+await mp.click('#addForm button[type=submit]'); await mp.waitForLoadState('networkidle');
+expect((await mp.locator('.cart-row').count()) >= 1, 'الإضافة للسلة تعمل من الجوال');
+expect(await mp.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'السلة بلا تمرير أفقي في الجوال');
+await mp.screenshot({ path: `${OUT}/${String(++n).padStart(2, '0')}-mobile-cart.png` });
+await mp.goto(BASE + '/checkout'); await mp.waitForLoadState('networkidle');
+expect(await mp.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'صفحة الدفع بلا تمرير أفقي في الجوال');
+const payBtn = mp.locator('button:has-text("تأكيد الطلب")');
+expect(await payBtn.isVisible(), 'زر تأكيد الطلب ظاهر في الجوال');
+const btnBox = await payBtn.boundingBox();
+expect(btnBox.height >= 40, `زر التأكيد كبير بما يكفي للإصبع (${Math.round(btnBox.height)}px)`);
+await mp.check('input[value=mypay_sadad]');
+await mp.screenshot({ path: `${OUT}/${String(++n).padStart(2, '0')}-mobile-checkout.png` });
+await payBtn.click(); await mp.waitForLoadState('networkidle');
+if (mp.url().includes('/pay/mock/')) { await mp.click('button:has-text("تأكيد الدفع")'); await mp.waitForLoadState('networkidle'); }
+const mOrder = mp.url().match(/DL-\d{4}-\d{6}/);
+expect(!!mOrder, `الطلب اكتمل من الجوال (${mp.url().split('/').pop()})`);
+expect(await has(mp, 'مدفوع') || await has(mp, 'قيد المعالجة') || await has(mp, 'تم استلام'), 'صفحة الطلب تؤكد الدفع للزبونة');
+await mp.screenshot({ path: `${OUT}/${String(++n).padStart(2, '0')}-mobile-order.png` });
+
 // 404
 const r404 = await page.goto(BASE + '/p/not-exist'); expect(r404.status() === 404, 'صفحة غير موجودة تعيد 404');
 
