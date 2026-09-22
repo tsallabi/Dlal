@@ -789,6 +789,15 @@ expect(cw > 140 && cw < 200, `عرض البطاقة في الجوال معقول
 // لا نص يخرج من حدود بطاقته (شرائح الشحن كانت تمتد خارج البطاقة الضيقة)
 const spill = await mp.$$eval('.card .body', els => els.filter(e => e.scrollWidth > e.clientWidth + 1).length);
 expect(spill === 0, `لا محتوى يتجاوز عرض بطاقته في الجوال (${spill} بطاقة)`);
+// شريط التنقل المثبّت لا يغطي آخر التذييل
+await mp.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+await mp.waitForTimeout(300);
+const gap = await mp.evaluate(() => {
+  const nav = document.querySelector('.bottom-nav').getBoundingClientRect();
+  const last = document.querySelector('.ftr').lastElementChild.getBoundingClientRect();
+  return Math.round(nav.top - last.bottom);
+});
+expect(gap >= 0, `شريط التنقل السفلي لا يغطي آخر التذييل (فرق ${gap}px)`);
 await mp.screenshot({ path: `${OUT}/${String(++n).padStart(2, '0')}-mobile-home.png` });
 await mp.goto(BASE + '/p/' + productSlug); await mp.waitForLoadState('networkidle');
 await mp.screenshot({ path: `${OUT}/${String(++n).padStart(2, '0')}-mobile-product.png` });

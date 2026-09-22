@@ -235,6 +235,8 @@ input:focus,select:focus,textarea:focus{border-color:var(--ink)}
   .bottom-nav a.on{color:var(--brand)}
   .bottom-nav .dot{position:absolute;top:6px;inset-inline-end:calc(50% - 20px);background:var(--brand);color:#fff;font-size:10px;border-radius:99px;padding:0 5px;font-style:normal}
   .hero{flex-direction:column;text-align:center}
+  /* شريط التنقل مثبّت فوق الصفحة: نترك مكانه وإلا غطّى آخر سطور التذييل */
+  body{padding-bottom:64px}
 }
 .toast{position:fixed;bottom:76px;inset-inline:0;margin:auto;width:fit-content;background:var(--ink);color:#fff;padding:10px 18px;border-radius:999px;font-size:14px;z-index:50;opacity:0;transition:opacity .2s}
 .toast.show{opacity:1}
