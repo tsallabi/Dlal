@@ -179,11 +179,11 @@ async function llm(ai: any, sys: string, user: string, models: string[]): Promis
 }
 
 // ترجمة بالذكاء الاصطناعي: النماذج اللغوية بالترتيب المقيس (مع العنوان الإنجليزي كمساعد إن وُجد)
-export async function translateZhAr(ai: any, text: string, kind: 'text' | 'attr' | 'title' = 'text', hintEn?: string | null): Promise<string | null> {
+export async function translateZhAr(ai: any, text: string, kind: 'text' | 'attr' | 'title' = 'text', hintEn?: string | null, extra?: string): Promise<string | null> {
   if (!ai || !text) return null;
   const sys = kind === 'attr' ? SYS_ATTR : kind === 'title' ? SYS_TITLE : SYS_TEXT;
   const base = hintEn && !hasCJK(hintEn) ? `الصينية: ${text.slice(0, 300)}\nالإنجليزية: ${hintEn.slice(0, 300)}` : text.slice(0, 300);
-  const user = base + glossFor(text);
+  const user = base + glossFor(text) + (extra ? `\n${extra}` : '');
   // العناوين: النموذج الكبير ثم الصغير؛ الخصائص القصيرة: النموذج الصغير (أسرع) يكفي
   const models = kind === 'title' ? TITLE_MODELS : SHORT_MODELS;
   return await llm(ai, sys, user, models);
@@ -209,15 +209,17 @@ export class Translator {
   private mem = new Map<string, string>();
   public aiCalls = 0;
   constructor(private db: D1Database, private ai: any, private maxAi = 80) {}
-  async t(text: string | null | undefined, kind: 'text' | 'attr' | 'title' = 'text', hintEn?: string | null): Promise<string | null> {
+  // `extra` تعليمة سياقية لهذه القطعة وحدها (مثل «العنوان مستعمل لمنتج آخر، ميّزه»).
+  // الناتج يخصّها فلا يُقرأ من الذاكرة ولا يُكتب فيها — وإلا سرى على كل من يشاركها المصدر.
+  async t(text: string | null | undefined, kind: 'text' | 'attr' | 'title' = 'text', hintEn?: string | null, extra?: string): Promise<string | null> {
     // النص المكسور (عربي ملتصق بلاتيني) يمرّ إلى الترجمة كما يمرّ الصيني: كلاهما لا يُقرأ.
     // بدون هذا كانت الدالة تُعيد «الرetro الأسود» كما هي لأنها بلا حرف صيني واحد.
     if (!text || (!hasCJK(text) && !mixedScript(text))) return text ?? null;
     const k = norm(text);
-    if (this.mem.has(k)) return this.mem.get(k)!;
+    if (!extra && this.mem.has(k)) return this.mem.get(k)!;
     const d = kind === 'attr' ? dictTranslate(k) : null;
     if (d !== null) { this.mem.set(k, d); return d; }
-    const row = await this.db.prepare('SELECT dst FROM translations WHERE src=?').bind(k).first<{ dst: string }>().catch(() => null);
+    const row = extra ? null : await this.db.prepare('SELECT dst FROM translations WHERE src=?').bind(k).first<{ dst: string }>().catch(() => null);
     // الذاكرة قد تكون مسمومة: ترجمة مكسورة محفوظة تُعاد إلى الأبد فلا يتغيّر العنوان مهما
     // أُعيدت المحاولة (أربعة عناوين بلغت سبع محاولات بلا تغيير). نحذفها ونسأل النموذج من جديد.
     if (row && goodArabic(row.dst) && !(kind === 'title' && brokenTitle(row.dst, k))) { this.mem.set(k, row.dst); return row.dst; }
@@ -225,11 +227,12 @@ export class Translator {
     const fallback = hintEn && !hasCJK(hintEn) ? hintEn.slice(0, 200) : text;
     if (this.aiCalls >= this.maxAi) return fallback;
     this.aiCalls++;
-    let out = await translateZhAr(this.ai, k, kind, hintEn);
+    let out = await translateZhAr(this.ai, k, kind, hintEn, extra);
     if (!out) return fallback;
     // مقاس لاتيني داخل القيمة (مثل "加大码XL") يبقى كما هو حتى لو عرّبه النموذج
     if (kind === 'attr') { const sz = k.match(/(XXS|XS|S|M|L|XL|XXL|XXXL|[2-6]XL)(?![A-Za-z])/i); if (sz && !new RegExp(`\\b${sz[1]}\\b`, 'i').test(out)) { const rest = dictTranslate(k.replace(sz[1], '').replace(/码/g, '').trim()); out = rest ? `${rest} ${sz[1].toUpperCase()}` : sz[1].toUpperCase(); } }
     if (kind === 'title' && brokenTitle(out, k)) return fallback;   // مكسور أيضًا: لا يُحفظ ولا يُستبدل به القديم
+    if (extra) return out;                                          // ناتج سياقي: لا يدخل الذاكرة
     this.mem.set(k, out);
     await this.db.prepare('INSERT OR REPLACE INTO translations(src,dst,kind) VALUES(?,?,?)').bind(k, out, kind).run().catch(() => {});
     return out;
@@ -272,17 +275,28 @@ export async function retranslatePending(db: D1Database, ai: any, limit = 40): P
   // ٢٧ منتجًا حيًا أصلها الصيني محفوظ ومحاولاتها صفر: هي في الطابور ولا يصلها الدور أبدًا
   // لأن الترتيب يدفنها تحت آلاف الصفوف. ترتفع هنا إلى المرتبة الثانية بعد الصيني.
   const NO_AR = `(title_ar NOT GLOB '*[\u0621-\u064A]*')`;
+  const DUP_SQL = `(tr_tries < 12 AND lower(title_ar) IN (SELECT lower(title_ar) FROM products
+     WHERE status IN ('active','draft') GROUP BY lower(title_ar) HAVING COUNT(*) >= 2))`;
   const { results } = await db.prepare(`SELECT id,title_ar,title_src,supplier_name,tr_tries,needs_tr FROM products
-     WHERE title_ar GLOB '*[一-龥]*' OR supplier_name GLOB '*[一-龥]*' OR title_src GLOB '*[一-龥]*' OR ${MASHED} OR ${NO_AR} OR ${BROKEN_SQL}
-     ORDER BY (title_ar GLOB '*[一-龥]*') DESC, needs_tr DESC, ${BROKEN_SQL} DESC, ${NO_AR} DESC, ${MASHED} DESC, tr_tries ASC, (status='draft') DESC, sales DESC, id DESC LIMIT 400`).all<any>();
+     WHERE title_ar GLOB '*[一-龥]*' OR supplier_name GLOB '*[一-龥]*' OR title_src GLOB '*[一-龥]*' OR ${MASHED} OR ${NO_AR} OR ${BROKEN_SQL} OR ${DUP_SQL}
+     ORDER BY (title_ar GLOB '*[一-龥]*') DESC, needs_tr DESC, ${DUP_SQL} DESC, ${BROKEN_SQL} DESC, ${NO_AR} DESC, ${MASHED} DESC, tr_tries ASC, (status='draft') DESC, sales DESC, id DESC LIMIT 400`).all<any>();
   // العناوين الصينية أو الرديئة أولًا، ثم ما تبقى (موردون)
-  const needs = (p: any) => hasCJK(p.title_ar) || !goodTitle(p.title_ar) || !!brokenTitle(p.title_ar, p.title_src);
+  // عنوان يتقاسمه منتجان فأكثر: النموذج طوى إعلانات مختلفة في وصف عام. الفرق موجود في
+  // العنوان الصيني (خامة، نوع، ماركة، مقاس) فنطلب منه تمييزه صراحةً بدل إعادة الاسم نفسه.
+  const { results: dups } = await db.prepare(`SELECT lower(title_ar) t, COUNT(*) n FROM products
+     WHERE status IN ('active','draft') GROUP BY lower(title_ar) HAVING n >= 2`).all<{ t: string; n: number }>();
+  const dupSet = new Set(dups.map(d => d.t));
+  // بعد اثنتي عشرة محاولة نكفّ: إعلانان متطابقان فعلًا عند المورّد لا يفرّقهما نموذج،
+  // وإصرارنا يسدّ الطابور على غيرهما. يظهران في تقرير التفتيش ليقرر صاحب المشروع.
+  const isDup = (p: any) => dupSet.has(String(p.title_ar ?? '').toLowerCase()) && (p.tr_tries ?? 0) < 12;
+  const needs = (p: any) => hasCJK(p.title_ar) || !goodTitle(p.title_ar) || !!brokenTitle(p.title_ar, p.title_src) || isDup(p);
   results.sort((a, b) => Number(needs(b)) - Number(needs(a)));
   let n = 0, nv = 0, tried = 0;
   for (const p of results) {
     if (tried >= limit) break;
     const src = hasCJK(p.title_src) ? p.title_src : p.title_ar;
-    const needTitle = hasCJK(p.title_ar) || !goodTitle(p.title_ar) || !!brokenTitle(p.title_ar, p.title_src);
+    const dup = isDup(p);
+    const needTitle = hasCJK(p.title_ar) || !goodTitle(p.title_ar) || !!brokenTitle(p.title_ar, p.title_src) || dup;
     // المنتج الذي عنوانه عربي سليم واسم مورّده عربي لا يحتاج شيئًا: نتخطاه بلا أن يُحسب من الدفعة.
     // (كان يُحسب فيبتلع الأربعين مكانًا ولا يصل الدور إلى العناوين الصينية الحقيقية.)
     if (!needTitle && !hasCJK(p.supplier_name)) {
@@ -294,16 +308,21 @@ export async function retranslatePending(db: D1Database, ai: any, limit = 40): P
     }
     // `tr.t` تُعيد النص الأصلي حين تعجز كل النماذج. قبوله يعني استبدال عنوان عربي مكسور
     // بعنوان صيني — أسوأ. لا نقبل إلا ترجمة عربية سليمة غير مكسورة، وإلا تُترك كما هي.
-    const cand = needTitle ? await tr.t(src, 'title') : p.title_ar;
-    const t = !needTitle ? p.title_ar
-      : (cand && goodTitle(cand) && !brokenTitle(cand, src)) ? cand
-      : (hasCJK(p.title_ar) ? cand : p.title_ar);
+    const extra = dup ? `تنبيه: العنوان «${p.title_ar}» مستعمل لمنتج آخر في المتجر. اكتب عنوانًا مختلفًا عنه يذكر ما يميّز هذه القطعة تحديدًا من النص الصيني: الخامة أو النوع أو الماركة أو المقاس أو عدد القطع.` : undefined;
+    const cand = needTitle ? await tr.t(src, 'title', null, extra) : p.title_ar;
+    let ok = !!cand && goodTitle(cand) && !brokenTitle(cand, src);
+    // عنوان جديد يصطدم بعنوان منتج آخر لا يحلّ شيئًا: نرفضه ونُبقي القديم لتعود المحاولة لاحقًا
+    if (ok && cand !== p.title_ar) {
+      const clash = await db.prepare('SELECT 1 FROM products WHERE lower(title_ar)=lower(?) AND id<>? LIMIT 1').bind(cand, p.id).first();
+      if (clash) ok = false;
+    }
+    const t = !needTitle ? p.title_ar : ok ? cand : (hasCJK(p.title_ar) ? cand : p.title_ar);
     const sp = await tr.t(p.supplier_name);
     // عنوان صار عربيًا: المنتج المحجوز كمسودة يُنشر الآن (لا يُعرض عنوان صيني للزبونة أبدًا)
     if ((t && t !== p.title_ar) || (sp && sp !== p.supplier_name)) {
       const pub = t && !hasCJK(t) ? ",status=CASE WHEN status='draft' THEN 'active' ELSE status END" : '';
       // العلامة تُمسح فقط إن صار العنوان سليمًا فعلًا — وإلا بقيت ليعود الدور عليه
-      const clear = t && goodTitle(t) && !brokenTitle(t, src) ? ',needs_tr=0' : '';
+      const clear = ok ? ',needs_tr=0' : '';
       await db.prepare(`UPDATE products SET title_src=COALESCE(title_src,title_ar),title_ar=?,supplier_name=?${pub}${clear},tr_tries=tr_tries+1 WHERE id=?`).bind(t ?? p.title_ar, sp ?? p.supplier_name, p.id).run(); n++;
     } else {
       // لم يتغيّر شيء: إن كان العنوان سليمًا أصلًا فالعلامة أدّت دورها (سألنا النموذج فعلًا)
