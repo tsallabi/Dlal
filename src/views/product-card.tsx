@@ -9,9 +9,16 @@ const Price: FC<{ v: number; deal?: boolean }> = ({ v, deal }) => {
   return <>{int.toLocaleString('ar-LY')}{frac ? <em>٫{String(frac).padStart(2, '0')}</em> : null}<em> د.ل</em></>;
 };
 
-export const ProductCard: FC<{ p: ProductRow; fav?: boolean }> = ({ p, fav }) => {
-  const off = p.compare_price_lyd && p.compare_price_lyd > p.price_lyd
-    ? Math.round((1 - p.price_lyd / p.compare_price_lyd) * 100) : 0;
+export type ShipCtx = { mode: 'air' | 'sea'; air: string; sea: string; seaOn: boolean };
+const DEF_SHIP: ShipCtx = { mode: 'air', air: '١٢ — ١٨ يومًا', sea: '٣٠ — ٤٥ يومًا', seaOn: true };
+
+export const ProductCard: FC<{ p: ProductRow; fav?: boolean; ship?: ShipCtx; best?: boolean }> = ({ p, fav, ship, best }) => {
+  const sh = ship ?? DEF_SHIP;
+  // السعر الظاهر يتبع طريقة الشحن المختارة، والسطر الثاني يعرض البديل بسعره
+  const sea = sh.seaOn && p.price_sea_lyd && p.price_sea_lyd < p.price_lyd ? p.price_sea_lyd : null;
+  const shown = sh.mode === 'sea' && sea ? sea : p.price_lyd;
+  const off = p.compare_price_lyd && p.compare_price_lyd > shown
+    ? Math.round((1 - shown / p.compare_price_lyd) * 100) : 0;
   const isNew = !p.sales;
   return (
     <a class="card" href={`/p/${p.slug}`} data-id={p.id}>
@@ -28,14 +35,13 @@ export const ProductCard: FC<{ p: ProductRow; fav?: boolean }> = ({ p, fav }) =>
       </div>
       <div class="body">
         <div class="t">{p.title_ar}</div>
-        {p.sales > 200 && <span class="best-pill">الأكثر مبيعًا في {p.cat_name ?? 'القسم'} ›</span>}
+        {best && <span class="best-pill">الأكثر مبيعًا في {p.cat_name ?? 'القسم'} ›</span>}
         <div class="meta"><span class="star">★ {p.rating.toFixed(1)}</span><span>({p.sales > 0 ? `${p.sales}+` : 'جديد'})</span></div>
-        <span class="ship">جوي · يصل خلال ١٢ — ١٨ يومًا</span>
-        {p.price_sea_lyd && p.price_sea_lyd < p.price_lyd
-          ? <span class="ship sea">🚢 بحري {fmt(p.price_sea_lyd)} · ٣٠ — ٤٥ يومًا</span>
-          : null}
+        <span class="ship">{sh.mode === 'sea' && sea ? `بحري · يصل خلال ${sh.sea}` : `جوي · يصل خلال ${sh.air}`}</span>
+        {sea && sh.mode === 'air' ? <span class="ship sea">🚢 بحري {fmt(sea)} · {sh.sea}</span> : null}
+        {sea && sh.mode === 'sea' ? <span class="ship sea">✈️ جوي {fmt(p.price_lyd)} · {sh.air}</span> : null}
         <div class="buy">
-          <div class={`p ${off ? 'deal' : ''}`}><Price v={p.price_lyd} />{off > 0 && <s>{fmt(p.compare_price_lyd!)}</s>}</div>
+          <div class={`p ${off ? 'deal' : ''}`}><Price v={shown} />{off > 0 && <s>{fmt(p.compare_price_lyd!)}</s>}</div>
           <button class="add" type="button" data-add={p.id} aria-label="أضيفي إلى السلة" title="أضيفي إلى السلة">+</button>
         </div>
       </div>
@@ -43,9 +49,14 @@ export const ProductCard: FC<{ p: ProductRow; fav?: boolean }> = ({ p, fav }) =>
   );
 };
 
-export const Grid: FC<{ items: ProductRow[]; favs?: Set<number> }> = ({ items, favs }) =>
-  items.length ? (
-    <div class="grid">{items.map(p => <ProductCard p={p} fav={favs?.has(p.id)} />)}</div>
+export const Grid: FC<{ items: ProductRow[]; favs?: Set<number>; ship?: ShipCtx }> = ({ items, favs, ship }) => {
+  // «الأكثر مبيعًا في القسم» تُمنح لصاحب أعلى مبيعات في كل قسم داخل هذه الشبكة فقط — لا لكل بطاقة
+  const top = new Map<string, { id: number; sales: number }>();
+  items.forEach(p => { const k = p.cat_name ?? '—'; const cur = top.get(k); if (p.sales > 0 && (!cur || p.sales > cur.sales)) top.set(k, { id: p.id, sales: p.sales }); });
+  const bestIds = new Set([...top.values()].map(v => v.id));
+  return items.length ? (
+    <div class="grid">{items.map(p => <ProductCard p={p} fav={favs?.has(p.id)} ship={ship} best={bestIds.has(p.id)} />)}</div>
   ) : (
     <div class="empty"><div class="big">🛍️</div>لا توجد منتجات هنا بعد</div>
   );
+};

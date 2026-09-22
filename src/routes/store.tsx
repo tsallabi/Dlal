@@ -25,7 +25,11 @@ async function favs(c: Context<Env>): Promise<Set<number>> {
 const base = async (c: Context<Env>) => {
   const u = c.get('user');
   const w = u ? await c.env.DB.prepare('SELECT COUNT(*) n FROM wishlist WHERE user_id=?').bind(u.id).first<{ n: number }>() : null;
-  return { user: u, cartCount: c.get('cartCount'), wishCount: w?.n ?? 0, categories: await getCategories(c.env.DB) };
+  const st = await loadSettings(c.env.DB);
+  const mode = shipMode(c);
+  // سياق الشحن يمرّ مع كل صفحة: البطاقة تعرض سعر الطريقة المختارة ومدّتها من الإعدادات لا من نص ثابت
+  const ship = { mode, air: st.air_days || '١٢ — ١٨ يومًا', sea: st.sea_days || '٣٠ — ٤٥ يومًا', seaOn: seaOn(st) };
+  return { user: u, cartCount: c.get('cartCount'), wishCount: w?.n ?? 0, categories: await getCategories(c.env.DB), ship };
 };
 
 // ---------- الرئيسية: بانر ترويجي + بلاطات أقسام دائرية + بطاقتا عروض + شبكة منتجات ----------
@@ -119,10 +123,10 @@ store.get('/', async (c) => {
 
       {/* الشبكة الرئيسية */}
       <div class="feed-h"><h2>اختيارات لك</h2></div>
-      <Grid items={feed.results} favs={f} />
+      <Grid ship={b.ship} items={feed.results} favs={f} />
       <a class="more-btn" href="/trending">عرض المزيد</a>
 
-      {recent.length > 0 && <><div class="feed-h"><h2>شاهدتِ مؤخرًا</h2></div><Grid items={recent} favs={f} /></>}
+      {recent.length > 0 && <><div class="feed-h"><h2>شاهدتِ مؤخرًا</h2></div><Grid ship={b.ship} items={recent} favs={f} /></>}
 
       <section class="why">
         <div><b>🏭 مباشرة من مصانع الصين</b><span>نشتري بأسعار الجملة ونبيع بالقطعة.</span></div>
@@ -257,7 +261,7 @@ async function listPage(c: Context<Env>, opts: { title: string; where: string; b
               {(min || max) && <a href={link('min', null).replace(/([?&])max=[^&]*/, '$1')} class="chip on">السعر: {min ?? 0}—{max ?? '∞'} ✕</a>}
             </div>
           )}
-          <Grid items={rows.results} favs={f} />
+          <Grid ship={bb.ship} items={rows.results} favs={f} />
           {pages > 1 && page < pages && <a class="more-btn" href={link('page', String(page + 1))}>عرض المزيد</a>}
           {pages > 1 && (
             <div class="sortbar" style="justify-content:center;padding-top:18px">
@@ -426,8 +430,8 @@ store.get('/p/:slug', async (c) => {
         ))}
       </section>
       <div class="sec-h"><h2>قد يعجبك أيضًا</h2></div>
-      <Grid items={related.results} favs={f} />
-      {recent.length > 0 && <><div class="sec-h"><h2>شاهدتِ مؤخرًا</h2></div><Grid items={recent} favs={f} /></>}
+      <Grid ship={b.ship} items={related.results} favs={f} />
+      {recent.length > 0 && <><div class="sec-h"><h2>شاهدتِ مؤخرًا</h2></div><Grid ship={b.ship} items={recent} favs={f} /></>}
     </Layout>,
   );
 });
@@ -438,7 +442,7 @@ store.get('/wishlist', async (c) => {
   const b = await base(c);
   if (!u) return c.html(<Layout {...b} title="المفضلة"><div class="empty"><div class="big">♡</div><a class="btn" href="/login?next=/wishlist">سجّلي الدخول لعرض المفضلة</a></div></Layout>);
   const { results } = await c.env.DB.prepare(`SELECT ${PRODUCT_SELECT} FROM wishlist w JOIN products p ON p.id=w.product_id LEFT JOIN categories c ON c.id=p.category_id WHERE w.user_id=?`).bind(u.id).all<ProductRow>();
-  return c.html(<Layout {...b} title="المفضلة"><div class="sec-h"><h2>المفضلة</h2></div><Grid items={results} favs={new Set(results.map(r => r.id))} /></Layout>);
+  return c.html(<Layout {...b} title="المفضلة"><div class="sec-h"><h2>المفضلة</h2></div><Grid ship={b.ship} items={results} favs={new Set(results.map(r => r.id))} /></Layout>);
 });
 store.post('/wishlist/toggle', async (c) => {
   const u = c.get('user');

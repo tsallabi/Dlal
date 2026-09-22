@@ -106,7 +106,19 @@ expect(seaShown < airShown, `سعر المنتج البحري أقل من الج
 expect(seaDays !== airDays && seaDays.includes('بحري'), 'بطاقة الشحن تعرض مدة الشحن البحري بعد الاختيار');
 expect(await page.locator('.pship label').nth(1).getAttribute('class') === 'on', 'الخيار البحري يبقى محددًا بعد إعادة التحميل');
 await shot(page, 'product-sea');
+// الاختيار يسري على كل الشبكة: البطاقة تعرض سعر البحري ومدّته والبديل الجوي
+await page.goto(BASE + '/c/dresses');
+const c1 = page.locator('.card').first();
+expect((await c1.locator('.ship').first().textContent()).includes('بحري'), 'بطاقة القسم تعرض المدة البحرية بعد اختيار البحري');
+expect((await c1.locator('.ship.sea').first().textContent()).includes('جوي'), 'البطاقة تعرض البديل الجوي بسعره');
+const cardSea = num(await c1.locator('.buy .p').first().textContent());
+expect((await page.locator('.card .best-pill').count()) <= 1, `شارة «الأكثر مبيعًا» لبطاقة واحدة في القسم (${await page.locator('.card .best-pill').count()})`);
+await page.goto(BASE + '/p/' + productSlug);
 await page.locator('.pship label').nth(0).click(); await page.waitForLoadState('networkidle');
+await page.goto(BASE + '/c/dresses');
+const cardAir = num(await page.locator('.card').first().locator('.buy .p').first().textContent());
+expect(cardAir > cardSea, `سعر البطاقة يرتفع بالعودة للجوي (${cardSea} → ${cardAir})`);
+await page.goto(BASE + '/p/' + productSlug);
 expect(num(await page.locator('.price').first().textContent()) === airShown, 'العودة للجوي تعيد السعر الأصلي');
 expect(!(await has(page, 'لا يوجد وصف')), 'كل منتج له وصف عربي ولو لم يصل معه وصف من المصدر');
 await shot(page, 'product');
