@@ -827,6 +827,15 @@ await page.fill('input[name=mypay_webhook_secret]', MP_SECRET);
 await page.locator('form:has(select[name=mypay_mode]) button:has-text("حفظ")').first().click();
 await page.waitForLoadState('networkidle');
 expect(await has(page, '/pay/sandbox/api/v1'), 'اللوحة تعرض عنوان الساندبوكس الحقيقي المركَّب');
+// النطاق القديم api.mypay.ly محفوظ في قواعد قائمة ولا وجود له عندهم: يجب أن يُصحَّح تلقائيًا
+await page.fill('input[name=mypay_base_url]', 'https://api.mypay.ly');
+await page.locator('form:has(select[name=mypay_mode]) button:has-text("حفظ")').first().click();
+await page.waitForLoadState('networkidle');
+const fixedBase = (await page.locator('p:has-text("العنوان الفعلي المستعمل الآن") b.mono').first().textContent()).trim();
+expect(fixedBase === 'https://mypay.ly/pay/sandbox/api/v1', `النطاق القديم api.mypay.ly يُصحَّح تلقائيًا (${fixedBase})`);
+await page.fill('input[name=mypay_base_url]', 'http://127.0.0.1:8803');
+await page.locator('form:has(select[name=mypay_mode]) button:has-text("حفظ")').first().click();
+await page.waitForLoadState('networkidle');
 
 // زبونة تشتري فعلًا وتُحوَّل إلى «بوابة ماي باي» — نفس مسار الزبونة الحقيقي
 // كلمة مرورها صارت secret456 بعد فحص تغيير كلمة المرور أعلاه — لا secret123
@@ -870,6 +879,17 @@ const mpBadSig = await page.evaluate(async ([b, body]) => {
   return r.status;
 }, [BASE, mpPay]);
 expect(mpBadSig === 401, `الإشعار بتوقيع مزوّر يُرفض (${mpBadSig})`);
+// الطلب الذي أنشأه هذا الفحص يبقى «مدفوعًا» في طابور شاهين، وتراكمه عبر التشغيلات
+// يدفع طلب الفحص الأصلي خارج الصفحة الأولى فيسقط فحص لا علاقة له بنا. ننهيه كما ينهيه الأدمن.
+await login(page, '0910000000', 'admin123');
+await page.goto(BASE + '/admin/orders?q=' + mpOrder);
+const mpRow = await page.locator(`tr:has-text("${mpOrder}") a[href^="/admin/orders/"]`).first().getAttribute('href').catch(() => null);
+if (mpRow) {
+  await page.goto(BASE + mpRow);
+  await page.selectOption('select[name=status]', 'delivered').catch(() => {});
+  await page.locator('form:has(select[name=status]) button:has-text("حفظ")').first().click().catch(() => {});
+  await page.waitForLoadState('networkidle');
+}
 await mpRestore();   // نعيد وضع المحاكاة والعنوان الحقيقي حتى لا تتأثر بقية الفحوص
 
 // ---------- لوحة صحة الكتالوج: الأرقام التي يقودها المالك بنفسه ----------

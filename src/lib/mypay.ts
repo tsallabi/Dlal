@@ -18,7 +18,10 @@ export type MyPayConfig = {
 
 // ساندبوكس: /pay/sandbox/api/v1 · إنتاج: /pay/api/v1 — نصًّا كما في إضافتهم الرسمية
 export function mypayBase(s: any): string {
-  const host = (s.mypay_base_url || 'https://mypay.ly').replace(/\/+$/, '').replace(/\/pay\/(sandbox\/)?api\/v1$/, '');
+  const host = (s.mypay_base_url || 'https://mypay.ly').replace(/\/+$/, '').replace(/\/pay\/(sandbox\/)?api\/v1$/, '')
+    // api.mypay.ly نطاق كتبناه نحن خطأً في إعداد قديم ولا وجود له عندهم؛ إضافتهم الرسمية تستعمل mypay.ly.
+    // تصحيحه هنا يمنع فشل اتصال صامت عند من حفظ القيمة القديمة.
+    .replace(/^https?:\/\/api\.mypay\.ly$/i, 'https://mypay.ly');
   const suffix = s.mypay_sandbox === 'no' ? '/pay/api/v1' : '/pay/sandbox/api/v1';
   return host + suffix;
 }
