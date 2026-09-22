@@ -77,7 +77,7 @@ await fl.locator('.feed-h .all').click(); await page.waitForLoadState('networkid
 expect(page.url().includes(flHref), 'الضغط على «عرض القسم» ينقل فعلًا إلى صفحة القسم');
 await page.goto(BASE + '/');
 // لا نص صيني أمام الزبونة في أي صفحة تصفّح
-const SHOPPER_PAGES = ['/', '/c/dresses', '/new', '/sale', '/search?q=%D9%81%D8%B3%D8%AA%D8%A7%D9%86'];
+const SHOPPER_PAGES = ['/', '/c/dresses', '/c/bags', '/new', '/sale', '/search?q=%D9%81%D8%B3%D8%AA%D8%A7%D9%86'];
 for (const path of SHOPPER_PAGES) {
   await page.goto(BASE + path);
   const cjk = ((await page.locator('body').textContent()).match(/[一-鿿]/g) || []).join('');
@@ -494,6 +494,11 @@ if (colorLinks) {
   await page.goto(BASE + '/c/dresses');
 }
 expect(colorLinks > 0, `فلتر الألوان يعرض ${colorLinks} لونًا بنقاط ملونة`);
+// قيمة مقاس لم تُترجم بعد يجب ألا تظهر في فلتر المقاسات ولا على صفحة المنتج
+const sizeFacets = await page.locator('.fsizes a').allTextContents();
+expect(!sizeFacets.some(t => /[一-鿿]/.test(t)), `لا مقاس صيني في الفلتر (${sizeFacets.filter(t => /[一-鿿]/.test(t)).join('، ') || 'نظيف'})`);
+const colorFacets = await page.locator('.fcolors a, .fcolor a').allTextContents();
+expect(!colorFacets.some(t => /[一-鿿]/.test(t)), 'لا لون صيني في الفلتر');
 // الترتيب بالسعر
 await page.click('.sortbar a:has-text("السعر: من الأقل")'); await page.waitForLoadState('networkidle');
 // السعر المشطوب داخل نفس العنصر: نحذفه قبل القراءة وإلا التصق الرقمان («84 د.ل105 د.ل» ⟵ 84105)

@@ -184,8 +184,9 @@ async function listPage(c: Context<Env>, opts: { title: string; where: string; b
   const [rows, cnt, sizes, colors, f] = await Promise.all([
     db.prepare(`SELECT ${PRODUCT_SELECT} FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE ${where} ORDER BY ${order} LIMIT ? OFFSET ?`).bind(...binds, per, (page - 1) * per).all<ProductRow>(),
     db.prepare(`SELECT COUNT(*) n FROM products p WHERE ${where}`).bind(...binds).first<{ n: number }>(),
-    db.prepare(`SELECT DISTINCT v.size FROM variants v JOIN products p ON p.id=v.product_id WHERE ${opts.where} AND v.size IS NOT NULL ORDER BY v.size`).bind(...opts.binds).all<{ size: string }>(),
-    db.prepare(`SELECT DISTINCT v.color FROM variants v JOIN products p ON p.id=v.product_id WHERE ${opts.where} AND v.color IS NOT NULL ORDER BY v.color LIMIT 20`).bind(...opts.binds).all<{ color: string }>(),
+    // قيمة مقاس أو لون لم تُترجم بعد لا تُعرض للزبونة (القاعدة الأولى) — المترجَمة تكفي للتصفية
+    db.prepare(`SELECT DISTINCT v.size FROM variants v JOIN products p ON p.id=v.product_id WHERE ${opts.where} AND v.size IS NOT NULL AND v.size NOT GLOB '*[一-龥]*' ORDER BY v.size`).bind(...opts.binds).all<{ size: string }>(),
+    db.prepare(`SELECT DISTINCT v.color FROM variants v JOIN products p ON p.id=v.product_id WHERE ${opts.where} AND v.color IS NOT NULL AND v.color NOT GLOB '*[一-龥]*' ORDER BY v.color LIMIT 20`).bind(...opts.binds).all<{ color: string }>(),
     favs(c),
   ]);
   const total = cnt?.n ?? 0;
@@ -359,8 +360,10 @@ store.get('/p/:slug', async (c) => {
   const rv = [p.id, ...(getCookie(c, 'rv') ?? '').split(',').map(Number).filter(n => n && n !== p.id)].slice(0, 12);
   setCookie(c, 'rv', rv.join(','), { path: '/', maxAge: 30 * 86400, sameSite: 'Lax' });
   const recent = await recentlyViewed(c, p.id);
-  const colors = [...new Set(vars.results.map(v => v.color).filter(Boolean))] as string[];
-  const sizes = [...new Set(vars.results.map(v => v.size).filter(Boolean))] as string[];
+  // نفس القاعدة على صفحة المنتج: لا تُعرض قيمة لم تُترجم بعد
+  const noCJK = (v: any) => v && !/[一-鿿]/.test(String(v));
+  const colors = [...new Set(vars.results.map(v => v.color).filter(noCJK))] as string[];
+  const sizes = [...new Set(vars.results.map(v => v.size).filter(noCJK))] as string[];
   const images = imgs.results.length ? imgs.results.map(i => i.url) : ['/placeholder.svg'];
   const off = p.compare_price_lyd && p.compare_price_lyd > p.price_lyd ? Math.round((1 - p.price_lyd / p.compare_price_lyd) * 100) : 0;
   const isClothing = ['dresses', 'abayas', 'tops', 'kids'].includes(p.cat_slug ?? '');
@@ -416,7 +419,7 @@ store.get('/p/:slug', async (c) => {
                 {fitTotal > 0 && <div class="fit"><span>رأي الزبونات في المقاس:</span> <b>{fitPct('true')}%</b> مطابق · <b>{fitPct('small')}%</b> أصغر · <b>{fitPct('large')}%</b> أكبر</div>}
               </div>
             )}
-            <script type="application/json" id="variantsJson" dangerouslySetInnerHTML={{ __html: JSON.stringify(vars.results).replace(/</g, '\\u003c') }}></script>
+            <script type="application/json" id="variantsJson" dangerouslySetInnerHTML={{ __html: JSON.stringify(vars.results.filter(v => noCJK(v.color ?? '—') && noCJK(v.size ?? '—'))).replace(/</g, '\\u003c') }}></script>
             <div class="opts"><h4>الكمية</h4>
               <div class="qty"><button type="button" data-q="-1">−</button><input type="number" name="qty" value={p.min_qty} min={p.min_qty} /><button type="button" data-q="1">+</button></div>
               {p.min_qty > 1 && <span style="font-size:12px;color:#888;margin-inline-start:8px">الحد الأدنى {p.min_qty} قطع</span>}
