@@ -8,7 +8,7 @@ import { fingerprint, sameProduct } from '../lib/dedupe';
 import { computePrice, loadSettings } from '../lib/pricing';
 import { getProvider } from '../lib/source-providers';
 import { runServerJobs } from '../lib/crawl';
-import { retranslatePending, diagnoseTitle, hasCJK, dropCJKWords } from '../lib/translate';
+import { retranslatePending, diagnoseTitle, hasCJK, dropCJKWords, dictTranslate } from '../lib/translate';
 
 const api = new Hono<Env>();
 
@@ -136,8 +136,11 @@ api.get('/logic-check', async (c) => {
     'مجموعة مجوهرات蝴蝶吊坠耳环 و项链 و خاتم',
     '调色盘 调色棒 化妆',
   ];
+  // قيم متغيّرات حقيقية بقيت صينية على الموقع الحي: يجب أن يترجمها القاموس بلا استدعاء نموذج
+  const attrs = ['8号', '9号', '10号', '2号色', '黑色 M', '均码', '藏青色'];
   return c.json({
     modesty,
+    dict: Object.fromEntries(attrs.map(t => [t, dictTranslate(t)])),
     strays: Object.fromEntries(strays.map(t => [t, dropCJKWords(t)])),
     dedupe: { same: sameProduct(w1, w2), different: sameProduct(w1, bag), noiseOnly: sameProduct('跨境 批发 新款', '外贸 现货 爆款'), fp: fingerprint(w1) },
     pricing: {

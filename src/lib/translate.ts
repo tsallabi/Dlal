@@ -22,6 +22,9 @@ export function dictTranslate(s: string): string | null {
   if (m) { const a = dictTranslate(m[1]); const b = dictTranslate(m[2]); if (a !== null && b !== null) return `${a} ${b}`.trim(); }
   const sz = k.match(/^(XXS|XS|S|M|L|XL|XXL|XXXL|2XL|3XL|4XL|5XL|\d{2,3})码?$/i);
   if (sz) return sz[1].toUpperCase();
+  // مقاس برقم: «8号» في الخواتم والأحذية = المقاس ٨، و«2号色» = اللون رقم ٢
+  const no = k.match(/^(\d{1,3}(?:\.\d)?)\s*号(色)?$/);
+  if (no) return no[2] ? `اللون رقم ${no[1]}` : `مقاس ${no[1]}`;
   // مركّب بلا فاصل: "白色豹纹" = 白色 + 豹纹 → "أبيض نمري"
   if (hasCJK(k) && k.length >= 3 && k.length <= 8) for (let i = 1; i < k.length; i++) { const a = DICT[k.slice(0, i)], b = DICT[k.slice(i)]; if (a !== undefined && b !== undefined) return `${a} ${b}`.trim(); }
   return null;

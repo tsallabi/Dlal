@@ -97,7 +97,7 @@ jobs:
             python3 -c "import json;d=json.load(open('out.json'));print('ok',d.get('ok'),'status',d.get('status'),'error',d.get('error'));print('url',d.get('url'));xs=d.get('data') or [];print('items',len(xs));[print('-',x.get('offerId'),x.get('priceCny'),(x.get('title') or '')[:40]) for x in xs[:3]]"
             done
           fi
-          if [ -n "$JOB" ]; then
+          if [ -n "$JOB" ] && [ "$JOB" != "-" ]; then
             for pass in $(seq 1 "${RE:-1}"); do
             for j in $(echo "$JOB" | tr ',' ' '); do
               echo "=== run job $j (pass $pass/${RE:-1})"
