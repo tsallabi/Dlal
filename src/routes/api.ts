@@ -266,9 +266,12 @@ api.post('/source/audit', async (c) => {
   const body = await c.req.json<{ fix?: boolean }>().catch(() => ({} as any));
   let flagged = 0;
   if (body.fix && flag.length) {
-    for (let i = 0; i < flag.length; i += 200) {
-      const part = flag.slice(i, i + 200);
-      await db.prepare(`UPDATE products SET needs_tr=1 WHERE id IN (${part.map(() => '?').join(',')})`).bind(...part).run();
+    // D1 يرفض ما يزيد على ١٠٠ متغيّر مربوط في الجملة الواحدة («too many SQL variables»)،
+    // والمعرّفات أرقام صحيحة من القاعدة نفسها فنكتبها حرفيًا بعد التحقق من أنها أعداد.
+    const ids = flag.filter(Number.isInteger);
+    for (let i = 0; i < ids.length; i += 500) {
+      const part = ids.slice(i, i + 500);
+      await db.prepare(`UPDATE products SET needs_tr=1 WHERE id IN (${part.join(',')})`).run();
       flagged += part.length;
     }
   }
