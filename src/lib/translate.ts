@@ -178,9 +178,13 @@ export async function retranslatePending(db: D1Database, ai: any, limit = 40): P
   // الأقل محاولةً أولًا: عنوان عصيّ على الترجمة لا يبتلع كل دفعة ويمنع بقية الكتالوج
   // العنوان المكسور («زippers»، «الكitchen») يدخل الطابور كما يدخله الصيني: كلاهما نص لا يُقرأ.
   const MASHED = `(title_ar GLOB '*[\u0621-\u064A][a-zA-Z]*' OR title_ar GLOB '*[a-zA-Z][\u0621-\u064A]*')`;
+  // عنوان بلا حرف عربي واحد: ترجمة المزوّد الإنجليزية حُفظت كما هي حين فشلت العربية.
+  // ٢٧ منتجًا حيًا أصلها الصيني محفوظ ومحاولاتها صفر: هي في الطابور ولا يصلها الدور أبدًا
+  // لأن الترتيب يدفنها تحت آلاف الصفوف. ترتفع هنا إلى المرتبة الثانية بعد الصيني.
+  const NO_AR = `(title_ar NOT GLOB '*[\u0621-\u064A]*')`;
   const { results } = await db.prepare(`SELECT id,title_ar,title_src,supplier_name,tr_tries FROM products
-     WHERE title_ar GLOB '*[一-龥]*' OR supplier_name GLOB '*[一-龥]*' OR title_src GLOB '*[一-龥]*' OR ${MASHED}
-     ORDER BY (title_ar GLOB '*[一-龥]*') DESC, ${MASHED} DESC, tr_tries ASC, (status='draft') DESC, sales DESC, id DESC LIMIT 400`).all<any>();
+     WHERE title_ar GLOB '*[一-龥]*' OR supplier_name GLOB '*[一-龥]*' OR title_src GLOB '*[一-龥]*' OR ${MASHED} OR ${NO_AR}
+     ORDER BY (title_ar GLOB '*[一-龥]*') DESC, ${NO_AR} DESC, ${MASHED} DESC, tr_tries ASC, (status='draft') DESC, sales DESC, id DESC LIMIT 400`).all<any>();
   // العناوين الصينية أو الرديئة أولًا، ثم ما تبقى (موردون)
   const needs = (p: any) => hasCJK(p.title_ar) || !goodTitle(p.title_ar);
   results.sort((a, b) => Number(needs(b)) - Number(needs(a)));

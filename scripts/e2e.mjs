@@ -74,6 +74,31 @@ expect(afterQty === '100', `السلة ترفض النزول تحت الحد ا�
 await page.locator('.cart-row', { hasText: 'قطعة جملة' }).first().locator('button:has-text("حذف")').first().click();
 await page.waitForLoadState('networkidle');
 
+// ---------- أداة الجملة: إخفاء وإظهار دفعةً واحدة، عكسيّة تمامًا ----------
+// ٣٠٣ قطع نشطة حدّها الأدنى ١٠ فأكثر على الموقع الحي. القرار تجاري لصاحب المشروع،
+// فالأداة تُعطى له ولا يُقرَّر عنه — لكن يجب أن تعمل ذهابًا وإيابًا بلا خسارة.
+await login(page, '0910000000', 'admin123');
+await page.goto(BASE + '/admin/products?moq=10');
+expect(await has(page, moqOffer), 'فلتر «أقل طلب ≥ ١٠» يُظهر قطعة الجملة');
+await page.fill('form[action$="/products/wholesale"] input[name=min]', '100');
+await page.locator('form[action$="/products/wholesale"] button:has-text("أخفِها")').click();
+await page.waitForLoadState('networkidle');
+expect(await has(page, 'أُخفيت'), 'اللوحة تقول كم قطعة أُخفيت');
+await page.goto(BASE + '/admin/products?q=' + moqOffer);
+expect(await has(page, 'hidden'), 'قطعة الجملة صارت مخفية');
+await page.goto(BASE + '/logout');
+const hid = await page.goto(BASE + moqHref);
+expect(hid.status() === 404, `الزبونة لا تفتح صفحة القطعة المخفية (${hid.status()})`);
+await login(page, '0910000000', 'admin123');
+await page.goto(BASE + '/admin/products?moq=10');
+await page.fill('form[action$="/products/wholesale"] input[name=min]', '100');
+await page.locator('form[action$="/products/wholesale"] button:has-text("أعِدها")').click();
+await page.waitForLoadState('networkidle');
+expect(await has(page, 'أُعيدت للمتجر'), 'اللوحة تقول كم قطعة عادت');
+await page.goto(BASE + '/logout');
+const back = await page.goto(BASE + moqHref);
+expect(back.status() === 200, `القطعة عادت للمتجر بعد الإظهار (${back.status()})`);
+
 // ---------- شروط البداية: الفحص يضبطها ولا يرثها ----------
 // تشغيلة سابقة قد تنهار وهي في وضع «حقيقي» مشيرة إلى خادم وهمي مغلق، فتسقط فحوص الدفع
 // في التشغيلة التالية لسبب لا علاقة له بها. حدث هذا ثلاث مرات في ٢٢/٠٩/٢٦.

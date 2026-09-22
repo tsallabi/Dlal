@@ -343,16 +343,29 @@ admin.get('/products', async (c) => {
   if (q) { where += ' AND (p.title_ar LIKE ? OR p.source_offer_id LIKE ?)'; binds.push(`%${q}%`, `%${q}%`); }
   if (st) { where += ' AND p.status=?'; binds.push(st); }
   // ?stuck=1 — ما تعذّر إثراؤه بعد ثلاث محاولات من الإضافة المجانية: هؤلاء من يستحق الكريدت
+  // ?moq=N — قطع الجملة: حدّها الأدنى N فأكثر. الزبونة لا تستطيع شراء أقل منه،
+  // فقطعة أقلّ طلبها ٨٠٠٠ ليست بيعًا بالتجزئة مهما بدت في الرف.
+  const moq = parseInt(c.req.query('moq') ?? '') || 0;
+  if (moq > 1) { where += ' AND p.min_qty >= ?'; binds.push(moq); }
   if (c.req.query('stuck')) where += ` AND p.source='1688' AND p.enrich_tries >= 3 AND p.status IN ('active','draft')
      AND ((SELECT COUNT(*) FROM product_images i WHERE i.product_id=p.id) <= 1
        OR (SELECT COUNT(*) FROM variants v WHERE v.product_id=p.id) = 0 OR p.weight_g IS NULL)`;
   const rows = await c.env.DB.prepare(`SELECT ${PRODUCT_SELECT} FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE ${where} ORDER BY p.id DESC LIMIT 200`).bind(...binds).all<ProductRow>();
   const s = await loadSettings(c.env.DB);
   const untranslated = (await c.env.DB.prepare("SELECT COUNT(*) n FROM products WHERE title_ar GLOB '*[一-龥]*'").first<any>())?.n ?? 0;
+  const lots = await c.env.DB.prepare("SELECT COUNT(*) n FROM products WHERE status='active' AND min_qty >= 10").first<{ n: number }>();
   return shell(c, 'products', 'المنتجات', (
     <>
-      <Flash msg={c.req.query('stuck') ? `منتجات تعذّر إثراؤها بعد ثلاث محاولات من الإضافة: صفحتها على 1688 لا تعطي الصور أو المقاسات أو الوزن. أثريها بالكريدت حين يتوفر — وحتى ذلك تُسعَّر بوزن القسم التقديري.` : c.req.query('imported') ? `تم استيراد ${c.req.query('imported')} منتج وتحديث ${c.req.query('updated')}` : c.req.query('translated') ? `تُرجم ${c.req.query('translated')} عنوانًا` : c.req.query('ok') ? 'تم الحفظ ✓' : undefined} /><Flash type="err" msg={c.req.query('noai') ? 'الترجمة تعمل على Cloudflare فقط (ربط Workers AI غير متاح هنا)' : undefined} />
+      <Flash msg={c.req.query('lots') ? `${c.req.query('act') === 'hide' ? 'أُخفيت' : 'أُعيدت للمتجر'} ${c.req.query('lots')} قطعة جملة` : c.req.query('stuck') ? `منتجات تعذّر إثراؤها بعد ثلاث محاولات من الإضافة: صفحتها على 1688 لا تعطي الصور أو المقاسات أو الوزن. أثريها بالكريدت حين يتوفر — وحتى ذلك تُسعَّر بوزن القسم التقديري.` : c.req.query('imported') ? `تم استيراد ${c.req.query('imported')} منتج وتحديث ${c.req.query('updated')}` : c.req.query('translated') ? `تُرجم ${c.req.query('translated')} عنوانًا` : c.req.query('ok') ? 'تم الحفظ ✓' : undefined} /><Flash type="err" msg={c.req.query('noai') ? 'الترجمة تعمل على Cloudflare فقط (ربط Workers AI غير متاح هنا)' : undefined} />
       <form class="inline" style="margin-bottom:10px"><input type="text" name="q" placeholder="بحث بالاسم أو offerId" value={q} /><select name="status"><option value="">كل الحالات</option>{['active', 'draft', 'hidden', 'unavailable'].map(x => <option value={x} selected={st === x}>{x}</option>)}</select><button class="btn sm">بحث</button><a class="btn sm ghost" href="/admin/products/new">+ منتج يدوي</a><button class="btn sm ghost" formaction="/admin/products/translate" formmethod="post">🈶 ترجمة العناوين الصينية ({untranslated})</button></form>
+      {/* قطع الجملة: القرار تجاري (نبيعها لوطًا أم نخفيها) فنعطي الأداة ولا نقرر */}
+      <form method="post" action="/admin/products/wholesale" class="card-box" style="margin-bottom:10px;padding:10px">
+        <b style="font-size:14px">قطع تُباع بالجملة</b>
+        <p style="font-size:12px;color:#666;margin:4px 0">{lots?.n ?? 0} قطعة نشطة حدّها الأدنى ١٠ فأكثر — الزبونة لا تستطيع شراء أقل منه، وسعر اللوط كامل هو ما تدفعه. <a href="/admin/products?moq=10">اعرضيها</a></p>
+        <div class="inline"><label style="margin:0">أقل طلب ≥</label><input type="number" name="min" value="50" min="2" style="width:90px" />
+          <button class="btn sm" name="act" value="hide">أخفِها من المتجر</button>
+          <button class="btn sm ghost" name="act" value="show">أعِدها للمتجر</button></div>
+      </form>
       <div class="tbl-wrap"><table class="tbl"><tr><th></th><th>المنتج</th><th>القسم</th><th>سعر المصدر</th><th>سعر البيع</th><th>الحالة</th><th>مبيعات</th><th>آخر فحص</th><th></th></tr>
         {rows.results.map(p => <tr><td><img src={imgUrl(p.image)} /></td><td><a href={`/admin/products/${p.id}`}>{p.title_ar}</a><br /><a class="src-link" href={p.source_url ?? '#'} target="_blank">{p.source_offer_id}</a></td><td>{p.cat_name ?? '—'}</td><td>{p.source_price_cny} ¥</td><td><b>{fmt(p.price_lyd)}</b><br /><small style="color:#888">هامش ≈ {Math.round((1 - (p.source_price_cny * parseFloat(s.fx_cny_lyd)) / p.price_lyd) * 100)}%</small></td><td><span class={`status ${p.status === 'active' ? 'green' : p.status === 'unavailable' ? 'red' : 'gray'}`}>{p.status}</span>{!p.in_stock && <><br /><small style="color:#d3262b">نفد</small></>}</td><td>{p.sales}</td><td><small>{p.last_checked_at ? timeAgo(p.last_checked_at) : '—'}</small></td><td><a href={`/p/${p.slug}`} target="_blank">👁</a></td></tr>)}
       </table></div>
@@ -360,6 +373,18 @@ admin.get('/products', async (c) => {
   ));
 });
 
+// إخفاء/إظهار قطع الجملة دفعةً واحدة. عكسيّ تمامًا: لا يلمس إلا الحالتين active/hidden
+// ولا يمسّ unavailable ولا draft، فلا يُفسد ما حجزه النظام ولا ما أنزله المورّد.
+admin.post('/products/wholesale', async (c) => {
+  const f = await c.req.parseBody();
+  const min = Math.max(2, Number(f.min) || 50);
+  const hide = String(f.act) === 'hide';
+  const r = await c.env.DB.prepare(hide
+    ? "UPDATE products SET status='hidden',updated_at=datetime('now') WHERE status='active' AND min_qty >= ?"
+    : "UPDATE products SET status='active',updated_at=datetime('now') WHERE status='hidden' AND min_qty >= ?").bind(min).run();
+  await logActivity(c.env.DB, c.get('user')!.id, 'products.wholesale', 'products', `${hide ? 'hide' : 'show'} min_qty>=${min}`);
+  return c.redirect(`/admin/products?moq=${min}&lots=${r.meta?.changes ?? 0}&act=${hide ? 'hide' : 'show'}`);
+});
 admin.post('/products/translate', async (c) => {
   if (!c.env.AI) { const rel = await releaseHeldDrafts(c.env.DB); return c.redirect(`/admin/products?noai=1&translated=${rel}`); }
   const r = await retranslatePending(c.env.DB, c.env.AI, 40);
