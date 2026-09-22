@@ -40,6 +40,10 @@ on:
         description: "yes = enrich products that are missing images/variants/weight, ignoring last check time"
         default: ""
         required: false
+      repeat:
+        description: "run the job list this many times in a row (enrichment moves 25 products per pass)"
+        default: ""
+        required: false
       reprice:
         description: "recompute air+sea prices for N products (empty = skip, 'all' = every product)"
         default: ""
@@ -66,6 +70,7 @@ jobs:
           MI: ${{ github.event.inputs.max_items }}
           EO: ${{ github.event.inputs.enrich_only }}
           RP: ${{ github.event.inputs.reprice }}
+          RE: ${{ github.event.inputs.repeat }}
           JK: ${{ github.event.inputs.job_keyword }}
         run: |
           set -e
@@ -83,8 +88,9 @@ jobs:
             done
           fi
           if [ -n "$JOB" ]; then
+            for pass in $(seq 1 "${RE:-1}"); do
             for j in $(echo "$JOB" | tr ',' ' '); do
-              echo "=== run job $j"
+              echo "=== run job $j (pass $pass/${RE:-1})"
               extra=""
               [ -n "$PG" ] && extra="$extra,\"pages\":$PG"
               [ -n "$FP" ] && extra="$extra,\"from_page\":$FP"
@@ -96,6 +102,7 @@ jobs:
               echo "HTTP $code"
               python3 -c "import json;d=json.load(open('out.json'));r=(d.get('results') or [{}])[0];print(' ',r.get('job'),'|',r.get('status'),'| صفحات',r.get('pages'),'| وُجد',r.get('found'),'| جديد',r.get('imported'),'| مُثرى',r.get('enriched'),'| مكرر',r.get('dupes'),'|',r.get('note',''))" 2>/dev/null || cat out.json
               sleep 5
+            done
             done
           fi
           if [ -n "$RP" ]; then
