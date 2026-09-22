@@ -604,6 +604,18 @@ const costTxt = await page.locator('.kpi', { hasText: 'تكلفتنا' }).textCo
 expect(parseFloat(costTxt.replace(/[^\d.]/g, '')) > 0, 'تكلفتنا محسوبة وليست صفرًا');
 await shot(page, 'admin-reports-profit');
 
+// ---------- لوحة صحة الكتالوج: الأرقام التي يقودها المالك بنفسه ----------
+await login(page, '0910000000', 'admin123');
+await page.goto(BASE + '/admin/source');
+const hk = page.locator('.card-box:has(h3:text("صحة الكتالوج")) .kpi');
+expect((await hk.count()) === 6, `لوحة صحة الكتالوج تعرض ستة أرقام (${await hk.count()})`);
+const cnLive = num(await hk.nth(1).locator('b').textContent());
+expect(cnLive === 0, `لا عنوان صيني ظاهر للزبونة (${cnLive})`);
+expect(num(await hk.nth(0).locator('b').textContent()) > 0, 'عدد المنتجات المعروضة يظهر في اللوحة');
+expect((await page.locator('button:has-text("أثرِ ١٠ منتجات الآن")').count()) === 1, 'زر الإثراء موجود في اللوحة');
+expect((await page.locator('button:has-text("ترجم ٢٠ عنوانًا الآن")').count()) === 1, 'زر الترجمة موجود في اللوحة');
+await shot(page, 'admin-catalog-health');
+
 // ---------- الحشمة: لا ملابس نوم ولا داخلية على الرئيسية ----------
 await login(page, '0910000000', 'admin123');
 await page.goto(BASE + '/admin/categories');

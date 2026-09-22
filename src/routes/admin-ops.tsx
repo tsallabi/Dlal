@@ -14,6 +14,7 @@ import { loadMyPay, checkConnection } from '../lib/mypay';
 import { setOrderStatus, addPoints } from '../lib/orders';
 import { getProvider, PROVIDERS } from '../lib/source-providers';
 import { runServerJobs } from '../lib/crawl';
+import { retranslatePending } from '../lib/translate';
 
 const ops = new Hono<Env>();
 ops.use('*', requireRole('admin'));
@@ -467,8 +468,22 @@ ops.post('/crawler/:id', async (c) => {
 
 // ---------- مزوّد API لبيانات 1688 (طرف ثالث) ----------
 ops.use('/source*', requirePerm('catalog.manage'));
+// أرقام صحة الكتالوج: ما يراه الزبون فعلًا، وما ينقصه، وما هو محجوز — وكلها أزرار تشتغل من هنا
+async function health(db: D1Database) {
+  const t = await db.prepare(`SELECT COUNT(*) n,
+      SUM(status='active') active, SUM(status='draft') draft, SUM(in_stock=0) oos,
+      SUM(title_ar GLOB '*[一-龥]*') cn, SUM(title_ar GLOB '*[一-龥]*' AND status='active') cn_live FROM products`).first<any>();
+  const thin = await db.prepare(`SELECT COUNT(*) n FROM products p WHERE p.status IN ('active','draft') AND p.source='1688'
+      AND ((SELECT COUNT(*) FROM product_images i WHERE i.product_id=p.id) <= 1
+        OR (SELECT COUNT(*) FROM variants v WHERE v.product_id=p.id) = 0 OR p.weight_g IS NULL)`).first<any>();
+  const calls = await db.prepare("SELECT COUNT(*) n FROM payment_log WHERE url LIKE 'SRC %'").first<any>();
+  const stockJob = await db.prepare("SELECT id FROM crawl_jobs WHERE type='stock' ORDER BY id LIMIT 1").first<{ id: number }>();
+  return { ...t, thin: thin?.n ?? 0, calls: calls?.n ?? 0, stockJob: stockJob?.id ?? null };
+}
+
 ops.get('/source', async (c) => {
   const db = c.env.DB; const s = await loadSettings(db);
+  const h = await health(db);
   const logs = await db.prepare("SELECT * FROM payment_log WHERE url LIKE 'SRC %' ORDER BY id DESC LIMIT 20").all<any>();
   const probes = await db.prepare("SELECT id,url,response,created_at FROM payment_log WHERE url LIKE 'PROBE %' ORDER BY id DESC LIMIT 5").all<{ id: number; url: string; response: string; created_at: string }>();
   const prov = getProvider(s);
@@ -488,6 +503,21 @@ ops.get('/source', async (c) => {
               <input type="text" name="test_id" placeholder="معرف منتج 1688 للاختبار" style="width:200px" dir="ltr" /><button class="btn sm ghost" formaction="/admin/source/test">اختبار: جلب منتج</button>
               <input type="text" name="test_kw" placeholder="كلمة بحث صينية" style="width:160px" /><button class="btn sm ghost" formaction="/admin/source/test">اختبار: بحث</button></div>
           </form>
+          <div class="card-box"><h3>صحة الكتالوج</h3>
+            <div class="kpis">
+              <div class="kpi"><b>{h.active}</b><span>منتج معروض للزبونة</span></div>
+              <div class="kpi"><b style={h.cn_live ? 'color:#d3262b' : 'color:#1a9c5b'}>{h.cn_live}</b><span>عنوان صيني ظاهر (يجب أن يكون صفرًا)</span></div>
+              <div class="kpi"><b>{h.draft}</b><span>محجوز حتى تكتمل ترجمته</span></div>
+              <div class="kpi"><b>{h.thin}</b><span>ينقصه صور/مقاسات/وزن</span></div>
+              <div class="kpi"><b>{h.oos}</b><span>نفد عند المورد</span></div>
+              <div class="kpi"><b>{h.calls}</b><span>استدعاء للمزوّد حتى الآن</span></div>
+            </div>
+            <div class="inline" style="margin-top:10px;flex-wrap:wrap">
+              <form method="post" action="/admin/source/enrich" class="inline"><button class="btn sm ok" disabled={!prov || !h.stockJob}>أثرِ ١٠ منتجات الآن</button></form>
+              <form method="post" action="/admin/source/translate" class="inline"><button class="btn sm ghost" disabled={!c.env.AI}>ترجم ٢٠ عنوانًا الآن</button></form>
+            </div>
+            <p style="font-size:12px;color:#666;margin-top:8px">كل ضغطة تأخذ دفعة واحدة وتعود بالنتيجة، فاضغطي مرة بعد مرة. الإثراء يبدأ بالمحجوزات: يجلب الصور والمقاسات والوزن ويُخرجها للمتجر. الوزن هو ما يُحسب عليه الشحن، فإثراؤه يصحّح السعر.</p>
+          </div>
           <form method="post" action="/admin/source/run" class="card-box"><h3>تشغيل من الخادم الآن</h3><p style="font-size:13px;color:#666">ينفذ المهام المستحقة في صفحة الزاحف عبر المزوّد (حتى 3 مهام في الضغطة الواحدة).</p><button class="btn sm ok" disabled={!prov}>شغّل المهام المستحقة</button> <a class="btn sm ghost" href="/admin/crawler">صفحة الزاحف ›</a></form>
         </div>
         <div>
@@ -538,6 +568,23 @@ ops.post('/source/test', async (c) => {
   const detail = r.ok ? (Array.isArray(d) ? `نجح البحث: ${d.length} منتج. الأول: ${d[0]?.title?.slice(0, 40)} — ¥${d[0]?.priceCny}` : `نجح: ${d?.title?.slice(0, 50)} — ¥${d?.priceCny} — صور ${d?.images?.length} — متغيرات ${d?.variants?.length} — حد أدنى ${d?.minQty}`) : `فشل: ${r.error} (HTTP ${r.status})`;
   return c.redirect(`/admin/source?test=${r.ok ? 'ok' : 'fail'}&detail=${encodeURIComponent(detail)}`);
 });
+ops.post('/source/enrich', async (c) => {
+  const db = c.env.DB;
+  const job = await db.prepare("SELECT id FROM crawl_jobs WHERE type='stock' ORDER BY id LIMIT 1").first<{ id: number }>();
+  if (!job) return c.redirect('/admin/source?test=err&detail=' + encodeURIComponent('لا توجد مهمة فحص مخزون'));
+  const r = await runServerJobs(c.env, { jobId: job.id, enrichOnly: true, maxItems: 10, byUserId: c.get('user')!.id });
+  const x = (r.results ?? [{}])[0] as any;
+  await logActivity(db, c.get('user')!.id, 'source.enrich', String(x?.enriched ?? 0));
+  return c.redirect(`/admin/source?test=ok&detail=${encodeURIComponent(`فُحص ${x?.checked ?? 0} وأُثري ${x?.enriched ?? 0} منتجًا.${x?.note ? ' ' + String(x.note).slice(0, 120) : ''}`)}`);
+});
+
+ops.post('/source/translate', async (c) => {
+  if (!c.env.AI) return c.redirect('/admin/source?test=err&detail=' + encodeURIComponent('الترجمة تعمل على Cloudflare فقط'));
+  const r = await retranslatePending(c.env.DB, c.env.AI, 20);
+  await logActivity(c.env.DB, c.get('user')!.id, 'source.translate', String(r.products));
+  return c.redirect(`/admin/source?test=ok&detail=${encodeURIComponent(`تُرجم ${r.products} عنوانًا و${r.variants} خاصية · بقي ${r.remaining} عنوانًا صينيًا (${r.held} محجوزة).`)}`);
+});
+
 ops.post('/source/run', async (c) => {
   const r = await runServerJobs(c.env, { limit: 3, byUserId: c.get('user')!.id });
   await logActivity(c.env.DB, c.get('user')!.id, 'source.run', String(r.ran));
