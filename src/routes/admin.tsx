@@ -86,7 +86,8 @@ admin.get('/orders', async (c) => {
   let where = '1=1'; const binds: any[] = [];
   if (st) { where += ' AND o.status=?'; binds.push(st); }
   if (q) { where += ' AND (o.code LIKE ? OR u.name LIKE ? OR u.phone LIKE ?)'; binds.push(`%${q}%`, `%${q}%`, `%${q}%`); }
-  const rows = await c.env.DB.prepare(`SELECT o.*,u.name,u.phone,pa.name AS partner FROM orders o JOIN users u ON u.id=o.user_id LEFT JOIN partners pa ON pa.id=o.partner_id WHERE ${where} ORDER BY o.id DESC LIMIT 200`).bind(...binds).all<any>();
+  const total = (await c.env.DB.prepare(`SELECT COUNT(*) n FROM orders o JOIN users u ON u.id=o.user_id WHERE ${where}`).bind(...binds).first<{ n: number }>())?.n ?? 0;
+  const rows = await c.env.DB.prepare(`SELECT o.*,u.name,u.phone,pa.name AS partner FROM orders o JOIN users u ON u.id=o.user_id LEFT JOIN partners pa ON pa.id=o.partner_id WHERE ${where} ORDER BY o.id DESC LIMIT ? OFFSET ?`).bind(...binds, PER, (pageOf(c) - 1) * PER).all<any>();
   const counts = await c.env.DB.prepare('SELECT status,COUNT(*) n FROM orders GROUP BY status').all<any>();
   const cm = Object.fromEntries(counts.results.map(r => [r.status, r.n]));
   return shell(c, 'orders', 'الطلبات', (
@@ -95,7 +96,7 @@ admin.get('/orders', async (c) => {
       <form class="inline" style="margin:8px 0"><input type="text" name="q" placeholder="رقم الطلب / اسم / هاتف" value={q} /><input type="hidden" name="status" value={st} /><button class="btn sm">بحث</button></form>
       <div class="tbl-wrap"><table class="tbl"><tr><th>الطلب</th><th>الزبونة</th><th>الحالة</th><th>الدفع</th><th>الشريك</th><th>الإجمالي</th><th>التاريخ</th></tr>
         {rows.results.map(o => <tr><td><a href={`/admin/orders/${o.code}`} style="color:#b5124f;font-weight:700">{o.code}</a></td><td>{o.name}<br /><small>{o.phone} · {o.ship_city}</small></td><td><span class={`status ${ORDER_STATUS[o.status]?.color}`}>{ORDER_STATUS[o.status]?.ar}</span></td><td>{PAYMENT_METHODS[o.payment_method]?.ar ?? o.payment_method}{o.payment_ref && <><br /><small>{o.payment_ref}</small></>}</td><td>{o.partner ?? '—'}</td><td>{fmt(o.total_lyd)}</td><td>{timeAgo(o.created_at)}</td></tr>)}
-      </table></div>
+      </table></div><Pager c={c} total={total} />
     </>
   ));
 });
@@ -350,6 +351,23 @@ function asVariant(v: any) {
   return color || size ? { ...v, color, size } : null;
 }
 
+// ترقيم صفحات اللوحة. القوائم كانت تقف عند ٢٠٠ صفّ بلا رقم صفحة واحد: ما بعدها
+// موجود في القاعدة ولا يصل إليه أحد — نفس عطل ترقيم المتجر بوجه آخر.
+// الرابط يضع `page` ولا يحذفه (الخطأ الذي أخفى ٩٠٪ من بضاعة المتجر).
+const PER = 100;
+const pageOf = (c: Context<Env>) => Math.max(1, parseInt(new URL(c.req.url).searchParams.get('page') ?? '1'));
+const Pager = ({ c, total }: { c: Context<Env>; total: number }) => {
+  const pages = Math.ceil(total / PER); const cur = pageOf(c);
+  if (pages <= 1) return null;
+  const href = (n: number) => { const u = new URL(c.req.url); u.searchParams.set('page', String(n)); return u.pathname + u.search; };
+  return (
+    <div class="pager" style="margin-top:12px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+      <span style="font-size:13px;color:#666">الصفحة {cur} من {pages} · {total} صفًّا</span>
+      {Array.from({ length: pages }, (_, i) => i + 1).slice(0, 20).map(n => <a href={href(n)} class={`btn sm ${n === cur ? '' : 'ghost'}`}>{n}</a>)}
+    </div>
+  );
+};
+
 // ---------- المنتجات ----------
 admin.get('/products', async (c) => {
   const q = c.req.query('q') ?? ''; const st = c.req.query('status') ?? '';
@@ -369,7 +387,8 @@ admin.get('/products', async (c) => {
   if (c.req.query('stuck')) where += ` AND p.source='1688' AND p.enrich_tries >= 3 AND p.status IN ('active','draft')
      AND ((SELECT COUNT(*) FROM product_images i WHERE i.product_id=p.id) <= 1
        OR (SELECT COUNT(*) FROM variants v WHERE v.product_id=p.id) = 0 OR p.weight_g IS NULL)`;
-  const rows = await c.env.DB.prepare(`SELECT ${PRODUCT_SELECT} FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE ${where} ORDER BY p.id DESC LIMIT 200`).bind(...binds).all<ProductRow>();
+  const total = (await c.env.DB.prepare(`SELECT COUNT(*) n FROM products p WHERE ${where}`).bind(...binds).first<{ n: number }>())?.n ?? 0;
+  const rows = await c.env.DB.prepare(`SELECT ${PRODUCT_SELECT} FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE ${where} ORDER BY p.id DESC LIMIT ? OFFSET ?`).bind(...binds, PER, (pageOf(c) - 1) * PER).all<ProductRow>();
   const s = await loadSettings(c.env.DB);
   const untranslated = (await c.env.DB.prepare("SELECT COUNT(*) n FROM products WHERE title_ar GLOB '*[一-龥]*'").first<any>())?.n ?? 0;
   const maxRetail = Math.max(2, parseInt(s.retail_max_moq ?? '') || 10);
@@ -402,7 +421,7 @@ admin.get('/products', async (c) => {
       </form>
       <div class="tbl-wrap"><table class="tbl"><tr><th></th><th>المنتج</th><th>القسم</th><th>سعر المصدر</th><th>سعر البيع</th><th>الحالة</th><th>مبيعات</th><th>آخر فحص</th><th></th></tr>
         {rows.results.map(p => <tr><td><img src={imgUrl(p.image)} /></td><td><a href={`/admin/products/${p.id}`}>{p.title_ar}</a><br /><a class="src-link" href={p.source_url ?? '#'} target="_blank">{p.source_offer_id}</a></td><td>{p.cat_name ?? '—'}</td><td>{p.source_price_cny} ¥</td><td><b>{fmt(p.price_lyd)}</b><br /><small style="color:#888">هامش ≈ {Math.round((1 - (p.source_price_cny * parseFloat(s.fx_cny_lyd)) / p.price_lyd) * 100)}%</small></td><td><span class={`status ${p.status === 'active' ? 'green' : p.status === 'unavailable' ? 'red' : 'gray'}`}>{p.status}</span>{!p.in_stock && <><br /><small style="color:#d3262b">نفد</small></>}</td><td>{p.sales}</td><td><small>{p.last_checked_at ? timeAgo(p.last_checked_at) : '—'}</small></td><td><a href={`/p/${p.slug}`} target="_blank">👁</a></td></tr>)}
-      </table></div>
+      </table></div><Pager c={c} total={total} />
     </>
   ));
 });

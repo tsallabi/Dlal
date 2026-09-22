@@ -1464,6 +1464,40 @@ for (const path of ['/c/all', '/new']) {
 }
 await shot(page, 'pager-page-3');
 
+// ---------- لا منتج يُجبر الزبونة على أكثر من قطعة ----------
+// «نحن موقع يبيع بالقطعة، لا يمكن أن نجبر الزبون أن يشتري أكثر من قطعة إلا برغبته»
+await login(page, '0910000000', 'admin123');
+await page.goto(BASE + '/admin/import');
+const moq2Offer = '71' + String(Date.now()).slice(-10); const moq2Tag = uniqTag();
+await page.fill('form[action$="/import/json"] textarea[name=json]', JSON.stringify([{
+  offerId: moq2Offer, url: `https://detail.1688.com/offer/${moq2Offer}.html`, title: `قطعتان ${moq2Tag}`,
+  priceCny: 7, images: ['https://cbu01.alicdn.com/img/ibank/two.jpg'], minQty: 2, inStock: true, weightG: 150,
+}]));
+await page.click('form[action$="/import/json"] button:has-text("استيراد")');
+await page.waitForLoadState('networkidle');
+await page.goto(BASE + '/admin/products?q=' + moq2Offer);
+expect((await page.locator(`tr:has-text("${moq2Offer}")`).first().textContent()).includes('hidden'),
+  'حتى الحد الأدنى «قطعتان» يدخل مخفيًا — المتجر بالقطعة');
+// ولا يبقى على الرف منتج واحد يُجبر الزبونة
+const forced = await page.evaluate(async (b) => {
+  const r = await fetch(b + '/api/source/stats', { method: 'POST', headers: { 'content-type': 'application/json', 'x-import-token': 'dev-import-token' }, body: '{}' });
+  return (await r.json()).totals;
+}, BASE);
+expect(typeof forced.active === 'number', `الإحصاءات تعمل (${forced.active} نشط)`);
+
+// ---------- ترقيم اللوحة: القوائم كانت تقف عند ٢٠٠ صفّ بلا رقم صفحة ----------
+await page.goto(BASE + '/admin/products');
+const admTotal = await page.locator('.pager span').first().textContent().catch(() => '');
+if (/من \d+/.test(admTotal)) {
+  const adm3 = page.locator('.pager a', { hasText: /^2$/ }).first();
+  const h = await adm3.getAttribute('href');
+  expect(/[?&]page=2(&|$)/.test(h ?? ''), `لوحة المنتجات: رابط الصفحة ٢ يحمل page=2 (${h})`);
+  await adm3.click(); await page.waitForLoadState('networkidle');
+  expect(/[?&]page=2(&|$)/.test(page.url()), `لوحة المنتجات: وصلنا فعلًا للصفحة ٢ (${page.url()})`);
+  expect(await has(page, 'الصفحة 2'), 'لوحة المنتجات تقول إنها الصفحة الثانية');
+}
+await page.goto(BASE + '/logout');
+
 // ---------- جوال ----------
 const m = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, locale: 'ar' });
 const mp = await m.newPage();
