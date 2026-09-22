@@ -84,5 +84,16 @@ expect(wt.zero === null, 'الوزن صفر أو مفقود يُهمل');
 expect(wt.specKg === 300, `٠٫٣ في جدول المواصفات كيلوغرامات (${wt.specKg} غ)`);
 expect(wt.specG === 800, `٨٠٠ في جدول المواصفات غرامات (${wt.specG} غ)`);
 
+
+// --- رأس عمود جدول المواصفات ليس قيمة خاصية
+const a2 = d.attrs2;
+expect(a2.cjkSize === null, `«尺码» رأس عمود لا مقاس (${a2.cjkSize})`);
+expect(a2.cjkColor === null, `«颜色：» بنقطتين رأس عمود أيضًا (${a2.cjkColor})`);
+expect(a2.arSize === null, `«المقاس» ليس مقاسًا (${a2.arSize})`);
+expect(a2.arColor === null, `«اللون» ليس لونًا (${a2.arColor})`);
+expect(a2.realColor === 'أحمر', `«أحمر» لون حقيقي يبقى (${a2.realColor})`);
+expect(a2.realSize === 'XL', `«XL» مقاس حقيقي يبقى (${a2.realSize})`);
+expect(a2.empty === null, 'القيمة الفارغة تُهمل');
+
 console.log(`\nنجح: ${passed} · فشل: ${problems.length}`);
 process.exit(problems.length ? 1 : 0);

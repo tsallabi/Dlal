@@ -10,6 +10,7 @@ import { classifyModesty } from '../lib/modesty';
 import { fingerprint, sameProduct } from '../lib/dedupe';
 import { loadSettings, computePrice } from '../lib/pricing';
 import { requireRole } from '../lib/auth';
+import { attrValue, notRetail } from '../lib/source';
 import { requirePerm, logActivity } from '../lib/perm';
 import { setOrderStatus, markOrderPaid } from '../lib/orders';
 import { Translator, hasCJK, goodTitle, retranslatePending, releaseHeldDrafts } from '../lib/translate';
@@ -242,6 +243,8 @@ export async function importProducts(db: D1Database, arr: any[], categoryId: num
   // ترجمة قيم المتغيرات (ألوان/مقاسات): قاموس فوري ثم الذاكرة ثم الذكاء الاصطناعي
   const trVariants = async (vs: any[]) => { for (const v of vs ?? []) { if (v.color) v.color = (await tr.t(String(v.color), 'attr', v.colorEn)) ?? v.color; if (v.size) v.size = (await tr.t(String(v.size), 'attr', v.sizeEn)) ?? v.size; } return vs ?? []; };
   const s = await loadSettings(db);
+  // الحد الفاصل بين التجزئة والجملة: فوقه لا تصل البضاعة للرف. قابل للضبط من /admin/pricing
+  const maxRetail = Math.max(2, parseInt(s.retail_max_moq ?? '') || 10);
   const cats = await getCategories(db);
   const cat = cats.find(x => x.id === categoryId) ?? null;
   // عناوين القسم الحالية: نقارن بها كل منتج جديد لئلا نُدخل نفس القطعة من مورد آخر
@@ -290,8 +293,9 @@ export async function importProducts(db: D1Database, arr: any[], categoryId: num
         it.images.slice(0, 8).forEach((u: string, i: number) => enrich.push(db.prepare('INSERT INTO product_images(product_id,url,sort) VALUES(?,?,?)').bind(ex.id, u, i)));
       }
       if (Array.isArray(it.variants) && it.variants.length && (cur?.vars ?? 0) === 0) {
-        it.variants.forEach((v: any) => enrich.push(db.prepare('INSERT INTO variants(product_id,source_sku_id,color,size,price_delta_lyd,in_stock,image_url) VALUES(?,?,?,?,?,?,?)')
-          .bind(ex.id, v.skuId ?? null, v.color ?? null, v.size ?? null, v.priceCny ? Math.round((v.priceCny - price) * parseFloat(s.fx_cny_lyd) * 1.4 * 2) / 2 : 0, v.inStock === false ? 0 : 1, v.image ?? null)));
+        // متغيّر بلا لون ولا مقاس بعد تنظيف رؤوس الأعمدة لا معنى له: لا يُدرج أصلًا
+        it.variants.map(asVariant).filter(Boolean).forEach((v: any) => enrich.push(db.prepare('INSERT INTO variants(product_id,source_sku_id,color,size,price_delta_lyd,in_stock,image_url) VALUES(?,?,?,?,?,?,?)')
+          .bind(ex.id, v.skuId ?? null, v.color, v.size, v.priceCny ? Math.round((v.priceCny - price) * parseFloat(s.fx_cny_lyd) * 1.4 * 2) / 2 : 0, v.inStock === false ? 0 : 1, v.image ?? null)));
       }
       // كل مرور على منتج موجود محاولة إثراء تُعدّ، نجحت أو لم تنجح: بها يتقدّم الطابور ولا يدور
       const upd: string[] = ['enrich_tries=enrich_tries+1']; const binds: any[] = [];
@@ -321,19 +325,28 @@ export async function importProducts(db: D1Database, arr: any[], categoryId: num
        VALUES('1688',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL,?,?,?,?)`,
     ).bind(offerId, it.url ?? `https://detail.1688.com/offer/${offerId}.html`, slug, titleAr, it.title ?? null, it.descriptionAr ?? null,
       targetCat, price, pr.total_lyd, Math.random() < 0.4 ? Math.ceil(pr.total_lyd * 1.25 / 5) * 5 : null, prSea.total_lyd, it.weightG ?? null, it.volumeCm3 ?? null,
-      Math.max(1, parseInt(it.minQty ?? 1) || 1), it.inStock === false ? 0 : 1, hasCJK(titleAr) ? 'draft' : 'active', supplierAr, parseInt(it.sales ?? 0) || 0, 0, homeOk, fp || null).run();
+      moq, it.inStock === false ? 0 : 1, notRetail(it.title, moq, maxRetail) ? 'hidden' : hasCJK(titleAr) ? 'draft' : 'active', supplierAr, parseInt(it.sales ?? 0) || 0, 0, homeOk, fp || null).run();
     const pid = ins.meta.last_row_id as number;
     if (!pid || !ins.meta.changes) { skipped++; continue; }   // تجاهل صفّ لم يُدرج (تعارض مع استيراد متزامن)
     const stmts: D1PreparedStatement[] = [];
     (it.images ?? []).slice(0, 6).forEach((u: string, i: number) => stmts.push(db.prepare('INSERT INTO product_images(product_id,url,sort) VALUES(?,?,?)').bind(pid, u, i)));
-    (it.variants ?? []).forEach((v: any) => stmts.push(db.prepare('INSERT INTO variants(product_id,source_sku_id,color,size,price_delta_lyd,in_stock,image_url) VALUES(?,?,?,?,?,?,?)')
-      .bind(pid, v.skuId ?? null, v.color ?? null, v.size ?? null, v.priceCny ? Math.round((v.priceCny - price) * parseFloat(s.fx_cny_lyd) * 1.4 * 2) / 2 : 0, v.inStock === false ? 0 : 1, v.image ?? null)));
+    (it.variants ?? []).map(asVariant).filter(Boolean).forEach((v: any) => stmts.push(db.prepare('INSERT INTO variants(product_id,source_sku_id,color,size,price_delta_lyd,in_stock,image_url) VALUES(?,?,?,?,?,?,?)')
+      .bind(pid, v.skuId ?? null, v.color, v.size, v.priceCny ? Math.round((v.priceCny - price) * parseFloat(s.fx_cny_lyd) * 1.4 * 2) / 2 : 0, v.inStock === false ? 0 : 1, v.image ?? null)));
     if (stmts.length) await db.batch(stmts);
     peers.push({ id: pid, source_offer_id: offerId, source_price_cny: price, t: srcTitle });
     imported++; newIds.push(offerId);
   }
   await db.prepare('INSERT INTO import_log(by_user_id,source,page_url,imported,updated,skipped) VALUES(?,?,?,?,?,?)').bind(byUserId, '1688', pageUrl, imported, updated, skipped).run();
   return { imported, updated, skipped, enriched, dupes, newIds };
+}
+
+// إعلان مصنع تغليف/طباعة/OEM — نفس الكلمات في src/lib/source.ts وفي ترحيل 0020
+const PACK = `(p.title_src LIKE '%\u5305\u88c5%' OR p.title_src LIKE '%\u5370\u5237%' OR p.title_src LIKE '%\u7eb8\u76d2%' OR p.title_src LIKE '%\u793c\u54c1\u76d2%' OR p.title_src LIKE '%\u5305\u88c5\u888b%' OR p.title_src LIKE '%\u5305\u88c5\u76d2%' OR p.title_src LIKE '%OEM%' OR p.title_src LIKE '%\u8d34\u724c%' OR p.title_src LIKE '%\u4ee3\u5de5%')`;
+
+// قيمة المتغيّر بعد تنظيف رؤوس الأعمدة؛ null إن لم يبقَ لون ولا مقاس فلا يُدرج المتغيّر
+function asVariant(v: any) {
+  const color = attrValue(v?.color), size = attrValue(v?.size);
+  return color || size ? { ...v, color, size } : null;
 }
 
 // ---------- المنتجات ----------
@@ -347,22 +360,33 @@ admin.get('/products', async (c) => {
   // فقطعة أقلّ طلبها ٨٠٠٠ ليست بيعًا بالتجزئة مهما بدت في الرف.
   const moq = parseInt(c.req.query('moq') ?? '') || 0;
   if (moq > 1) { where += ' AND p.min_qty >= ?'; binds.push(moq); }
+  // ?pack=1 — إعلانات مصانع التغليف والطباعة وOEM: تبيع العلبة الفارغة لا ما في الصورة
+  if (c.req.query('pack')) where += ` AND ${PACK}`;
   if (c.req.query('stuck')) where += ` AND p.source='1688' AND p.enrich_tries >= 3 AND p.status IN ('active','draft')
      AND ((SELECT COUNT(*) FROM product_images i WHERE i.product_id=p.id) <= 1
        OR (SELECT COUNT(*) FROM variants v WHERE v.product_id=p.id) = 0 OR p.weight_g IS NULL)`;
   const rows = await c.env.DB.prepare(`SELECT ${PRODUCT_SELECT} FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE ${where} ORDER BY p.id DESC LIMIT 200`).bind(...binds).all<ProductRow>();
   const s = await loadSettings(c.env.DB);
   const untranslated = (await c.env.DB.prepare("SELECT COUNT(*) n FROM products WHERE title_ar GLOB '*[一-龥]*'").first<any>())?.n ?? 0;
-  const lots = await c.env.DB.prepare("SELECT COUNT(*) n FROM products WHERE status='active' AND min_qty >= 10").first<{ n: number }>();
+  const maxRetail = Math.max(2, parseInt(s.retail_max_moq ?? '') || 10);
+  const lots = await c.env.DB.prepare(`SELECT
+     SUM(p.status='active' AND p.min_qty >= ?) lotsOn, SUM(p.status='hidden' AND p.min_qty >= ?) lotsOff,
+     SUM(p.status='active' AND ${PACK}) packOn, SUM(p.status='hidden' AND ${PACK}) packOff
+     FROM products p`).bind(maxRetail, maxRetail).first<any>();
   return shell(c, 'products', 'المنتجات', (
     <>
       <Flash msg={c.req.query('lots') ? `${c.req.query('act') === 'hide' ? 'أُخفيت' : 'أُعيدت للمتجر'} ${c.req.query('lots')} قطعة جملة` : c.req.query('stuck') ? `منتجات تعذّر إثراؤها بعد ثلاث محاولات من الإضافة: صفحتها على 1688 لا تعطي الصور أو المقاسات أو الوزن. أثريها بالكريدت حين يتوفر — وحتى ذلك تُسعَّر بوزن القسم التقديري.` : c.req.query('imported') ? `تم استيراد ${c.req.query('imported')} منتج وتحديث ${c.req.query('updated')}` : c.req.query('translated') ? `تُرجم ${c.req.query('translated')} عنوانًا` : c.req.query('ok') ? 'تم الحفظ ✓' : undefined} /><Flash type="err" msg={c.req.query('noai') ? 'الترجمة تعمل على Cloudflare فقط (ربط Workers AI غير متاح هنا)' : undefined} />
       <form class="inline" style="margin-bottom:10px"><input type="text" name="q" placeholder="بحث بالاسم أو offerId" value={q} /><select name="status"><option value="">كل الحالات</option>{['active', 'draft', 'hidden', 'unavailable'].map(x => <option value={x} selected={st === x}>{x}</option>)}</select><button class="btn sm">بحث</button><a class="btn sm ghost" href="/admin/products/new">+ منتج يدوي</a><button class="btn sm ghost" formaction="/admin/products/translate" formmethod="post">🈶 ترجمة العناوين الصينية ({untranslated})</button></form>
-      {/* قطع الجملة: القرار تجاري (نبيعها لوطًا أم نخفيها) فنعطي الأداة ولا نقرر */}
+      {/* بضاعة ليست للتجزئة: لوط جملة، أو إعلان مصنع تغليف يبيع العلبة الفارغة لا ما في الصورة */}
       <form method="post" action="/admin/products/wholesale" class="card-box" style="margin-bottom:10px;padding:10px">
-        <b style="font-size:14px">قطع تُباع بالجملة</b>
-        <p style="font-size:12px;color:#666;margin:4px 0">{lots?.n ?? 0} قطعة نشطة حدّها الأدنى ١٠ فأكثر — الزبونة لا تستطيع شراء أقل منه، وسعر اللوط كامل هو ما تدفعه. <a href="/admin/products?moq=10">اعرضيها</a></p>
-        <div class="inline"><label style="margin:0">أقل طلب ≥</label><input type="number" name="min" value="50" min="2" style="width:90px" />
+        <b style="font-size:14px">بضاعة ليست للتجزئة</b>
+        <p style="font-size:12px;color:#666;margin:4px 0">
+          <b>لوط جملة</b> (أقل طلب {maxRetail} فأكثر): {lots?.lotsOn ?? 0} على الرف · {lots?.lotsOff ?? 0} مخفية — <a href={`/admin/products?moq=${maxRetail}`}>اعرضيها</a>
+          <br /><b>إعلانات تغليف وطباعة وOEM</b>: {lots?.packOn ?? 0} على الرف · {lots?.packOff ?? 0} مخفية — <a href="/admin/products?pack=1">اعرضيها</a>.
+          هذه تبيع العلبة الفارغة لا ما يظهر في الصورة، ولهذا أقلّ طلبها بالمئات.
+        </p>
+        <div class="inline"><label style="margin:0">أقل طلب ≥</label><input type="number" name="min" value={maxRetail} min="2" style="width:80px" />
+          <label style="margin:0"><input type="checkbox" name="pack" value="1" checked /> ومعها إعلانات التغليف</label>
           <button class="btn sm" name="act" value="hide">أخفِها من المتجر</button>
           <button class="btn sm ghost" name="act" value="show">أعِدها للمتجر</button></div>
       </form>
@@ -379,10 +403,12 @@ admin.post('/products/wholesale', async (c) => {
   const f = await c.req.parseBody();
   const min = Math.max(2, Number(f.min) || 50);
   const hide = String(f.act) === 'hide';
+  const withPack = !!f.pack;
+  const cond = `(p.min_qty >= ?${withPack ? ` OR ${PACK}` : ''})`;
   const r = await c.env.DB.prepare(hide
-    ? "UPDATE products SET status='hidden',updated_at=datetime('now') WHERE status='active' AND min_qty >= ?"
-    : "UPDATE products SET status='active',updated_at=datetime('now') WHERE status='hidden' AND min_qty >= ?").bind(min).run();
-  await logActivity(c.env.DB, c.get('user')!.id, 'products.wholesale', 'products', `${hide ? 'hide' : 'show'} min_qty>=${min}`);
+    ? `UPDATE products SET status='hidden',updated_at=datetime('now') WHERE id IN (SELECT p.id FROM products p WHERE p.status='active' AND ${cond})`
+    : `UPDATE products SET status='active',updated_at=datetime('now') WHERE id IN (SELECT p.id FROM products p WHERE p.status='hidden' AND ${cond})`).bind(min).run();
+  await logActivity(c.env.DB, c.get('user')!.id, 'products.wholesale', 'products', `${hide ? 'hide' : 'show'} min_qty>=${min}${withPack ? '+pack' : ''}`);
   return c.redirect(`/admin/products?moq=${min}&lots=${r.meta?.changes ?? 0}&act=${hide ? 'hide' : 'show'}`);
 });
 admin.post('/products/translate', async (c) => {
@@ -542,7 +568,7 @@ admin.get('/pricing', async (c) => {
         <h3>سعر الصرف (يحدّث يوميًا)</h3>
         {F('fx_cny_lyd', '1 يوان صيني = ؟ دينار')}{F('fx_usd_lyd', '1 دولار = ؟ دينار')}
         <h3 style="margin-top:16px">قواعد التسعير</h3>
-        {F('markup_percent', 'نسبة الربح الافتراضية %', '1')}{F('safety_percent', 'هامش أمان لتغير السعر %', '1')}{F('ship_usd_per_kg', 'الشحن الجوي للكيلو ($)')}{F('customs_percent', 'الجمارك %', '1')}{F('domestic_cn_ship_cny', 'شحن داخل الصين لمخزن الشريك (¥)')}
+        {F('markup_percent', 'نسبة الربح الافتراضية %', '1')}{F('safety_percent', 'هامش أمان لتغير السعر %', '1')}{F('ship_usd_per_kg', 'الشحن الجوي للكيلو ($)')}{F('customs_percent', 'الجمارك %', '1')}{F('domestic_cn_ship_cny', 'شحن داخل الصين لمخزن الشريك (¥)')}{F('retail_max_moq', 'أقل طلب يُقبل للتجزئة (فوقه يدخل مخفيًا)', '1')}
         <h3 style="margin-top:16px">الشحن من الصين — ما تدفعه لشركة الشحن</h3>
         <p style="font-size:13px;color:#666">شركات الشحن تحاسب بالوزن الحقيقي أو بالحجم، أيهما أكبر. ضع هنا سعر شاهين للمتر المكعب وسعر الكيلو، والنظام يوزّع التكلفة على كل قطعة حسب حجمها ووزنها، ويجمع لك المستحق لهم في صفحة التقارير.</p>
         {S('ship_mode', 'طريقة حساب الشحن', [['max', 'الأعلى بين الوزن والحجم (الأدق)'], ['kg', 'بالوزن فقط'], ['cbm', 'بالحجم فقط']])}
@@ -597,7 +623,7 @@ admin.get('/pricing', async (c) => {
 });
 admin.post('/pricing', async (c) => {
   const f = await c.req.parseBody();
-  const keys = ['fx_cny_lyd', 'fx_usd_lyd', 'markup_percent', 'safety_percent', 'ship_usd_per_kg', 'customs_percent', 'domestic_cn_ship_cny', 'delivery_lyd', 'free_ship_over_lyd', 'ship_mode', 'ship_usd_per_cbm', 'volumetric_divisor', 'default_volume_cm3', 'sea_enabled', 'ship_usd_per_kg_sea', 'ship_usd_per_cbm_sea', 'air_days', 'sea_days', 'delivery_city_rates'];
+  const keys = ['fx_cny_lyd', 'fx_usd_lyd', 'markup_percent', 'safety_percent', 'ship_usd_per_kg', 'customs_percent', 'domestic_cn_ship_cny', 'delivery_lyd', 'free_ship_over_lyd', 'ship_mode', 'ship_usd_per_cbm', 'volumetric_divisor', 'default_volume_cm3', 'sea_enabled', 'ship_usd_per_kg_sea', 'ship_usd_per_cbm_sea', 'air_days', 'sea_days', 'delivery_city_rates', 'retail_max_moq'];
   await c.env.DB.batch(keys.filter(k => f[k] !== undefined).map(k => c.env.DB.prepare("INSERT INTO settings(key,value,updated_at) VALUES(?,?,datetime('now')) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at").bind(k, String(f[k]))));
   return c.redirect('/admin/pricing?ok=1');
 });

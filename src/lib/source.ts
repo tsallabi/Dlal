@@ -1,3 +1,36 @@
+// ليست بضاعة تجزئة: إعلان مصنع تغليف أو طباعة أو تصنيع حسب الطلب (OEM)، أو لوط جملة.
+// صاحب المشروع فتح «صندوق هدايا أزياء للهواتف والسماعات» فوجد أقل طلب ٢٠٠ قطعة: الإعلان
+// لمصنع علب (YIGAO PACKAGING PRINTING · 源头大厂 专属定制) يبيع العلبة الفارغة، والسماعات
+// في الصورة محتوى توضيحي. ٩٦ إعلانًا كهذا و٣٠٦ لوط جملة في ٢٢/٠٩/٢٦.
+// الكلمات المستعملة قوية الدلالة فقط: 定制 و厂家直销 يرشّهما الباعة كدعاية على بضاعة سليمة.
+const MFG_WORDS = ['包装', '印刷', '纸盒', '礼品盒', '包装袋', '包装盒', 'OEM', '贴牌', '代工'];
+export function isPackagingListing(titleSrc: string | null | undefined): boolean {
+  const t = String(titleSrc ?? '');
+  return !!t && MFG_WORDS.some(w => t.includes(w));
+}
+// الحد الفاصل بين التجزئة والجملة قابل للضبط من `retail_max_moq` (الافتراضي ١٠)
+export function isWholesaleLot(minQty: number | null | undefined, maxRetail = 10): boolean {
+  return (Number(minQty) || 1) >= Math.max(2, maxRetail);
+}
+export function notRetail(titleSrc: string | null | undefined, minQty: number | null | undefined, maxRetail = 10): boolean {
+  return isPackagingListing(titleSrc) || isWholesaleLot(minQty, maxRetail);
+}
+
+// رأس العمود ليس قيمة: قارئ جدول مواصفات 1688 يلتقط أحيانًا اسم الخاصية نفسه
+// («尺码»، «颜色») فيُترجم إلى «المقاس» و«اللون» ويظهر للزبونة زرَّ مقاس اسمه «المقاس».
+// ١٣ منتجًا حيًا في ٢٢/٠٩/٢٦، منها الكيس الذي فتحه صاحب المشروع.
+const ATTR_NOISE = new Set([
+  '尺码', '尺寸', '规格', '颜色', '色系', '型号', '款式', '材质', '数量',
+  'size', 'sizes', 'color', 'colour', 'colors', 'model', 'style', 'spec', 'specification', 'quantity',
+  'المقاس', 'مقاس', 'المقاسات', 'مقاسات', 'الحجم', 'حجم', 'القياس', 'قياس',
+  'اللون', 'لون', 'الألوان', 'ألوان', 'النوع', 'نوع', 'المواصفات', 'مواصفات', 'الكمية', 'الموديل', 'موديل',
+]);
+export function attrValue(v: string | null | undefined): string | null {
+  const t = String(v ?? '').trim().replace(/[:\uFF1A]\s*$/, '').trim();
+  if (!t) return null;
+  return ATTR_NOISE.has(t.toLowerCase()) ? null : t;
+}
+
 // وزن المورّد يأتي عادةً بالكيلوغرام، وبعضهم يكتبه بالغرام في نفس الحقل. ضربُ الغرامات
 // في ١٠٠٠ ثانيةً أنتج رفّ حمام وزنه ٦٥٠ كغ وكوبًا حراريًا بـ٥٠٠ كغ، فظهرا على الرف بـ٥٤٬٦٠٠
 // و٤١٬٩٣٠ د.ل (٢٢/٠٩/٢٦). لا قطعة نشحنها جوًّا أو بحرًا تتجاوز ٥٠ كغ، فما فوقها يُعاد تفسيره

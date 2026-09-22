@@ -45,13 +45,28 @@ page.on('response', r => { if (r.status() >= 500) problems.push(`HTTP ${r.status
 // أثره مال حقيقي: نشتري ١٠٠ من 1688 ونبيع واحدة.
 await login(page, '0910000000', 'admin123');
 await page.goto(BASE + '/admin/import');
+// sameProduct يرفض أي عنوان أقل من أربع كلمات، فنُبقي كل عيّنة عند ثلاث كلمات أو أقل:
+// تشغيلة سابقة تترك عيّنتها في القاعدة، وعنوان مطابق في ثلاث كلمات من أربع يُعدّ «توأمًا»
+// فيُتجاهل الاستيراد بصمت ويسقط الفحص لسبب لا علاقة له به.
+const uniqTag = () => 'ت' + Math.random().toString(36).slice(2, 7);
 const moqOffer = '65' + String(Date.now()).slice(-10);
+const moqTag = uniqTag();
 await page.fill('form[action$="/import/json"] textarea[name=json]', JSON.stringify([{
-  offerId: moqOffer, url: `https://detail.1688.com/offer/${moqOffer}.html`, title: `قطعة جملة ${moqOffer}`,
+  offerId: moqOffer, url: `https://detail.1688.com/offer/${moqOffer}.html`, title: `قطعة جملة ${moqTag}`,
   priceCny: 3, images: ['https://cbu01.alicdn.com/img/ibank/moq.jpg'], minQty: 100, inStock: true, weightG: 120,
 }]));
 await page.click('form[action$="/import/json"] button:has-text("استيراد")');
 await page.waitForLoadState('networkidle');
+await page.goto(BASE + '/admin/products?q=' + moqOffer);
+// اللوط يدخل مخفيًا الآن (أقل طلب ١٠٠ ≥ الحد الفاصل): هذا هو السلوك المقصود.
+// صاحب المشروع يراجع المخفي ويُعيد ما يريد بيعه لوطًا — وهذا ما نفعله هنا قبل فحص العرض.
+const moqAdmin = await page.locator(`tr:has-text("${moqOffer}") a[href^="/admin/products/"]`).first().getAttribute('href');
+expect((await page.locator(`tr:has-text("${moqOffer}")`).first().textContent()).includes('hidden'), 'اللوط يدخل مخفيًا لا نشطًا');
+await page.goto(BASE + moqAdmin);
+await page.selectOption('select[name=status]', 'active');
+await page.click('form:has(input[name=title_ar]) button:has-text("حفظ")');
+await page.waitForLoadState('networkidle');
+expect(await page.locator('select[name=status]').inputValue() === 'active', 'الأدمن أعاد اللوط للرف بنفسه');
 await page.goto(BASE + '/admin/products?q=' + moqOffer);
 const moqHref = await page.locator(`tr:has-text("${moqOffer}") a[href^="/p/"]`).first().getAttribute('href');
 await login(page, '0910000000', 'admin123');
@@ -60,7 +75,7 @@ expect(await has(page, 'أقل طلب'), 'صفحة المنتج تقول إنه 
 const moqTotal = (await page.locator('.moq-note').textContent()).replace(/\s+/g, ' ');
 expect(/100 قطعة/.test(moqTotal), `تنبيه الحد الأدنى يذكر العدد (${moqTotal.slice(0, 70)})`);
 await page.click('#addForm button[type=submit]'); await page.waitForLoadState('networkidle');
-const moqRow = page.locator('.cart-row', { hasText: 'قطعة جملة' }).first();
+const moqRow = page.locator('.cart-row', { hasText: moqTag }).first();
 expect((await moqRow.locator('input[name=qty]').first().inputValue()) === '100', 'السلة تبدأ بالحد الأدنى ١٠٠');
 // الزبونة تحاول إنزالها إلى ١ — يجب أن تعود إلى ١٠٠
 // لا يوجد زر «تحديث»: الحقل يُرسل النموذج عند تغيّره (onchange) — نفعل ما تفعله الزبونة
@@ -69,9 +84,9 @@ await moqInput.fill('1');
 // النموذج يُرسل عند التغيّر فيحدث انتقال؛ ننتظر الانتقال نفسه لا «شبكة هادئة»
 // (الأخيرة قد تتحقق على الصفحة القديمة قبل أن يبدأ الإرسال فنقرأ قيمة قديمة)
 await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle' }), moqInput.dispatchEvent('change')]);
-const afterQty = await page.locator('.cart-row', { hasText: 'قطعة جملة' }).first().locator('input[name=qty]').first().inputValue();
+const afterQty = await page.locator('.cart-row', { hasText: moqTag }).first().locator('input[name=qty]').first().inputValue();
 expect(afterQty === '100', `السلة ترفض النزول تحت الحد الأدنى (${afterQty})`);
-await page.locator('.cart-row', { hasText: 'قطعة جملة' }).first().locator('button:has-text("حذف")').first().click();
+await page.locator('.cart-row', { hasText: moqTag }).first().locator('button:has-text("حذف")').first().click();
 await page.waitForLoadState('networkidle');
 
 // ---------- أداة الجملة: إخفاء وإظهار دفعةً واحدة، عكسيّة تمامًا ----------
@@ -81,6 +96,7 @@ await login(page, '0910000000', 'admin123');
 await page.goto(BASE + '/admin/products?moq=10');
 expect(await has(page, moqOffer), 'فلتر «أقل طلب ≥ ١٠» يُظهر قطعة الجملة');
 await page.fill('form[action$="/products/wholesale"] input[name=min]', '100');
+await page.uncheck('form[action$="/products/wholesale"] input[name=pack]');
 await page.locator('form[action$="/products/wholesale"] button:has-text("أخفِها")').click();
 await page.waitForLoadState('networkidle');
 expect(await has(page, 'أُخفيت'), 'اللوحة تقول كم قطعة أُخفيت');
@@ -92,12 +108,63 @@ expect(hid.status() === 404, `الزبونة لا تفتح صفحة القطعة
 await login(page, '0910000000', 'admin123');
 await page.goto(BASE + '/admin/products?moq=10');
 await page.fill('form[action$="/products/wholesale"] input[name=min]', '100');
+await page.uncheck('form[action$="/products/wholesale"] input[name=pack]');
 await page.locator('form[action$="/products/wholesale"] button:has-text("أعِدها")').click();
 await page.waitForLoadState('networkidle');
 expect(await has(page, 'أُعيدت للمتجر'), 'اللوحة تقول كم قطعة عادت');
 await page.goto(BASE + '/logout');
 const back = await page.goto(BASE + moqHref);
 expect(back.status() === 200, `القطعة عادت للمتجر بعد الإظهار (${back.status()})`);
+
+// ---------- رأس عمود جدول المواصفات لا يصير زرّ مقاس على الرف ----------
+// صاحب المشروع فتح كيسًا فوجد «اللون: سمك مزدوج» و«المقاس: المقاس» — الثاني اسم العمود
+// نفسه التقطه القارئ من رأس الجدول. ١٣ منتجًا حيًا في ٢٢/٠٩/٢٦.
+await login(page, '0910000000', 'admin123');
+await page.goto(BASE + '/admin/import');
+const attrOffer = '66' + String(Date.now()).slice(-10); const attrTag = uniqTag();
+await page.fill('form[action$="/import/json"] textarea[name=json]', JSON.stringify([{
+  offerId: attrOffer, url: `https://detail.1688.com/offer/${attrOffer}.html`, title: `أعمدة ${attrTag}`,
+  priceCny: 5, images: ['https://cbu01.alicdn.com/img/ibank/attr.jpg'], minQty: 1, inStock: true, weightG: 200,
+  variants: [{ color: '颜色', size: '尺码' }, { color: 'اللون', size: 'المقاس' }, { color: 'أحمر', size: 'XL' }],
+}]));
+await page.click('form[action$="/import/json"] button:has-text("استيراد")');
+await page.waitForLoadState('networkidle');
+await page.goto(BASE + '/admin/products?q=' + attrOffer);
+const attrHref = await page.locator(`tr:has-text("${attrOffer}") a[href^="/p/"]`).first().getAttribute('href');
+await page.goto(BASE + '/logout');
+await page.goto(BASE + attrHref);
+const sizeChips = await page.locator('.chips[data-opt=size] .chip').allTextContents();
+const colorChips = await page.locator('.chips[data-opt=color] .chip').allTextContents();
+expect(sizeChips.join('،') === 'XL', `زرّ المقاس الوحيد هو المقاس الحقيقي (${sizeChips.join('،') || 'لا شيء'})`);
+expect(colorChips.join('،') === 'أحمر', `زرّ اللون الوحيد هو اللون الحقيقي (${colorChips.join('،') || 'لا شيء'})`);
+expect(!sizeChips.includes('المقاس') && !colorChips.includes('اللون'), 'لا زرّ اسمه «المقاس» ولا «اللون»');
+expect(!sizeChips.includes('尺码') && !colorChips.includes('颜色'), 'ولا رأس عمود صيني');
+await shot(page, 'variant-headers-clean');
+
+// ---------- إعلان مصنع تغليف لا يصل الرف أصلًا ----------
+// «صندوق هدايا للهواتف والسماعات» بأقل طلب ٢٠٠: المورّد مصنع علب (包装/印刷) يبيع العلبة
+// الفارغة والسماعات في الصورة محتوى توضيحي. ٩٦ إعلانًا كهذا دخل المتجر كأنه منتج.
+await login(page, '0910000000', 'admin123');
+await page.goto(BASE + '/admin/import');
+const packOffer = '67' + String(Date.now()).slice(-10); const packTag = uniqTag();
+await page.fill('form[action$="/import/json"] textarea[name=json]', JSON.stringify([{
+  offerId: packOffer, url: `https://detail.1688.com/offer/${packOffer}.html`,
+  title: `包装盒 ${packTag}`,                      // «علبة تغليف» — كلمتان فقط فلا تصطدم بعيّنة تشغيلة سابقة
+  descriptionAr: 'صندوق هدايا', priceCny: 5, images: ['https://cbu01.alicdn.com/img/ibank/pack.jpg'],
+  minQty: 200, inStock: true, weightG: 120,
+}]));
+await page.click('form[action$="/import/json"] button:has-text("استيراد")');
+await page.waitForLoadState('networkidle');
+await page.goto(BASE + '/admin/products?q=' + packOffer);
+const packRow = page.locator(`tr:has-text("${packOffer}")`).first();
+expect((await packRow.textContent()).includes('hidden'), 'إعلان مصنع التغليف يدخل مخفيًا لا نشطًا');
+const packHref = await packRow.locator('a[href^="/p/"]').first().getAttribute('href');
+await page.goto(BASE + '/logout');
+const packRes = await page.goto(BASE + packHref);
+expect(packRes.status() === 404, `الزبونة لا ترى إعلان مصنع التغليف (${packRes.status()})`);
+await login(page, '0910000000', 'admin123');
+await page.goto(BASE + '/admin/products?pack=1');
+expect(await has(page, packOffer), 'فلتر «إعلانات التغليف» يجمعها للمراجعة');
 
 // ---------- شروط البداية: الفحص يضبطها ولا يرثها ----------
 // تشغيلة سابقة قد تنهار وهي في وضع «حقيقي» مشيرة إلى خادم وهمي مغلق، فتسقط فحوص الدفع
