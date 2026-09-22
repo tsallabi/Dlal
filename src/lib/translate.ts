@@ -67,6 +67,23 @@ export async function translateZhAr(ai: any, text: string, kind: 'text' | 'attr'
   return (await llm(ai, sys, user, models)) ?? (hintEn && !hasCJK(hintEn) ? await m2m(ai, hintEn, 'english') : null) ?? (await m2m(ai, text, 'chinese'));
 }
 
+// تشخيص عنوان عصيّ: ماذا ردّ كل نموذج بالضبط وأي بوابة رفضته — بلا تخمين
+export async function diagnoseTitle(ai: any, text: string, hintEn?: string | null) {
+  const out: any[] = [];
+  const user = hintEn && !hasCJK(hintEn) ? `الصينية: ${text.slice(0, 300)}\nالإنجليزية: ${hintEn.slice(0, 300)}` : text.slice(0, 300);
+  for (const model of ['@cf/meta/llama-3.3-70b-instruct-fp8-fast', '@cf/meta/llama-3.1-8b-instruct']) {
+    try {
+      const r: any = await ai.run(model, { messages: [{ role: 'system', content: SYS_TITLE }, { role: 'user', content: user }], max_tokens: 120, temperature: 0.2 });
+      const raw = String(r?.response ?? '').trim().split('\n')[0].replace(/^["'«»“”\s]+|["'«»“”\s.]+$/g, '').trim();
+      const cleaned = cleanTitle(raw);
+      out.push({ model, raw: raw.slice(0, 200), cleaned: cleaned.slice(0, 200), arabic: /[\u0600-\u06FF]/.test(raw), cjk: hasCJK(raw), degenerate: !goodArabic(raw) && /[\u0600-\u06FF]/.test(raw) && !hasCJK(raw), goodArabic: goodArabic(raw), goodTitle: goodTitle(raw), cleanedOk: goodTitle(cleaned) });
+    } catch (e: any) { out.push({ model, error: String(e?.message ?? e).slice(0, 200) }); }
+  }
+  const m2mEn = hintEn && !hasCJK(hintEn) ? await m2m(ai, hintEn, 'english') : null;
+  const m2mZh = await m2m(ai, text, 'chinese');
+  return { src: text.slice(0, 200), hintEn: hintEn ?? null, models: out, m2mEn, m2mZh };
+}
+
 // ترجمة مع ذاكرة: قاموس → ذاكرة القاعدة → الذكاء الاصطناعي → (العنوان الإنجليزي إن وُجد) → النص الأصلي
 export class Translator {
   private mem = new Map<string, string>();

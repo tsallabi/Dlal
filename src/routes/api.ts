@@ -8,7 +8,7 @@ import { fingerprint, sameProduct } from '../lib/dedupe';
 import { computePrice, loadSettings } from '../lib/pricing';
 import { getProvider } from '../lib/source-providers';
 import { runServerJobs } from '../lib/crawl';
-import { retranslatePending } from '../lib/translate';
+import { retranslatePending, diagnoseTitle, hasCJK } from '../lib/translate';
 
 const api = new Hono<Env>();
 
@@ -186,6 +186,18 @@ api.post('/source/stats', async (c) => {
        OR p.weight_g IS NULL)`).first<any>();
   const { results: jobs } = await db.prepare('SELECT id,name,type,query,runner,active,max_pages,max_new,interval_hours,last_run_at,last_summary FROM crawl_jobs ORDER BY id').all<any>();
   return c.json({ totals: { products: tot?.n ?? 0, active: tot?.a ?? 0, from1688: tot?.s ?? 0, providerCalls: src?.n ?? 0, outOfStock: tot?.oos ?? 0, chineseTitles: cn?.n ?? 0, chineseVisible: cn?.a ?? 0, heldDraft: tot?.dr ?? 0, needEnrich: thin?.n ?? 0 }, categories: cats, jobs });
+});
+
+// لماذا يرفض النظام ترجمة عناوين بعينها؟ يعيد الردّ الخام وحكم كل بوابة على أول N عنوان عالق
+api.post('/source/translate/why', async (c) => {
+  if (!tokenOk(c)) return c.json({ error: 'رمز غير صحيح' }, 401);
+  if (!c.env.AI) return c.json({ error: 'لا يوجد Workers AI' }, 400);
+  const b = await c.req.json<{ limit?: number }>().catch(() => ({} as any));
+  const n = Math.max(1, Math.min(b.limit ?? 3, 8));
+  const { results } = await c.env.DB.prepare("SELECT id,title_ar,title_src,tr_tries FROM products WHERE title_ar GLOB '*[一-龥]*' ORDER BY tr_tries DESC, id LIMIT ?").bind(n).all<any>();
+  const out = [];
+  for (const p of results) out.push({ id: p.id, tries: p.tr_tries, ...(await diagnoseTitle(c.env.AI, p.title_src && hasCJK(p.title_src) ? p.title_src : p.title_ar)) });
+  return c.json({ checked: out.length, cases: out });
 });
 
 api.post('/source/translate', async (c) => {

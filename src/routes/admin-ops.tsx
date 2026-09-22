@@ -257,6 +257,8 @@ ops.get('/reports', async (c) => {
     db.prepare(`SELECT p.id,p.name,
        COALESCE(SUM(CASE WHEN o.status IN ('delivered','ready','arrived','customs','shipped') THEN oi.qty*COALESCE(oi.unit_ship_lyd,0) END),0) shipped_due,
        COALESCE(SUM(oi.qty*COALESCE(oi.unit_ship_lyd,0)),0) all_due,
+       COALESCE(SUM(CASE WHEN COALESCE(o.ship_method,'air')='air' THEN oi.qty*COALESCE(oi.unit_ship_lyd,0) END),0) air_due,
+       COALESCE(SUM(CASE WHEN o.ship_method='sea' THEN oi.qty*COALESCE(oi.unit_ship_lyd,0) END),0) sea_due,
        COALESCE(SUM(oi.qty*COALESCE(oi.unit_goods_lyd,0)),0) goods_due,
        COUNT(DISTINCT o.id) orders
        FROM partners p LEFT JOIN orders o ON o.partner_id=p.id AND ${SOLD}
@@ -279,9 +281,10 @@ ops.get('/reports', async (c) => {
       <div class="card-box">
         <h3>المستحق لشركات الشحن</h3>
         <p style="font-size:13px;color:#666">«مستحق الآن» = شحن البضائع التي خرجت من الصين فعلًا. «إجمالي متوقع» يشمل الطلبات المدفوعة التي لم تُشحن بعد. ثمن البضاعة عند المورد معروض منفصلًا لأن الشريك يشتريه نيابةً عنا.</p>
-        <table class="tbl"><tr><th>الشريك</th><th>طلبات</th><th>ثمن البضاعة</th><th>مستحق الشحن الآن</th><th>إجمالي الشحن المتوقع</th><th>المجموع المستحق الآن</th></tr>
-          {owed.results.map(r => <tr><td><b>{r.name}</b></td><td>{r.orders}</td><td>{fmt(r.goods_due)}</td><td><b style="color:#d3262b">{fmt(r.shipped_due)}</b></td><td>{fmt(r.all_due)}</td><td><b>{fmt(r.goods_due + r.shipped_due)}</b></td></tr>)}
+        <table class="tbl"><tr><th>الشريك</th><th>طلبات</th><th>ثمن البضاعة</th><th>مستحق الشحن الآن</th><th>✈️ جوي</th><th>🚢 بحري</th><th>إجمالي الشحن المتوقع</th><th>المجموع المستحق الآن</th></tr>
+          {owed.results.map(r => <tr><td><b>{r.name}</b></td><td>{r.orders}</td><td>{fmt(r.goods_due)}</td><td><b style="color:#d3262b">{fmt(r.shipped_due)}</b></td><td>{fmt(r.air_due)}</td><td>{fmt(r.sea_due)}</td><td>{fmt(r.all_due)}</td><td><b>{fmt(r.goods_due + r.shipped_due)}</b></td></tr>)}
         </table>
+        <p style="font-size:12px;color:#666">عمودا «جوي» و«بحري» يقسمان إجمالي الشحن المتوقع حسب طريقة الشحن التي اختارتها الزبونة، لتطابق فاتورة الشريك التي تفصل الطريقتين.</p>
       </div>
       <div class="card-box"><h3>الأعلى ربحًا</h3>
         <table class="tbl"><tr><th>المنتج</th><th>قطع</th><th>مبيعات</th><th>تكلفة</th><th>ربح</th><th>هامش</th></tr>

@@ -48,6 +48,10 @@ on:
         description: "recompute air+sea prices for N products (empty = skip, 'all' = every product)"
         default: ""
         required: false
+      why:
+        description: "diagnose N stuck Chinese titles: what each model returned and which gate rejected it"
+        default: ""
+        required: false
       stats:
         description: "live store stats: 'short' = totals+categories only, 'yes' = also list every job, 'no' = skip"
         default: "short"
@@ -71,6 +75,7 @@ jobs:
           EO: ${{ github.event.inputs.enrich_only }}
           RP: ${{ github.event.inputs.reprice }}
           RE: ${{ github.event.inputs.repeat }}
+          WH: ${{ github.event.inputs.why }}
           JK: ${{ github.event.inputs.job_keyword }}
         run: |
           set -e
@@ -130,6 +135,11 @@ jobs:
               [ "$stall" -ge 3 ] && { echo "ثلاث دفعات بلا تقدّم — نتوقف"; break; }
               sleep 2
             done
+          fi
+          if [ -n "$WH" ]; then
+            echo "=== why are these titles stuck"
+            code=$(post "{\"limit\":$WH}" translate/why); echo "HTTP $code"
+            python3 -c "import json;d=json.load(open('out.json'));[print('\n---',c['id'],'محاولات',c['tries'],'\nSRC:',c['src'][:120],'\nEN:',c['hintEn'],*[f\"\n  {m.get('model','')[-28:]}: err={m.get('error')} raw={m.get('raw','')[:120]!r} ar={m.get('arabic')} cjk={m.get('cjk')} good={m.get('goodArabic')} title={m.get('goodTitle')} cleanedOk={m.get('cleanedOk')}\" for m in c['models']],'\n  m2mEn:',c['m2mEn'],'\n  m2mZh:',c['m2mZh']) for c in d.get('cases') or []]" 2>/dev/null || cat out.json
           fi
           if [ -n "$ST" ] && [ "$ST" != "no" ]; then
             echo "=== store stats"; code=$(post '{}' stats); echo "HTTP $code"

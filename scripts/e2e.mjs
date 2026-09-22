@@ -616,6 +616,11 @@ const profitTxt = await page.locator('.kpi', { hasText: 'صافي الربح' })
 expect(parseFloat(profitTxt.replace(/[^\d.]/g, '')) > 0, `صافي الربح محسوب من الطلبات الحقيقية: ${profitTxt.trim().split('\n')[0]}`);
 const marginPct = parseInt((profitTxt.match(/هامش\s*(\d+)/) ?? [0, '0'])[1]);
 expect(marginPct > 5 && marginPct < 70, `الهامش واقعي بعد حساب التكلفة: ${marginPct}%`);
+// فاتورة الشريك تفصل الجوي عن البحري، فالجدول يفصلهما أيضًا
+const owedHead = await page.locator('.card-box', { hasText: 'المستحق لشركات الشحن' }).locator('th').allTextContents();
+expect(owedHead.some(h => h.includes('جوي')) && owedHead.some(h => h.includes('بحري')), 'جدول المستحقات يفصل الشحن الجوي عن البحري');
+const owedRow = await page.locator('.card-box', { hasText: 'المستحق لشركات الشحن' }).locator('tr', { hasText: 'شاهين' }).locator('td').allTextContents();
+expect(Math.abs(num(owedRow[4]) + num(owedRow[5]) - num(owedRow[6])) < 0.05, `جوي ${owedRow[4]} + بحري ${owedRow[5]} = إجمالي الشحن ${owedRow[6]}`);
 const costTxt = await page.locator('.kpi', { hasText: 'تكلفتنا' }).textContent();
 expect(parseFloat(costTxt.replace(/[^\d.]/g, '')) > 0, 'تكلفتنا محسوبة وليست صفرًا');
 await shot(page, 'admin-reports-profit');
@@ -709,7 +714,7 @@ expect(await has(page, staffReply), 'المحادثة نفسها محفوظة ف
 await login(page, '0910000000', 'admin123');
 await page.goto(BASE + '/admin/import');
 const cnOffer = '68' + String(Date.now()).slice(-10);
-const cnTitle = '跨境外贸女装连衣裙夏季新款';
+const cnTitle = '跨境外贸女装连衣裙夏季新款 ' + String(Date.now()).slice(-5);
 const dressOpt = await page.locator('form[action$="/import/json"] select[name=category_id] option').evaluateAll(
   os => (os.find(o => o.textContent.includes('فساتين')) || {}).value);
 await page.selectOption('form[action$="/import/json"] select[name=category_id]', dressOpt);
@@ -718,7 +723,8 @@ await page.fill('form[action$="/import/json"] textarea[name=json]', JSON.stringi
   offerId: cnOffer, url: `https://detail.1688.com/offer/${cnOffer}.html`, title: cnTitle,
   priceCny: 42, images: ['https://cbu01.alicdn.com/img/ibank/test.jpg'], minQty: 1, inStock: true,
 }, {
-  offerId: arOffer, url: `https://detail.1688.com/offer/${arOffer}.html`, title: 'فستان سهرة مطرز بأكمام طويلة',
+  // عنوان بكلمات فريدة لكل تشغيل: كاشف المكرر يرفض نسخة ثانية من قطعة تشبه ما في القسم، وهو سلوك صحيح
+  offerId: arOffer, url: `https://detail.1688.com/offer/${arOffer}.html`, title: `قطعة اختبار ${arOffer}`,
   priceCny: 55, images: ['https://cbu01.alicdn.com/img/ibank/ar.jpg'], minQty: 1, inStock: true,
 }]));
 await page.click('form[action$="/import/json"] button:has-text("استيراد")');
