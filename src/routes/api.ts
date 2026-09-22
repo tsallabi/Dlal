@@ -91,6 +91,28 @@ api.post('/crawl/report', async (c) => {
 });
 
 // اختبار مزوّد API الخارجي (OTAPI/TMAPI) بالرمز نفسه — للفحص الآلي من GitHub Actions
+// إعادة تسعير الكتالوج من الخادم (جوي + بحري) — دفعات حتى لا تتجاوز حدود الـ Worker
+api.post('/source/reprice', async (c) => {
+  if (!tokenOk(c)) return c.json({ error: 'رمز غير صحيح' }, 401);
+  const b = await c.req.json<{ limit?: number; only_missing_sea?: boolean }>().catch(() => ({} as any));
+  const db = c.env.DB;
+  const s = await loadSettings(db);
+  const cats = await getCategories(db);
+  const limit = Math.max(1, Math.min(b.limit ?? 400, 800));
+  const where = b.only_missing_sea === false ? '1=1' : 'price_sea_lyd IS NULL';
+  const { results } = await db.prepare(`SELECT id,source_price_cny,weight_g,volume_cm3,category_id FROM products WHERE ${where} LIMIT ?`).bind(limit).all<any>();
+  const stmts = results.map((p: any) => {
+    const cat = cats.find(x => x.id === p.category_id);
+    const w = p.weight_g ?? cat?.est_weight_g ?? 300;
+    const air = computePrice(s, p.source_price_cny, w, cat?.markup_percent, p.volume_cm3);
+    const sea = computePrice(s, p.source_price_cny, w, cat?.markup_percent, p.volume_cm3, 'sea');
+    return db.prepare('UPDATE products SET price_lyd=?,price_sea_lyd=? WHERE id=?').bind(air.total_lyd, sea.total_lyd, p.id);
+  });
+  for (let i = 0; i < stmts.length; i += 100) await db.batch(stmts.slice(i, i + 100));
+  const left = await db.prepare('SELECT COUNT(*) n FROM products WHERE price_sea_lyd IS NULL').first<{ n: number }>();
+  return c.json({ ok: true, repriced: results.length, missing_sea_left: left?.n ?? 0 });
+});
+
 // فحص منطق الحشمة والبصمة والشحن على الكود الحقيقي (scripts/logic-test)
 api.get('/logic-check', async (c) => {
   if (!tokenOk(c)) return c.json({ error: 'رمز غير صحيح' }, 401);

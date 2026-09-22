@@ -17,7 +17,7 @@ export const Layout: FC<Props> = ({ title, user, cartCount = 0, wishCount = 0, c
     <head>
       <meta charset="utf-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1" />
-      <title>{title ? `${title} | تالين TALIN` : 'تالين TALIN — تسوق من الصين إلى ليبيا'}</title>
+      <title>{title ? `${title} | تالين TALIN` : 'تالين TALIN — بوابة الصين'}</title>
       <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
       <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" />
@@ -39,7 +39,7 @@ export const Layout: FC<Props> = ({ title, user, cartCount = 0, wishCount = 0, c
         </div>
         {/* الشريط الرئيسي: الشعار + بحث + أيقونات */}
         <div class="hdr-main wrap">
-          <a href="/" class="logo" aria-label="تالين TALIN"><b>تالين</b><i>TALIN</i></a>
+          <a href="/" class="logo" aria-label="تالين TALIN — بوابة الصين"><b>تالين</b><i>TALIN</i><u>بوابة الصين</u></a>
           <form class="search" action="/search" method="get" role="search">
             <input name="q" placeholder="ابحثي عن فستان، عباية، حقيبة…" value={q ?? ''} aria-label="ابحثي عن منتج" />
             <button type="submit" aria-label="بحث"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.2-3.2" stroke-linecap="round" /></svg></button>

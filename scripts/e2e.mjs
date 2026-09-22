@@ -42,7 +42,24 @@ page.on('response', r => { if (r.status() >= 500) problems.push(`HTTP ${r.status
 // ---------- الزبونة: تصفح ----------
 await page.goto(BASE + '/');
 expect((await page.locator('.card').count()) >= 20, 'الرئيسية تعرض شبكة منتجات');
-expect((await page.locator('.cat-tiles a').count()) >= 10, 'الرئيسية تعرض بلاطات الأقسام');
+expect((await page.locator('.tiles .tile').count()) >= 12, 'الرئيسية تعرض بلاطات الأقسام الدائرية');
+expect(await page.locator('.promo-hero .ph-item').count() > 0, 'البانر الترويجي يعرض منتجات بأسعارها');
+expect((await page.locator('.duo .duo-card').count()) === 2, 'بطاقتا «أرخص الأسعار» و«الأكثر رواجًا» جنبًا إلى جنب');
+expect((await page.locator('.trust > div').count()) === 4, 'شريط الثقة فيه أربع ضمانات');
+expect(await has(page, 'اختيارات لك'), 'الشبكة الرئيسية معنونة');
+expect((await page.locator('.card .unavail').count()) === 0, 'لا منتجات غير متوفرة على الرئيسية');
+// البلاطات لا تمرّ إلا إذا تجاوزت عرض الشاشة — نضيّق النافذة لنفرض ذلك ثم نختبر السهم
+await page.setViewportSize({ width: 900, height: 900 });
+await page.goto(BASE + '/'); await page.waitForLoadState('networkidle');
+const overflow = await page.evaluate(() => { const r = document.getElementById('catTiles'); return r.scrollWidth - r.clientWidth; });
+expect(overflow > 100, `بلاطات الأقسام تتجاوز العرض فتحتاج تمريرًا (${overflow}px)`);
+const tilesX = await page.evaluate(() => document.getElementById('catTiles').scrollLeft);
+await page.click('[data-tiles="1"]'); await page.waitForTimeout(700);
+const tilesX2 = await page.evaluate(() => document.getElementById('catTiles').scrollLeft);
+expect(Math.abs(tilesX2 - tilesX) > 50, `سهم البلاطات يمرّرها (${tilesX} → ${tilesX2})`);
+await page.setViewportSize({ width: 1280, height: 860 });
+await page.goto(BASE + '/'); await page.waitForLoadState('networkidle');
+expect(await page.locator('.hdr-main .logo u').textContent() === 'بوابة الصين', 'الشعار يحمل «بوابة الصين» تحت الاسمين');
 await shot(page, 'home');
 await page.click('.cats a:has-text("فساتين")'); await page.waitForLoadState('networkidle');
 expect(page.url().includes('/c/dresses'), 'الضغط على قسم فساتين يفتح صفحة القسم');

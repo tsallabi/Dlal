@@ -230,3 +230,14 @@ const proxyImg = (u) => (!u ? u : /(^|\.)(alicdn\.com|1688\.com|taobao\.com|tbcd
     } catch { b.textContent = old; b.disabled = false; }
   });
 })();
+
+// ===== بلاطات الأقسام الدائرية: أسهم التمرير (RTL معكوس) =====
+(function () {
+  const row = document.getElementById('catTiles');
+  if (!row) return;
+  const rtl = getComputedStyle(row).direction === 'rtl';
+  document.querySelectorAll('[data-tiles]').forEach(b => b.addEventListener('click', () => {
+    const dir = Number(b.getAttribute('data-tiles')) * (rtl ? -1 : 1);
+    row.scrollBy({ left: dir * 320, behavior: 'smooth' });
+  }));
+})();
