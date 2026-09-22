@@ -90,10 +90,19 @@ expect(page.url().includes('/c/dresses'), 'الضغط على قسم فساتين
 await page.click('.fsizes a:has-text("M")'); await page.waitForLoadState('networkidle');
 expect(page.url().includes('size=M'), 'فلتر المقاس يعمل');
 await page.click('.sortbar a:has-text("السعر: من الأقل")'); await page.waitForLoadState('networkidle');
-const prices = await page.$$eval('.card .p', els => els.map(e => parseFloat(e.textContent.replace(/[^\d٫.]/g, '').replace('٫', '.'))));
+const prices = (await page.$$eval('.card .p', els => els.map(e => { const c = e.cloneNode(true); c.querySelectorAll('s').forEach(n => n.remove()); return c.textContent; }))).map(num);
 expect(prices.every((v, i) => i === 0 || v >= prices[i - 1]), 'الترتيب بالسعر تصاعدي صحيح');
 await page.fill('.search input', 'حقيبة'); await page.press('.search input', 'Enter'); await page.waitForLoadState('networkidle');
 expect((await page.locator('.card').count()) >= 3, 'البحث عن "حقيبة" يعيد نتائج');
+// البحث بكلمتين لا يشترط ترتيبهما ولا يرتبك بـ «ال» التعريف
+const nFound = async (q) => { await page.goto(BASE + '/search?q=' + encodeURIComponent(q)); return page.locator('.card').count(); };
+const nOne = await nFound('فستان');
+const nTwo = await nFound('فستان سهرة');
+const nRev = await nFound('سهرة فستان');
+const nAl = await nFound('الفستان');
+expect(nTwo > 0 && nTwo === nRev, `«فستان سهرة» و«سهرة فستان» نتيجة واحدة (${nTwo} = ${nRev})`);
+expect(nTwo <= nOne, `كلمتان تضيّقان النتيجة (${nTwo} ≤ ${nOne})`);
+expect(nAl === nOne, `«الفستان» = «فستان» (${nAl} = ${nOne})`);
 // افتح أول منتج في القسم يملك ألوانًا ومقاسات (المنتجات المستوردة حديثًا قد تكون بلا متغيرات بعد)
 async function openProductWithVariants(cat = 'dresses') {
   await page.goto(BASE + '/c/' + cat);

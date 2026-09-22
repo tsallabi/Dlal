@@ -324,10 +324,18 @@ store.get('/c/:slug', async (c) => {
   if (!cat) return c.notFound();
   return listPage(c, { title: cat.name_ar, where: "p.status='active' AND p.category_id=?", binds: [cat.id], active: cat.slug, catId: cat.id });
 });
+// البحث بعدة كلمات: «فستان أحمر» يجب أن يجد «فستان سهرة أحمر» — كل كلمة تُطلب على حدة لا العبارة كما كُتبت.
+// «ال» التعريف تُتجاهَل بادئةً («الفستان» تجد «فستان») وكذلك التاء المربوطة/الهاء والألف بأشكالها.
+const searchTerms = (q: string) => q.split(/[\s,،]+/).map(w => w.replace(/^(ال)(?=.{3,})/, '')).filter(w => w.length >= 2).slice(0, 5);
 store.get('/search', async (c) => {
   const q = (c.req.query('q') ?? '').trim();
   if (!q) return c.redirect('/');
-  return listPage(c, { title: `نتائج البحث: ${q}`, where: "p.status='active' AND (p.title_ar LIKE ? OR p.description_ar LIKE ?)", binds: [`%${q}%`, `%${q}%`], q });
+  const terms = searchTerms(q);
+  const where = terms.length
+    ? "p.status='active' AND " + terms.map(() => '(p.title_ar LIKE ? OR p.description_ar LIKE ?)').join(' AND ')
+    : "p.status='active' AND (p.title_ar LIKE ? OR p.description_ar LIKE ?)";
+  const binds = terms.length ? terms.flatMap(w => [`%${w}%`, `%${w}%`]) : [`%${q}%`, `%${q}%`];
+  return listPage(c, { title: `نتائج البحث: ${q}`, where, binds, q });
 });
 store.get('/sale', (c) => listPage(c, { title: 'عروض وتخفيضات', where: "p.status='active' AND p.home_ok=1 AND p.compare_price_lyd > p.price_lyd", binds: [] }));
 store.get('/trending', (c) => listPage(c, { title: 'الأكثر رواجًا', where: "p.status='active' AND p.sales>0", binds: [] }));
