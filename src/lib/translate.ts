@@ -145,7 +145,7 @@ export function cleanTitle(t: string): string {
 // المحذوفة: llama-3.1-8b (5028 مُلغى) · qwen1.5-14b (مُلغى) · qwen2.5-14b (غير موجود) · gemma-3 (ممنوع للحساب)
 const TITLE_MODELS = ['@cf/meta/llama-4-scout-17b-16e-instruct', '@cf/meta/llama-3.3-70b-instruct-fp8-fast', '@cf/mistralai/mistral-small-3.1-24b-instruct', '@cf/meta/llama-3.1-8b-instruct-fp8'];
 const SHORT_MODELS = ['@cf/mistralai/mistral-small-3.1-24b-instruct', '@cf/meta/llama-4-scout-17b-16e-instruct', '@cf/meta/llama-3.3-70b-instruct-fp8-fast'];
-const SYS_TITLE = 'أنت مترجم لمتجر أزياء عربي. حوّل عنوان منتج من موقع 1688 (صيني محشو بكلمات مفتاحية) إلى عنوان منتج عربي قصير وطبيعي من 5 إلى 14 كلمة يصف المنتج للزبون. احذف عبارات مثل "تجارة خارجية"، "عبر الحدود"، "جديد 2025"، "بالجملة"، "موديل جديد". أجب بالعنوان العربي فقط، بلا شرح ولا علامات اقتباس.';
+const SYS_TITLE = 'أنت مترجم لمتجر أزياء عربي. حوّل عنوان منتج من موقع 1688 (صيني محشو بكلمات مفتاحية) إلى عنوان منتج عربي قصير وطبيعي من 5 إلى 14 كلمة يصف المنتج للزبون. احذف عبارات مثل "تجارة خارجية"، "عبر الحدود"، "جديد 2025"، "بالجملة"، "موديل جديد". اذكر ما يميّز هذه القطعة تحديدًا (الخامة أو المقاس أو عدد القطع أو الاستعمال) ولا تكتفِ بوصف عام يصلح لعشرات المنتجات. أجب بالعنوان العربي فقط، بلا شرح ولا علامات اقتباس.';
 const SYS_ATTR = 'ترجم قيمة خاصية منتج (لون أو مقاس أو نمط) من الصينية إلى العربية بكلمة أو كلمتين كما تُكتب في متجر ملابس. احتفظ برموز المقاسات اللاتينية (S, M, L, XL, 2XL) والأرقام كما هي بلا تعريب. 均码 تعني "مقاس واحد". أجب بالترجمة فقط.';
 const SYS_TEXT = 'ترجم النص التالي من الصينية إلى العربية بشكل طبيعي وقصير. أجب بالترجمة فقط.';
 // مسرد مصطلحات: كلمات صينية أخطأ فيها النموذج فعلًا على الرف الحي، تُمرَّر إليه في الطلب
@@ -297,7 +297,12 @@ export async function retranslatePending(db: D1Database, ai: any, limit = 40): P
       // العلامة تُمسح فقط إن صار العنوان سليمًا فعلًا — وإلا بقيت ليعود الدور عليه
       const clear = t && goodTitle(t) && !brokenTitle(t, src) ? ',needs_tr=0' : '';
       await db.prepare(`UPDATE products SET title_src=COALESCE(title_src,title_ar),title_ar=?,supplier_name=?${pub}${clear},tr_tries=tr_tries+1 WHERE id=?`).bind(t ?? p.title_ar, sp ?? p.supplier_name, p.id).run(); n++;
-    } else { await db.prepare('UPDATE products SET tr_tries=tr_tries+1 WHERE id=?').bind(p.id).run(); }
+    } else {
+      // لم يتغيّر شيء: إن كان العنوان سليمًا أصلًا فالعلامة أدّت دورها (سألنا النموذج فعلًا)
+      // وتُمسح، وإلا بقي معلّمًا. بدون هذا تعلق العناوين المتكرّرة إلى الأبد وتُعطّل الطابور.
+      const ok = !hasCJK(p.title_ar) && goodTitle(p.title_ar) && !brokenTitle(p.title_ar, p.title_src);
+      await db.prepare(`UPDATE products SET tr_tries=tr_tries+1${ok ? ',needs_tr=0' : ''} WHERE id=?`).bind(p.id).run();
+    }
     tried++;
   }
   // ١٢٠ قيمة لكل دفعة: ٣٠٠ كانت تُطيل الاستدعاء إلى دقائق فتتأخر كل دفعة ويقترب الكرون من حدّه
