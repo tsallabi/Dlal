@@ -92,7 +92,12 @@ export async function handleWebhook(env: Env['Bindings'], rawBody: string, signa
   const w = parseWebhook(j);
   const p = w.trxRef ? await db.prepare('SELECT * FROM payments WHERE trx_ref=? OR provider_ref=?').bind(w.trxRef, w.trxRef).first<any>() : null;
   if (!valid) {
-    await log(db, p?.id ?? null, 'in', origin + '/api/mypay/webhook', 401, rawBody, 'توقيع غير صالح — رُفض', false);
+    // السبب شبه الدائم: السرّ المحفوظ عندنا ليس نفسه الذي تُوقّع به ماي باي. نقولها صراحةً
+    // لأن الأثر خطير: العملية تنجح عندهم ويُخصم المال، والطلب يبقى «غير مدفوع» عندنا.
+    const why = !cfg.webhookSecret ? 'لا يوجد سرّ ويبهوك محفوظ عندنا إطلاقًا'
+      : !signature ? 'الإشعار وصل بلا ترويسة توقيع (x-mypay-signature)'
+      : 'التوقيع لا يطابق السرّ المحفوظ — تأكدي أن MYPAY_WEBHOOK_SECRET هو نفسه المعروض في «Configure Webhook» بلوحة ماي باي حرفيًا';
+    await log(db, p?.id ?? null, 'in', origin + '/api/mypay/webhook', 401, rawBody, `توقيع غير صالح — رُفض. ${why}`, false);
     return { status: 401, body: { ok: false, error: 'invalid signature' } };
   }
   if (!p) {

@@ -235,7 +235,11 @@ ops.post('/payments/test', requirePerm('payments.manage'), async (c) => {
   const r = await checkConnection(cfg);
   // المحاكاة ليست اتصالًا بماي باي: إظهارها خضراء يوهم صاحب المشروع أن البوابة اختُبرت وهي لم تُلمس
   if (cfg.mode === 'mock') return c.redirect('/admin/payments?test=mock&detail=' + encodeURIComponent('لم يُختبر شيء: الوضع «محاكاة» فلا يخرج أي طلب إلى ماي باي. غيّري الوضع إلى «حقيقي» واحفظي ثم اختبري.'));
-  return c.redirect(`/admin/payments?test=${r.ok ? 'ok' : 'fail'}&detail=${encodeURIComponent(`${r.status} — ${r.detail}`.slice(0, 300))}`);
+  // ماي باي ترد بالعربية مُرمَّزة \uXXXX، فتظهر طلاسم ولا يفهم صاحب المشروع سبب الرفض
+  const readable = r.detail.replace(/\\u([0-9a-fA-F]{4})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
+  // الاختبار يستعمل ما في النموذج لا ما هو محفوظ: ذكر العنوان المستعمل فعلًا يكشف خطأ البيئة فورًا
+  const hint = !r.ok && cfg.baseUrl.includes('/pay/api/v1') ? ' — تنبيه: اختبرتِ على بيئة الإنتاج؛ مفاتيح الساندبوكس تُرفض هنا. اختاري البيئة «ساندبوكس».' : '';
+  return c.redirect(`/admin/payments?test=${r.ok ? 'ok' : 'fail'}&detail=${encodeURIComponent(`${r.status} — ${cfg.baseUrl} — ${readable}${hint}`.slice(0, 400))}`);
 });
 
 // ---------- التقارير ----------

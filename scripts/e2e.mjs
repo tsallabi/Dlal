@@ -40,6 +40,18 @@ const page = await ctx.newPage();
 page.on('pageerror', e => problems.push('JS error: ' + e.message));
 page.on('response', r => { if (r.status() >= 500) problems.push(`HTTP ${r.status()} ${r.url()}`); });
 
+// ---------- شروط البداية: الفحص يضبطها ولا يرثها ----------
+// تشغيلة سابقة قد تنهار وهي في وضع «حقيقي» مشيرة إلى خادم وهمي مغلق، فتسقط فحوص الدفع
+// في التشغيلة التالية لسبب لا علاقة له بها. حدث هذا ثلاث مرات في ٢٢/٠٩/٢٦.
+await login(page, '0910000000', 'admin123');
+await page.goto(BASE + '/admin/payments');
+await page.selectOption('select[name=mypay_mode]', 'mock');
+await page.fill('input[name=mypay_base_url]', 'https://mypay.ly');
+await page.locator('form:has(select[name=mypay_mode]) button:has-text("حفظ")').first().click();
+await page.waitForLoadState('networkidle');
+expect(await has(page, 'محاكاة'), 'الفحص يبدأ ببوابة دفع في وضع المحاكاة');
+await page.goto(BASE + '/logout');
+
 // ---------- الزبونة: تصفح ----------
 await page.goto(BASE + '/');
 expect((await page.locator('.card').count()) >= 20, 'الرئيسية تعرض شبكة منتجات');
@@ -820,6 +832,20 @@ process.once('uncaughtException', async (e) => { await mpRestore(); console.erro
 await login(page, '0910000000', 'admin123');
 await page.goto(BASE + '/admin/payments');
 await page.selectOption('select[name=mypay_mode]', 'live');
+// رد ماي باي يأتي بالعربية مُرمَّزة \uXXXX: يجب أن يُفكّ ليقرأه صاحب المشروع، وأن يُذكر
+// العنوان المستعمل فعلًا لأن الاختبار يأخذ قيم النموذج لا المحفوظ — هنا يظهر خطأ البيئة فورًا
+const mpErrSrv = createServer((_q, res) => {
+  res.writeHead(400, { 'content-type': 'application/json' });
+  res.end('{"code":400,"message":"\\u0628\\u064a\\u0627\\u0646\\u0627\\u062a \\u0627\\u0644\\u0627\\u0639\\u062a\\u0645\\u0627\\u062f \\u063a\\u064a\\u0631 \\u0635\\u0627\\u0644\\u062d\\u0629"}');
+});
+await new Promise(r => mpErrSrv.listen(8804, r));
+await page.fill('input[name=mypay_base_url]', 'http://127.0.0.1:8804');
+await page.locator('button:has-text("اختبار الاتصال")').click();
+await page.waitForLoadState('networkidle');
+expect(await has(page, 'بيانات الاعتماد غير صالحة'), 'رد ماي باي العربي يُفكّ ترميزه ويُقرأ');
+expect(await has(page, '127.0.0.1:8804'), 'نتيجة الاختبار تذكر العنوان المستعمل فعلًا');
+mpErrSrv.close();
+await page.fill('input[name=mypay_base_url]', 'http://127.0.0.1:8803');
 await page.fill('input[name=mypay_base_url]', 'http://127.0.0.1:8803');
 await page.fill('input[name=mypay_client_id]', 'e2e-client-id');
 await page.fill('input[name=mypay_secret_id]', 'e2e-secret-id');
@@ -888,6 +914,10 @@ const mpBadSig = await page.evaluate(async ([b, body]) => {
   return r.status;
 }, [BASE, mpPay]);
 expect(mpBadSig === 401, `الإشعار بتوقيع مزوّر يُرفض (${mpBadSig})`);
+// الرفض يجب أن يقول سببه: سرّ غير متطابق هو أخطر حالة (المال يُخصم والطلب يبقى غير مدفوع)
+await login(page, '0910000000', 'admin123');
+await page.goto(BASE + '/admin/payments');
+expect(await has(page, 'التوقيع لا يطابق السرّ المحفوظ'), 'سجل البوابة يسمّي سبب رفض الإشعار لا يكتفي بـ«غير صالح»');
 // الطلب الذي أنشأه هذا الفحص يبقى «مدفوعًا» في طابور شاهين، وتراكمه عبر التشغيلات
 // يدفع طلب الفحص الأصلي خارج الصفحة الأولى فيسقط فحص لا علاقة له بنا. ننهيه كما ينهيه الأدمن.
 await login(page, '0910000000', 'admin123');
