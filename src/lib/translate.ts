@@ -30,8 +30,28 @@ export function dictTranslate(s: string): string | null {
   return null;
 }
 
+// بعد حذف كلمة قد يبقى حرف عطف يتيمًا في أول العنوان أو آخره («… والسماعات مع»)
+const tidyJoin = (t: string) => t
+  .replace(/\s+(و|مع|من|في|على)(\s+\1)+\s+/g, ' $1 ')     // «و و» بعد حذف كلمة بينهما
+  .replace(/^\s*(و|مع|من|في|على|,|،|-)\s+/, '')
+  .replace(/\s+(و|مع|من|في|على|ب|ل|,|،|-)\s*$/, '')
+  .replace(/\s+([,،])/g, '$1').replace(/\s{2,}/g, ' ').trim();
+
+// النموذج يلصق أحيانًا بقية كلمة لاتينية بكلمة عربية: «زippers»، «الكitchen»، «كاردigan»،
+// «بheel»، «مفتاحsheetmetal». نص مكسور يراه الزبون على الرف، فلا يُعدّ عنوانًا مقبولًا.
+// الشرط التصاق حرفين من أبجديتين بلا مسافة، فلا يمسّ «مقاس XL» ولا «USB» ولا «2XL».
+export const mixedScript = (t: string | null | undefined) => /[\u0600-\u06FF][A-Za-z]|[A-Za-z][\u0600-\u06FF]/.test(t ?? '');
+// إصلاح أخير قبل الرفض: نحذف الكلمة المكسورة وحدها إن بقي أغلب العنوان (مثل dropCJKWords)
+export function dropMixedWords(t: string): string | null {
+  const words = t.split(/\s+/).filter(Boolean);
+  const kept = words.filter(w => !mixedScript(w));
+  if (kept.length < 3 || kept.length < words.length * 0.6) return null;
+  const out = tidyJoin(kept.join(' '));
+  return out.length >= 8 && !mixedScript(out) ? out : null;
+}
+
 const degenerate = (t: string) => { const w = t.split(/\s+/).filter(Boolean); if (w.length >= 4 && new Set(w).size / w.length < 0.5) return true; return /(\S{2,})(\s+\1){2,}/.test(t); };
-export const goodArabic = (t: string | null | undefined) => !!t && /[\u0600-\u06FF]/.test(t) && !hasCJK(t) && !degenerate(t) && t.length <= 220;
+export const goodArabic = (t: string | null | undefined) => !!t && /[\u0600-\u06FF]/.test(t) && !hasCJK(t) && !mixedScript(t) && !degenerate(t) && t.length <= 220;
 // عنوان منتج مقبول: عربي سليم وخالٍ من حشو 1688 المترجم حرفيًا
 const JUNK = /عبر الحدود|تجارة (أجنبية|خارجية)|الأسهم الحقيقية|أمازون|علي إكسبريس|بالجملة|مصدر البضائع|موسم (الخريف|الربيع|الصيف|الشتاء) الجديد|^\(?\s*20\d\d/;
 export const goodTitle = (t: string | null | undefined) => goodArabic(t) && !JUNK.test(t!);
@@ -43,10 +63,7 @@ export function dropCJKWords(t: string): string | null {
   const words = t.split(/\s+/).filter(Boolean);
   const kept = words.filter(w => !hasCJK(w));
   if (kept.length < 3 || kept.length < words.length * 0.6) return null;
-  const out = kept.join(' ')
-    .replace(/\s+(و|مع|من|في|على)(\s+\1)+\s+/g, ' $1 ')     // «و و» بعد حذف كلمة بينهما
-    .replace(/^\s*(و|مع|من|في|على|,|،|-)\s+/, '')
-    .replace(/\s+([,،])/g, '$1').replace(/\s{2,}/g, ' ').trim();
+  const out = tidyJoin(kept.join(' '));
   return out.length >= 8 ? out : null;
 }
 
@@ -71,6 +88,7 @@ async function llm(ai: any, sys: string, user: string, models: string[]): Promis
       let raw = String(r?.response ?? '').trim().split('\n')[0].replace(/^["'«»“”\s]+|["'«»“”\s.]+$/g, '').trim();
       // عربية سليمة بقيت فيها كلمة صينية: نحذف تلك الكلمة بدل رمي الترجمة كلها
       if (hasCJK(raw) && /[\u0600-\u06FF]/.test(raw)) raw = dropCJKWords(raw) ?? raw;
+      if (mixedScript(raw)) raw = dropMixedWords(raw) ?? raw;
       const t = sys === SYS_TITLE && goodArabic(raw) && !goodTitle(raw) ? cleanTitle(raw) : raw;
       if (goodArabic(t) && (sys !== SYS_TITLE || goodTitle(t))) return t.slice(0, 200);
     } catch {}

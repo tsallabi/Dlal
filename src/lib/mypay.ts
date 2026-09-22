@@ -61,6 +61,15 @@ function pickStr(j: any, keys: string[]): string | undefined {
   for (const k of ['data', 'result', 'payment', 'payload']) { const v = pickStr(j[k], keys); if (v) return v; }
 }
 
+// مهلة قصوى لكل اتصال ببوابة ماي باي. بدونها قد يبقى الطلب معلّقًا حتى يقتله Cloudflare
+// فيضيع كل شيء بلا رسالة ولا سطر سجل (حدث فعليًا في 2026/09/22).
+const TIMEOUT_MS = 20000;
+function timeout() { return AbortSignal.timeout(TIMEOUT_MS); }
+function netErr(e: any) {
+  const m = String(e?.name === 'TimeoutError' || /abort|timed? ?out/i.test(e?.message ?? '') ? `البوابة لم ترد خلال ${TIMEOUT_MS / 1000} ثانية` : e?.message ?? e);
+  return m;
+}
+
 export async function createPayment(cfg: MyPayConfig, r: CreateReq, origin: string): Promise<CreateRes> {
   // أسماء الحقول منقولة حرفيًا من إضافة ماي باي الرسمية (mypay_initialize_payment).
   // `custom` هو ما يعيدونه في الويبهوك، فنضع فيه مرجعنا لنجد الدفعة عند وصول الإشعار.
@@ -85,6 +94,7 @@ export async function createPayment(cfg: MyPayConfig, r: CreateReq, origin: stri
       method: 'POST',
       headers: { 'content-type': 'application/json', accept: 'application/json', authorization: `Bearer ${tok.token}` },
       body: JSON.stringify(body),
+      signal: timeout(),
     });
     const text = await res.text();
     let j: any = null; try { j = JSON.parse(text); } catch {}
@@ -92,7 +102,7 @@ export async function createPayment(cfg: MyPayConfig, r: CreateReq, origin: stri
     if (!res.ok || !link) return { ok: false, status: res.status, request: body, response: text, error: !res.ok ? `البوابة ردت ${res.status}` : 'الرد لا يحتوي رابط دفع' };
     return { ok: true, url: link, token: j?.data?.token ?? pickStr(j, ['token', 'payment_token', 'id', 'payment_id']), providerRef: j?.data?.token ?? pickStr(j, ['transaction_id', 'trx_id', 'id']), status: res.status, request: body, response: text };
   } catch (e: any) {
-    return { ok: false, status: 0, request: body, response: '', error: 'تعذر الاتصال بالبوابة: ' + e.message };
+    return { ok: false, status: 0, request: body, response: String(e?.stack ?? e), error: 'تعذر الاتصال بالبوابة: ' + netErr(e) };
   }
 }
 
@@ -103,13 +113,14 @@ export async function getAccessToken(cfg: MyPayConfig): Promise<{ ok: boolean; t
       method: 'POST',
       headers: { 'content-type': 'application/json', accept: 'application/json' },
       body: JSON.stringify({ client_id: cfg.clientId, secret_id: cfg.secretId }),
+      signal: timeout(),
     });
     const text = await res.text();
     let j: any = null; try { j = JSON.parse(text); } catch {}
     const token = j?.data?.access_token;
     if (!res.ok || !token) return { ok: false, status: res.status, detail: text.slice(0, 600) };
     return { ok: true, token, status: res.status, detail: 'ok' };
-  } catch (e: any) { return { ok: false, status: 0, detail: e.message }; }
+  } catch (e: any) { return { ok: false, status: 0, detail: netErr(e) }; }
 }
 
 export async function checkConnection(cfg: MyPayConfig): Promise<{ ok: boolean; status: number; detail: string }> {

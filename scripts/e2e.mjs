@@ -40,6 +40,40 @@ const page = await ctx.newPage();
 page.on('pageerror', e => problems.push('JS error: ' + e.message));
 page.on('response', r => { if (r.status() >= 500) problems.push(`HTTP ${r.status()} ${r.url()}`); });
 
+// ---------- الحد الأدنى للمورّد: يُفرض في السلة أيضًا لا عند الإضافة فقط ----------
+// وجده صاحب المشروع على الموقع الحي: قطعة أقلّها ١٠٠ عند المورّد، والسلة قبلت ١.
+// أثره مال حقيقي: نشتري ١٠٠ من 1688 ونبيع واحدة.
+await login(page, '0910000000', 'admin123');
+await page.goto(BASE + '/admin/import');
+const moqOffer = '65' + String(Date.now()).slice(-10);
+await page.fill('form[action$="/import/json"] textarea[name=json]', JSON.stringify([{
+  offerId: moqOffer, url: `https://detail.1688.com/offer/${moqOffer}.html`, title: `قطعة جملة ${moqOffer}`,
+  priceCny: 3, images: ['https://cbu01.alicdn.com/img/ibank/moq.jpg'], minQty: 100, inStock: true, weightG: 120,
+}]));
+await page.click('form[action$="/import/json"] button:has-text("استيراد")');
+await page.waitForLoadState('networkidle');
+await page.goto(BASE + '/admin/products?q=' + moqOffer);
+const moqHref = await page.locator(`tr:has-text("${moqOffer}") a[href^="/p/"]`).first().getAttribute('href');
+await login(page, '0910000000', 'admin123');
+await page.goto(BASE + moqHref);
+expect(await has(page, 'أقل طلب'), 'صفحة المنتج تقول إنه يُباع بالكمية وتذكر الإجمالي');
+const moqTotal = (await page.locator('.moq-note').textContent()).replace(/\s+/g, ' ');
+expect(/100 قطعة/.test(moqTotal), `تنبيه الحد الأدنى يذكر العدد (${moqTotal.slice(0, 70)})`);
+await page.click('#addForm button[type=submit]'); await page.waitForLoadState('networkidle');
+const moqRow = page.locator('.cart-row', { hasText: 'قطعة جملة' }).first();
+expect((await moqRow.locator('input[name=qty]').first().inputValue()) === '100', 'السلة تبدأ بالحد الأدنى ١٠٠');
+// الزبونة تحاول إنزالها إلى ١ — يجب أن تعود إلى ١٠٠
+// لا يوجد زر «تحديث»: الحقل يُرسل النموذج عند تغيّره (onchange) — نفعل ما تفعله الزبونة
+const moqInput = moqRow.locator('input[name=qty]').first();
+await moqInput.fill('1');
+// النموذج يُرسل عند التغيّر فيحدث انتقال؛ ننتظر الانتقال نفسه لا «شبكة هادئة»
+// (الأخيرة قد تتحقق على الصفحة القديمة قبل أن يبدأ الإرسال فنقرأ قيمة قديمة)
+await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle' }), moqInput.dispatchEvent('change')]);
+const afterQty = await page.locator('.cart-row', { hasText: 'قطعة جملة' }).first().locator('input[name=qty]').first().inputValue();
+expect(afterQty === '100', `السلة ترفض النزول تحت الحد الأدنى (${afterQty})`);
+await page.locator('.cart-row', { hasText: 'قطعة جملة' }).first().locator('button:has-text("حذف")').first().click();
+await page.waitForLoadState('networkidle');
+
 // ---------- شروط البداية: الفحص يضبطها ولا يرثها ----------
 // تشغيلة سابقة قد تنهار وهي في وضع «حقيقي» مشيرة إلى خادم وهمي مغلق، فتسقط فحوص الدفع
 // في التشغيلة التالية لسبب لا علاقة له بها. حدث هذا ثلاث مرات في ٢٢/٠٩/٢٦.
@@ -918,6 +952,35 @@ expect(mpBadSig === 401, `الإشعار بتوقيع مزوّر يُرفض (${m
 await login(page, '0910000000', 'admin123');
 await page.goto(BASE + '/admin/payments');
 expect(await has(page, 'التوقيع لا يطابق السرّ المحفوظ'), 'سجل البوابة يسمّي سبب رفض الإشعار لا يكتفي بـ«غير صالح»');
+
+// ---- بوابة ميتة: يجب ألا تصمت الصفحة، ويجب أن يبقى أثر في السجل ----
+// في 2026/09/22 ضغط صاحب المشروع «ادفع» فوجد سلة فارغة: لا رسالة نجاح ولا فشل،
+// والدفعة بقيت 'created' بلا سطر واحد في السجل لأن التسجيل كان *بعد* الاتصال.
+await page.goto(BASE + '/admin/payments');
+await page.fill('input[name=mypay_base_url]', 'http://127.0.0.1:8809');   // لا شيء يستمع على هذا المنفذ
+await page.locator('form:has(select[name=mypay_mode]) button:has-text("حفظ")').first().click();
+await page.waitForLoadState('networkidle');
+await login(page, PHONE, 'secret456');
+await page.goto(BASE + '/c/bags');
+await page.click('.card >> nth=1'); await page.waitForLoadState('networkidle');
+await page.click('#addForm button[type=submit]'); await page.waitForLoadState('networkidle');
+await page.goto(BASE + '/checkout'); await page.waitForLoadState('networkidle');
+await page.selectOption('select[name=city]', 'طرابلس').catch(() => {});
+await page.fill('textarea[name=address]', 'شارع الجمهورية، عمارة 2').catch(() => {});
+await page.locator('.pm-list input[value^=mypay_]').first().check();
+await page.click('button:has-text("تأكيد الطلب")'); await page.waitForLoadState('networkidle');
+expect(await has(page, 'تعذر بدء الدفع'), 'بوابة لا تستجيب تُظهر صفحة خطأ للزبونة لا صمتًا');
+expect(await has(page, 'لم يُخصم منكِ شيء'), 'صفحة الخطأ تطمئن الزبونة أن لا خصم وتذكر رقم الطلب');
+await shot(page, 'pay-start-failed');
+await login(page, '0910000000', 'admin123');
+await page.goto(BASE + '/admin/payments');
+// العنوان المركَّب كاملًا لا يظهر إلا في سطر السجل (خانة الإعدادات تعرض الجذر فقط)
+expect(await has(page, '127.0.0.1:8809/pay/sandbox/api/v1/payment/create'), 'المحاولة الفاشلة تركت سطرًا في سجل البوابة بعنوانها المركَّب');
+expect(await has(page, 'تعذّر الحصول على توكن'), 'سطر السجل يسمّي سبب الفشل لا يكتفي بالصمت');
+expect(await page.locator('.plog summary .status.red').count() > 0, 'سطر المحاولة الفاشلة مُعلَّم بالأحمر');
+await page.fill('input[name=mypay_base_url]', 'http://127.0.0.1:8803');
+await page.locator('form:has(select[name=mypay_mode]) button:has-text("حفظ")').first().click();
+await page.waitForLoadState('networkidle');
 // الطلب الذي أنشأه هذا الفحص يبقى «مدفوعًا» في طابور شاهين، وتراكمه عبر التشغيلات
 // يدفع طلب الفحص الأصلي خارج الصفحة الأولى فيسقط فحص لا علاقة له بنا. ننهيه كما ينهيه الأدمن.
 await login(page, '0910000000', 'admin123');

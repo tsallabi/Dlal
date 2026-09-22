@@ -425,6 +425,9 @@ store.get('/p/:slug', async (c) => {
             <div class="opts"><h4>الكمية</h4>
               <div class="qty"><button type="button" data-q="-1">−</button><input type="number" name="qty" value={p.min_qty} min={p.min_qty} /><button type="button" data-q="1">+</button></div>
               {p.min_qty > 1 && <span style="font-size:12px;color:#888;margin-inline-start:8px">الحد الأدنى {p.min_qty} قطع</span>}
+              {/* الحد الأدنى مأخوذ من عرض الجملة عند المورّد: الزبونة ترى سعر القطعة بخط كبير
+                  وتظن أنها تدفعه، فتكتشف الإجمالي في السلة. نقوله لها هنا صراحةً. */}
+              {p.min_qty > 1 && <div class="moq-note">تُباع بالكمية: أقل طلب <b>{p.min_qty} قطعة</b> — أي <b>{fmt(shown * p.min_qty)}</b> إجمالًا.</div>}
             </div>
             <div class="inline" style="margin:16px 0">
               <button class="btn brand" type="submit" disabled={!p.in_stock} style="flex:1">أضيفي إلى السلة</button>
@@ -527,7 +530,12 @@ store.post('/cart/update', async (c) => {
   const f = await c.req.parseBody();
   const id = Number(f.id), qty = Number(f.qty);
   if (f.action === 'remove' || qty <= 0) await c.env.DB.prepare('DELETE FROM cart_items WHERE id=? AND user_id=?').bind(id, u.id).run();
-  else await c.env.DB.prepare('UPDATE cart_items SET qty=? WHERE id=? AND user_id=?').bind(qty, id, u.id).run();
+  else {
+    // الحد الأدنى للمورّد يُفرض هنا أيضًا: كان يُفرض عند الإضافة فقط، فتستطيع الزبونة
+    // إنزال الكمية إلى ١ داخل السلة لقطعة أقلّها ١٠٠ — فنشتري ١٠٠ ونبيع واحدة.
+    const mq = await c.env.DB.prepare('SELECT p.min_qty FROM cart_items ci JOIN products p ON p.id=ci.product_id WHERE ci.id=? AND ci.user_id=?').bind(id, u.id).first<{ min_qty: number }>();
+    await c.env.DB.prepare('UPDATE cart_items SET qty=? WHERE id=? AND user_id=?').bind(Math.max(qty, mq?.min_qty ?? 1), id, u.id).run();
+  }
   return c.redirect('/cart');
 });
 store.post('/cart/coupon', async (c) => {
@@ -544,7 +552,7 @@ store.post('/cart/coupon', async (c) => {
 
 async function cartRows(db: D1Database, uid: number, mode: ShipMode = 'air') {
   const { results } = await db.prepare(
-    `SELECT ci.id,ci.qty,ci.variant_id,p.id AS product_id,p.slug,p.title_ar,p.price_lyd,p.price_sea_lyd,p.in_stock,p.status,p.source_offer_id,p.source_url,
+    `SELECT ci.id,ci.qty,ci.variant_id,p.id AS product_id,p.slug,p.title_ar,p.price_lyd,p.price_sea_lyd,p.in_stock,p.status,p.source_offer_id,p.source_url,p.min_qty,
             p.source_price_cny,p.weight_g,p.volume_cm3,p.category_id,c.est_weight_g,c.markup_percent,
             v.color,v.size,COALESCE(v.price_delta_lyd,0) AS delta,
             COALESCE(v.image_url,(SELECT url FROM product_images i WHERE i.product_id=p.id ORDER BY sort LIMIT 1)) AS image
@@ -699,7 +707,7 @@ store.get('/cart', async (c) => {
                   {(!r.in_stock || r.status !== 'active') && <div style="color:#d3262b;font-size:12px">غير متوفر حاليًا — احذفيه للمتابعة</div>}
                   <form method="post" action="/cart/update" class="inline" style="margin-top:6px">
                     <input type="hidden" name="id" value={r.id} />
-                    <div class="qty"><button type="button" data-q="-1">−</button><input type="number" name="qty" value={r.qty} min="1" onchange="this.form.submit()" /><button type="button" data-q="1">+</button></div>
+                    <div class="qty"><button type="button" data-q="-1">−</button><input type="number" name="qty" value={r.qty} min={r.min_qty ?? 1} onchange="this.form.submit()" /><button type="button" data-q="1">+</button></div>
                     <button class="btn sm ghost" name="action" value="remove">حذف</button>
                   </form>
                 </div>
@@ -820,7 +828,7 @@ store.post('/checkout', async (c) => {
     db.prepare('UPDATE orders SET code=? WHERE id=?').bind(code, oid),
     // لقطة التكلفة لحظة البيع: تبقى ثابتة في التقارير مهما تغيّرت إعدادات التسعير لاحقًا
     ...rows.map(r => {
-      const br = computePrice(t.s, r.source_price_cny ?? 0, r.weight_g ?? r.est_weight_g ?? 300, r.markup_percent, r.volume_cm3, t.mode);
+      const br = computePrice(t.s, r.source_price_cny ?? 0, r.weight_g ?? r.est_weight_g ?? 300, r.markup_percent, r.volume_cm3, t.mode, r.min_qty ?? 1);
       return db.prepare(
         `INSERT INTO order_items(order_id,product_id,variant_id,title_ar,color,size,qty,unit_price_lyd,source_offer_id,source_url,unit_cost_lyd,unit_ship_lyd,unit_goods_lyd,ship_method) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       ).bind(oid, r.product_id, r.variant_id, r.title_ar, r.color, r.size, r.qty, r.unit, r.source_offer_id, r.source_url,

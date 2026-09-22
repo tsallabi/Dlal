@@ -49,5 +49,30 @@ expect(byKg.ship_basis === 'وزن', 'وضع «بالوزن فقط» يتجاه�
 expect(Math.abs(light.total_lyd - (light.cost_lyd + light.profit_lyd)) < 1.01, `سعر البيع = التكلفة + الربح (${light.total_lyd} ≈ ${light.cost_lyd}+${light.profit_lyd})`);
 expect(light.profit_lyd > 0, `الربح موجب: ${light.profit_lyd} د.ل`);
 
+
+// --- كلمة عربية ملتصقة ببقية لاتينية («زippers») — نص مكسور يراه الزبون
+const mh = d.mashed, ol = d.okLatin;
+for (const [t, v] of Object.entries(mh)) {
+  expect(v.mixed === true, `«${t.slice(-18)}» يُكتشف كخلط أبجديات`);
+  expect(v.good === false, `«${t.slice(-18)}» لا يُقبل عنوانًا صالحًا`);
+}
+expect(mh['كيس شفاف للهاتف والسماعات مع زippers'].fixed === 'كيس شفاف للهاتف والسماعات',
+  `«زippers» تُحذف كلمةً كاملة ⟵ ${mh['كيس شفاف للهاتف والسماعات مع زippers'].fixed}`);
+for (const [t, v] of Object.entries(ol)) {
+  expect(v.mixed === false, `«${t}» لاتينية مشروعة لا تُعدّ خلطًا`);
+  expect(v.good === true, `«${t}» يبقى عنوانًا مقبولًا`);
+}
+
+// --- الشحن الداخلي في الصين يُقسَّم على اللوط لا يُضرب فيه
+const { lot1, lot100, lot100Sea } = d.pricing;
+expect(lot100.domestic_ship_lyd < lot1.domestic_ship_lyd / 50,
+  `لوط ١٠٠ قطعة يحمل جزءًا من الشحن الداخلي (${lot100.domestic_ship_lyd} مقابل ${lot1.domestic_ship_lyd} للقطعة الواحدة)`);
+expect(lot100.total_lyd < lot1.total_lyd,
+  `سعر القطعة داخل لوط ١٠٠ أقل من سعرها مفردة (${lot100.total_lyd} < ${lot1.total_lyd} د.ل)`);
+expect(lot1.total_lyd - lot100.total_lyd >= (lot1.domestic_ship_lyd - lot100.domestic_ship_lyd),
+  `الفرق كله من الشحن الداخلي المقسَّم (${(lot1.total_lyd - lot100.total_lyd).toFixed(2)} ≥ ${(lot1.domestic_ship_lyd - lot100.domestic_ship_lyd).toFixed(2)})`);
+expect(lot100Sea.total_lyd <= lot100.total_lyd,
+  `البحري ليس أغلى من الجوي (${lot100Sea.total_lyd} ≤ ${lot100.total_lyd})`);
+
 console.log(`\nنجح: ${passed} · فشل: ${problems.length}`);
 process.exit(problems.length ? 1 : 0);

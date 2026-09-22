@@ -169,10 +169,14 @@ ops.post('/tickets/:code/resolve', async (c) => {
 ops.use('/payments*', requirePerm('payments.view', 'payments.manage'));
 ops.get('/payments', async (c) => {
   const db = c.env.DB; const s = await loadSettings(db); const cfg = loadMyPay(s, c.env);
-  const [pays, logs, sums] = await Promise.all([
+  const [pays, logs, sums, smoke] = await Promise.all([
     db.prepare('SELECT p.*,o.code FROM payments p JOIN orders o ON o.id=p.order_id ORDER BY p.id DESC LIMIT 100').all<any>(),
-    db.prepare('SELECT * FROM payment_log ORDER BY id DESC LIMIT 30').all<any>(),
+    // سجل البوابة كان يغرق في ضجيج: استدعاءات مزوّد 1688 (SRC) وإشعار الفحص الذاتي
+    // الذي يرسله smoke.yml بعد كل نشر بتوقيع خاطئ عمدًا. كلاهما يُخفى هنا ويُعدّ أسفل القائمة.
+    db.prepare(`SELECT * FROM payment_log WHERE url NOT LIKE 'SRC %' AND url NOT LIKE 'PROBE %'
+       AND request <> '{"event":"payment.success","trx_ref":"x"}' ORDER BY id DESC LIMIT 30`).all<any>(),
     db.prepare("SELECT status,COUNT(*) n,COALESCE(SUM(amount_lyd),0) s FROM payments GROUP BY status").all<any>(),
+    db.prepare(`SELECT COUNT(*) n FROM payment_log WHERE request = '{"event":"payment.success","trx_ref":"x"}'`).first<{ n: number }>(),
   ]);
   const sm = Object.fromEntries(sums.results.map(r => [r.status, r]));
   const canManage = permsOf(c.get('user')).has('payments.manage');
@@ -185,7 +189,7 @@ ops.get('/payments', async (c) => {
         <div class="kpi"><b style="color:#1a9c5b">{fmt(sm.paid?.s ?? 0)}</b><span>مدفوعات ناجحة ({sm.paid?.n ?? 0})</span></div>
         <div class="kpi"><b style="color:#d68b00">{sm.pending?.n ?? 0}</b><span>بانتظار البوابة</span></div>
         <div class="kpi"><b style="color:#d3262b">{(sm.failed?.n ?? 0) + (sm.cancelled?.n ?? 0)}</b><span>فاشلة / ملغاة</span></div>
-        <div class="kpi"><b>{cfg.mode === 'live' ? 'حقيقي' : 'محاكاة'}</b><span>وضع البوابة</span></div>
+        <div class="kpi"><b>{cfg.mode !== 'live' ? 'محاكاة' : s.mypay_sandbox === 'no' ? 'حقيقي · إنتاج' : 'حقيقي · ساندبوكس'}</b><span>{cfg.mode === 'live' && s.mypay_sandbox !== 'no' ? 'وضع البوابة — بلا خصم فعلي' : 'وضع البوابة'}</span></div>
       </div>
       <div class="two">
         <div>
@@ -193,6 +197,7 @@ ops.get('/payments', async (c) => {
             {pays.results.map(p => <tr><td class="mono" style="display:table-cell">{p.trx_ref}</td><td><a href={`/admin/orders/${p.code}`}>{p.code}</a></td><td>{p.gateway}</td><td>{fmt(p.amount_lyd)}</td><td><span class={`status ${p.status === 'paid' ? 'green' : p.status === 'pending' ? 'blue' : p.status === 'created' ? 'gray' : 'red'}`}>{p.status}</span></td><td><small>{p.provider_ref ?? '—'}</small></td><td><small>{timeAgo(p.updated_at)}</small></td></tr>)}
           </table></div>{pays.results.length === 0 && <p style="color:#888">لا عمليات بعد.</p>}</div>
           <div class="card-box"><h3>سجل الاتصال بالبوابة (طلبات وردود)</h3><p style="font-size:12px;color:#666">كل ما يُرسل إلى ماي باي وكل ما يصل منها يُسجل هنا حرفيًا. إن اختلف شكل الرد عن المتوقع تعرف السبب فورًا.</p>
+            {smoke && smoke.n > 0 && <p style="font-size:12px;color:#888">أُخفي {smoke.n} إشعار فحص ذاتي (smoke) واستدعاءات مزوّد 1688 — تُعرض في صفحة «مزوّد API».</p>}
             {logs.results.map(l => <details class="plog"><summary><span class={`status ${l.ok ? 'green' : 'red'}`}>{l.direction === 'out' ? '⬆ إرسال' : '⬇ استقبال'} {l.status_code}</span> <small>{l.url} · {timeAgo(l.created_at)}</small></summary><pre class="mono">{l.request}</pre><pre class="mono">{l.response}</pre></details>)}
           </div>
         </div>
@@ -225,7 +230,12 @@ ops.get('/payments', async (c) => {
 ops.post('/payments/settings', requirePerm('payments.manage'), async (c) => {
   const f = await c.req.parseBody(); const db = c.env.DB;
   const keys = ['mypay_mode', 'mypay_base_url', 'mypay_sandbox', 'mypay_create_path', 'mypay_api_key', 'mypay_client_id', 'mypay_secret_id', 'mypay_webhook_secret', 'mypay_gateways', 'branches'];
-  await db.batch(keys.filter(k => f[k] !== undefined).map(k => db.prepare("INSERT INTO settings(key,value,updated_at) VALUES(?,?,datetime('now')) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at").bind(k, String(f[k]).trim())));
+  // نخزّن الجذر مصحَّحًا لا كما كُتب: البقاء على api.mypay.ly (نطاق لا وجود له) في الخانة
+  // يجعل اللوحة تعرض عنوانًا وتستعمل غيره، وهو بالضبط ما أربك صاحب المشروع.
+  const norm = (k: string, v: string) => k === 'mypay_base_url'
+    ? v.replace(/\/+$/, '').replace(/\/pay\/(sandbox\/)?api\/v1$/, '').replace(/^https?:\/\/api\.mypay\.ly$/i, 'https://mypay.ly')
+    : v;
+  await db.batch(keys.filter(k => f[k] !== undefined).map(k => db.prepare("INSERT INTO settings(key,value,updated_at) VALUES(?,?,datetime('now')) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at").bind(k, norm(k, String(f[k]).trim()))));
   await logActivity(db, c.get('user')!.id, 'payments.settings', 'mypay', `mode=${f.mypay_mode}`);
   return c.redirect('/admin/payments?ok=1');
 });

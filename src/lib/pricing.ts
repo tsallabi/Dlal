@@ -53,6 +53,7 @@ export function computePrice(
   categoryMarkup?: number | null,
   volumeCm3?: number | null,
   mode: ShipMode = 'air',
+  minQty = 1,
 ): PriceBreakdown {
   const fx = parseFloat(s.fx_cny_lyd || '0.95');
   const usd = parseFloat(s.fx_usd_lyd || '6.9');
@@ -72,7 +73,10 @@ export function computePrice(
   const usdPerKg = ch.basis === 'حجم' && perCbm > 0 ? perCbm / (1000000 / divisor) : shipPerKg;
 
   const goods = sourcePriceCny * fx;
-  const domesticShip = domestic * fx;
+  // الشحن الداخلي في الصين يُدفع **مرة واحدة للطرد** لا لكل قطعة.
+  // قطعة أقلّ طلبها ١٠٠ تصل في طرد واحد، فتحميل كل قطعة ٦ يوان كان يضاعف سعر اللوط ٧٠ ضعفًا:
+  // كيس بـ0.05 يوان ظهر بـ٨ د.ل للقطعة و٨٠٠ د.ل للّوط، و٩٩٪ منها شحن داخلي مكرَّر (٢٢/٠٩/٢٦).
+  const domesticShip = (domestic * fx) / Math.max(1, minQty || 1);
   const intlShip = ch.kg * usdPerKg * usd;
   const customsFee = goods * customs;
   const safetyFee = goods * safety;

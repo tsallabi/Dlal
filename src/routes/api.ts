@@ -8,7 +8,7 @@ import { fingerprint, sameProduct } from '../lib/dedupe';
 import { computePrice, loadSettings } from '../lib/pricing';
 import { getProvider } from '../lib/source-providers';
 import { runServerJobs } from '../lib/crawl';
-import { retranslatePending, releaseHeldDrafts, diagnoseTitle, hasCJK, dropCJKWords, dictTranslate } from '../lib/translate';
+import { retranslatePending, releaseHeldDrafts, diagnoseTitle, hasCJK, dropCJKWords, dictTranslate, mixedScript, dropMixedWords, goodTitle } from '../lib/translate';
 
 const api = new Hono<Env>();
 
@@ -113,13 +113,13 @@ api.post('/source/reprice', async (c) => {
   const all = b.only_missing_sea === false;
   const after = Number(b.after_id ?? 0) || 0;
   const { results } = all
-    ? await db.prepare('SELECT id,source_price_cny,weight_g,volume_cm3,category_id FROM products WHERE id>? ORDER BY id LIMIT ?').bind(after, limit).all<any>()
-    : await db.prepare('SELECT id,source_price_cny,weight_g,volume_cm3,category_id FROM products WHERE price_sea_lyd IS NULL ORDER BY id LIMIT ?').bind(limit).all<any>();
+    ? await db.prepare('SELECT id,source_price_cny,weight_g,volume_cm3,category_id,min_qty FROM products WHERE id>? ORDER BY id LIMIT ?').bind(after, limit).all<any>()
+    : await db.prepare('SELECT id,source_price_cny,weight_g,volume_cm3,category_id,min_qty FROM products WHERE price_sea_lyd IS NULL ORDER BY id LIMIT ?').bind(limit).all<any>();
   const stmts = results.map((p: any) => {
     const cat = cats.find(x => x.id === p.category_id);
     const w = p.weight_g ?? cat?.est_weight_g ?? 300;
-    const air = computePrice(s, p.source_price_cny, w, cat?.markup_percent, p.volume_cm3);
-    const sea = computePrice(s, p.source_price_cny, w, cat?.markup_percent, p.volume_cm3, 'sea');
+    const air = computePrice(s, p.source_price_cny, w, cat?.markup_percent, p.volume_cm3, 'air', p.min_qty ?? 1);
+    const sea = computePrice(s, p.source_price_cny, w, cat?.markup_percent, p.volume_cm3, 'sea', p.min_qty ?? 1);
     return db.prepare('UPDATE products SET price_lyd=?,price_sea_lyd=? WHERE id=?').bind(air.total_lyd, sea.total_lyd, p.id);
   });
   for (let i = 0; i < stmts.length; i += 100) await db.batch(stmts.slice(i, i + 100));
@@ -147,15 +147,29 @@ api.get('/logic-check', async (c) => {
   ];
   // قيم متغيّرات حقيقية بقيت صينية على الموقع الحي: يجب أن يترجمها القاموس بلا استدعاء نموذج
   const attrs = ['8号', '9号', '10号', '2号色', '黑色 M', '均码', '藏青色'];
+  // كلمات عربية ملتصقة ببقية لاتينية — أمثلة حقيقية من الموقع الحي (٢٢/٠٩/٢٦)
+  const mashed = [
+    'كيس شفاف للهاتف والسماعات مع زippers',
+    'حذاء صيفي أنثوي بheel عريض ومستقر',
+    'فستان بناتي طويل الأكمام بالكorean ستايل للربيع والخريف',
+    'صندوق تخزين بلاستيكي كبير للعلب البلاستيكية والمنزل والكitchen',
+  ];
+  const okLatin = ['عباية سوداء مقاس XL', 'كابل شحن USB طويل', 'بلوزة قطن 2XL'];
   return c.json({
     modesty,
     dict: Object.fromEntries(attrs.map(t => [t, dictTranslate(t)])),
     strays: Object.fromEntries(strays.map(t => [t, dropCJKWords(t)])),
+    mashed: Object.fromEntries(mashed.map(t => [t, { mixed: mixedScript(t), good: goodTitle(t), fixed: dropMixedWords(t) }])),
+    okLatin: Object.fromEntries(okLatin.map(t => [t, { mixed: mixedScript(t), good: goodTitle(t) }])),
     dedupe: { same: sameProduct(w1, w2), different: sameProduct(w1, bag), noiseOnly: sameProduct('跨境 批发 新款', '外贸 现货 爆款'), fp: fingerprint(w1) },
     pricing: {
       light: computePrice(s, 25, 800, null, 1500),                       // صغيرة وثقيلة
       bulky: computePrice(s, 25, 300, null, 40000),                      // كبيرة وخفيفة
       byKg: computePrice({ ...s, ship_mode: 'kg' }, 25, 300, null, 40000),
+      // الشحن الداخلي في الصين للطرد الواحد: قطعة أقلّها ١٠٠ لا تحمل ١٠٠ ضعفه
+      lot1: computePrice(s, 0.05, 1, null, null, 'air', 1),
+      lot100: computePrice(s, 0.05, 1, null, null, 'air', 100),
+      lot100Sea: computePrice(s, 0.05, 1, null, null, 'sea', 100),
     },
   });
 });

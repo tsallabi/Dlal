@@ -7,6 +7,7 @@ import { Layout, Flash } from '../views/layout';
 import { getCategories, fmt } from '../lib/db';
 import { loadSettings } from '../lib/pricing';
 import { loadMyPay, createPayment, verifySignature, parseWebhook, hmacHex } from '../lib/mypay';
+import type { CreateRes } from '../lib/mypay';
 import { markOrderPaid } from '../lib/orders';
 
 const pay = new Hono<Env>();
@@ -15,7 +16,19 @@ const base = async (c: Context<Env>) => ({ user: c.get('user'), cartCount: c.get
 
 async function log(db: D1Database, paymentId: number | null, direction: 'out' | 'in', url: string | null, status: number, request: any, response: string, ok = true) {
   await db.prepare('INSERT INTO payment_log(payment_id,direction,url,status_code,request,response,ok) VALUES(?,?,?,?,?,?,?)')
-    .bind(paymentId, direction, url, status, typeof request === 'string' ? request : JSON.stringify(request), response.slice(0, 4000), ok ? 1 : 0).run();
+    .bind(paymentId, direction, url, status, typeof request === 'string' ? request : JSON.stringify(request), (response ?? '').slice(0, 4000), ok ? 1 : 0).run();
+}
+
+// نكتب سطر السجل **قبل** الاتصال الخارجي ثم نُحدّثه بالرد.
+// السبب: في 2026/09/22 ضاعت محاولة دفع كاملة بلا سطر واحد في السجل لأن التسجيل كان بعد الاتصال،
+// فإن مات الطلب في منتصفه (مهلة البوابة أو حد موارد Worker) لا يبقى أي أثر نقرأه.
+async function logStart(db: D1Database, paymentId: number | null, url: string, request: any): Promise<number> {
+  const r = await db.prepare('INSERT INTO payment_log(payment_id,direction,url,status_code,request,response,ok) VALUES(?,?,?,?,?,?,0)')
+    .bind(paymentId, 'out', url, 0, JSON.stringify(request), '(أُرسل الطلب ولم يصل رد — إن بقي هذا السطر هكذا فالاتصال مات قبل أن يرد)').run();
+  return r.meta.last_row_id as number;
+}
+async function logEnd(db: D1Database, id: number, status: number, response: string, ok: boolean) {
+  await db.prepare('UPDATE payment_log SET status_code=?,response=?,ok=? WHERE id=?').bind(status, (response ?? '').slice(0, 4000), ok ? 1 : 0, id).run();
 }
 
 // ---------- بدء الدفع ----------
@@ -33,19 +46,29 @@ pay.get('/pay/start/:code', async (c) => {
   const cfg = loadMyPay(s, c.env);
   const origin = new URL(c.req.url).origin;
   // دفعة جديدة لكل محاولة
+  // محاولة سابقة بقيت 'created' تعني أن الطلب مات قبل أن يرد أحد: نُنهيها بدل تركها معلّقة للأبد
+  await db.prepare("UPDATE payments SET status='failed',raw=COALESCE(raw,'لم يصل رد من البوابة — بدأت محاولة جديدة'),updated_at=datetime('now') WHERE order_id=? AND status='created'").bind(o.id).run();
   const n = await db.prepare('SELECT COUNT(*) n FROM payments WHERE order_id=?').bind(o.id).first<{ n: number }>();
   const trxRef = `${o.code}-${(n?.n ?? 0) + 1}`;
   const ins = await db.prepare("INSERT INTO payments(order_id,provider,gateway,amount_lyd,currency,status,trx_ref) VALUES(?,'mypay',?,?,'LYD','created',?)").bind(o.id, pm.gateway, o.total_lyd, trxRef).run();
   const pid = ins.meta.last_row_id as number;
-  const r = await createPayment(cfg, {
+  const req = {
     trxRef, orderCode: o.code, amount: o.total_lyd, currency: 'LYD', gateway: pm.gateway!, name: o.ship_name, phone: o.ship_phone, email: u.email,
     returnUrl: `${origin}/pay/return?ref=${trxRef}`, cancelUrl: `${origin}/pay/cancel?ref=${trxRef}`, webhookUrl: `${origin}/api/mypay/webhook`,
-  }, origin);
-  await log(db, pid, 'out', cfg.mode === 'mock' ? '(mock)' : cfg.baseUrl + cfg.createPath, r.status, r.request, r.response, r.ok);
+  };
+  const outUrl = cfg.mode === 'mock' ? '(mock)' : cfg.baseUrl + cfg.createPath;
+  const logId = await logStart(db, pid, outUrl, req);
+  let r: CreateRes;
+  try {
+    r = await createPayment(cfg, req, origin);
+  } catch (e: any) {
+    r = { ok: false, status: 0, request: req, response: String(e?.stack ?? e), error: 'انهيار غير متوقع أثناء الاتصال بالبوابة: ' + (e?.message ?? String(e)) };
+  }
+  await logEnd(db, logId, r.status, r.ok ? r.response : `${r.error ?? ''}\n${r.response ?? ''}`, r.ok);
   if (!r.ok) {
     await db.prepare("UPDATE payments SET status='failed',raw=?,updated_at=datetime('now') WHERE id=?").bind(r.error ?? r.response, pid).run();
     const b = await base(c);
-    return c.html(<Layout {...b} title="تعذر بدء الدفع"><div class="form"><h1>تعذر بدء الدفع</h1><Flash type="err" msg={r.error} /><p style="font-size:14px;color:#666">يمكنك المحاولة مرة أخرى أو اختيار طريقة دفع أخرى من صفحة الطلب.</p><a class="btn" href={`/pay/start/${o.code}`}>إعادة المحاولة</a> <a class="btn ghost" href={`/orders/${o.code}`}>صفحة الطلب</a></div></Layout>);
+    return c.html(<Layout {...b} title="تعذر بدء الدفع"><div class="form"><h1>تعذر بدء الدفع</h1><Flash type="err" msg={r.error} /><p style="font-size:14px;color:#666">لم يُخصم منكِ شيء، وطلبكِ <b>{o.code}</b> محفوظ بانتظار الدفع. المرجع <b class="mono" style="display:inline">{trxRef}</b>.</p><a class="btn" href={`/pay/start/${o.code}`}>إعادة المحاولة</a> <a class="btn ghost" href={`/orders/${o.code}`}>صفحة الطلب</a></div></Layout>);
   }
   await db.prepare("UPDATE payments SET status='pending',token=?,provider_ref=?,checkout_url=?,raw=?,updated_at=datetime('now') WHERE id=?").bind(r.token ?? null, r.providerRef ?? null, r.url!, r.response, pid).run();
   return c.redirect(r.url!);

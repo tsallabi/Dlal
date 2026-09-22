@@ -269,14 +269,16 @@ export async function importProducts(db: D1Database, arr: any[], categoryId: num
     const lingerieId = cats.find(x => x.slug === 'lingerie')?.id ?? null;
     const targetCat = mod.intimate && lingerieId ? lingerieId : categoryId;
     const homeOk = mod.homeOk && targetCat !== lingerieId ? 1 : 0;
-    const ex = await db.prepare("SELECT id,category_id,weight_g,volume_cm3 FROM products WHERE source='1688' AND source_offer_id=?").bind(offerId).first<{ id: number; category_id: number | null; weight_g: number | null; volume_cm3: number | null }>();
+    const ex = await db.prepare("SELECT id,category_id,weight_g,volume_cm3,min_qty FROM products WHERE source='1688' AND source_offer_id=?").bind(offerId).first<{ id: number; category_id: number | null; weight_g: number | null; volume_cm3: number | null; min_qty: number | null }>();
     // منتج موجود: يُسعَّر بقسمه هو ووزنه المحفوظ، لا بقسم المهمة التي فحصته
     // (إعادة الفحص من مهمة بلا قسم كانت تُنقص السعر لأنها تفترض وزنًا افتراضيًا)
     const useCat = ex ? (cats.find(x => x.id === ex.category_id) ?? cat) : (cats.find(x => x.id === targetCat) ?? cat);
     const weight = it.weightG ?? ex?.weight_g ?? useCat?.est_weight_g ?? 300;
     const volume = it.volumeCm3 ?? ex?.volume_cm3 ?? null;
-    const pr = computePrice(s, price, weight, useCat?.markup_percent, volume);
-    const prSea = computePrice(s, price, weight, useCat?.markup_percent, volume, 'sea');
+    // الشحن الداخلي يُقسَّم على اللوط: الحد الأدنى جزء من التسعير لا معلومة عرض فقط
+    const moq = Math.max(1, Number(it.minQty ?? 0) || ex?.min_qty || 1);
+    const pr = computePrice(s, price, weight, useCat?.markup_percent, volume, 'air', moq);
+    const prSea = computePrice(s, price, weight, useCat?.markup_percent, volume, 'sea', moq);
     if (ex) {
       await db.prepare("UPDATE products SET source_price_cny=?,price_lyd=?,price_sea_lyd=?,in_stock=?,last_checked_at=datetime('now'),updated_at=datetime('now') WHERE id=?")
         .bind(price, pr.total_lyd, prSea.total_lyd, it.inStock === false ? 0 : 1, ex.id).run();
@@ -403,7 +405,7 @@ admin.get('/products/:id', async (c) => {
   const [cats, imgs, vars] = await Promise.all([getCategories(db), db.prepare('SELECT * FROM product_images WHERE product_id=? ORDER BY sort').bind(p.id).all<any>(), db.prepare('SELECT * FROM variants WHERE product_id=?').bind(p.id).all<any>()]);
   const s = await loadSettings(db);
   const cat = cats.find(x => x.id === p.category_id);
-  const br = computePrice(s, p.source_price_cny, p.weight_g ?? cat?.est_weight_g ?? 300, cat?.markup_percent);
+  const br = computePrice(s, p.source_price_cny, p.weight_g ?? cat?.est_weight_g ?? 300, cat?.markup_percent, p.volume_cm3, 'air', p.min_qty ?? 1);
   return shell(c, 'products', p.title_ar, (
     <div class="two">
       <form method="post" class="card-box">
@@ -439,7 +441,7 @@ admin.get('/products/:id', async (c) => {
 admin.post('/products/:id', async (c) => {
   const f = await c.req.parseBody(); const db = c.env.DB; const id = Number(c.req.param('id'));
   const s = await loadSettings(db); const cats = await getCategories(db); const cat = cats.find(x => x.id === Number(f.category_id));
-  const price = f.price_lyd ? parseFloat(String(f.price_lyd)) : computePrice(s, parseFloat(String(f.source_price_cny)), Number(f.weight_g) || cat?.est_weight_g || 300, cat?.markup_percent).total_lyd;
+  const price = f.price_lyd ? parseFloat(String(f.price_lyd)) : computePrice(s, parseFloat(String(f.source_price_cny)), Number(f.weight_g) || cat?.est_weight_g || 300, cat?.markup_percent, null, 'air', Number(f.min_qty) || 1).total_lyd;
   await db.prepare(`UPDATE products SET title_ar=?,category_id=?,source_price_cny=?,weight_g=?,min_qty=?,price_lyd=?,compare_price_lyd=?,status=?,in_stock=?,description_ar=?,source_url=?,updated_at=datetime('now') WHERE id=?`)
     .bind(String(f.title_ar), Number(f.category_id), parseFloat(String(f.source_price_cny)), f.weight_g ? Number(f.weight_g) : null, Number(f.min_qty) || 1, price, f.compare_price_lyd ? parseFloat(String(f.compare_price_lyd)) : null, String(f.status), Number(f.in_stock), String(f.description_ar ?? ''), f.source_url ? String(f.source_url) : null, id).run();
   return c.redirect(`/admin/products/${id}?ok=1`);
@@ -448,7 +450,7 @@ admin.post('/products/:id/reprice', async (c) => {
   const db = c.env.DB; const id = Number(c.req.param('id'));
   const p = await db.prepare('SELECT source_price_cny,weight_g,category_id FROM products WHERE id=?').bind(id).first<any>();
   const s = await loadSettings(db); const cats = await getCategories(db); const cat = cats.find(x => x.id === p.category_id);
-  const pr = computePrice(s, p.source_price_cny, p.weight_g ?? cat?.est_weight_g ?? 300, cat?.markup_percent);
+  const pr = computePrice(s, p.source_price_cny, p.weight_g ?? cat?.est_weight_g ?? 300, cat?.markup_percent, p.volume_cm3, 'air', p.min_qty ?? 1);
   await db.prepare('UPDATE products SET price_lyd=? WHERE id=?').bind(pr.total_lyd, id).run();
   return c.redirect(`/admin/products/${id}?ok=1`);
 });
@@ -578,12 +580,12 @@ admin.post('/pricing', async (c) => {
 admin.post('/pricing/backfill-costs', async (c) => {
   const db = c.env.DB; const s = await loadSettings(db); const cats = await getCategories(db);
   const { results } = await db.prepare(
-    `SELECT oi.id,oi.product_id,p.source_price_cny,p.weight_g,p.volume_cm3,p.category_id
+    `SELECT oi.id,oi.product_id,p.source_price_cny,p.weight_g,p.volume_cm3,p.category_id,p.min_qty
      FROM order_items oi JOIN products p ON p.id=oi.product_id WHERE oi.unit_cost_lyd IS NULL`,
   ).all<any>();
   const stmts = results.map(r => {
     const cat = cats.find(x => x.id === r.category_id);
-    const br = computePrice(s, r.source_price_cny ?? 0, r.weight_g ?? cat?.est_weight_g ?? 300, cat?.markup_percent, r.volume_cm3);
+    const br = computePrice(s, r.source_price_cny ?? 0, r.weight_g ?? cat?.est_weight_g ?? 300, cat?.markup_percent, r.volume_cm3, 'air', r.min_qty ?? 1);
     return db.prepare('UPDATE order_items SET unit_cost_lyd=?,unit_ship_lyd=?,unit_goods_lyd=? WHERE id=?')
       .bind(br.cost_lyd, br.intl_ship_lyd + br.domestic_ship_lyd, br.goods_lyd, r.id);
   });
@@ -592,12 +594,12 @@ admin.post('/pricing/backfill-costs', async (c) => {
 });
 admin.post('/pricing/reprice-all', async (c) => {
   const db = c.env.DB; const s = await loadSettings(db); const cats = await getCategories(db);
-  const { results } = await db.prepare('SELECT id,source_price_cny,weight_g,volume_cm3,category_id FROM products').all<any>();
+  const { results } = await db.prepare('SELECT id,source_price_cny,weight_g,volume_cm3,category_id,min_qty FROM products').all<any>();
   const stmts = results.map(p => {
     const cat = cats.find(x => x.id === p.category_id);
     const w = p.weight_g ?? cat?.est_weight_g ?? 300;
-    const air = computePrice(s, p.source_price_cny, w, cat?.markup_percent, p.volume_cm3);
-    const sea = computePrice(s, p.source_price_cny, w, cat?.markup_percent, p.volume_cm3, 'sea');
+    const air = computePrice(s, p.source_price_cny, w, cat?.markup_percent, p.volume_cm3, 'air', p.min_qty ?? 1);
+    const sea = computePrice(s, p.source_price_cny, w, cat?.markup_percent, p.volume_cm3, 'sea', p.min_qty ?? 1);
     return db.prepare('UPDATE products SET price_lyd=?,price_sea_lyd=? WHERE id=?').bind(air.total_lyd, sea.total_lyd, p.id);
   });
   for (let i = 0; i < stmts.length; i += 100) await db.batch(stmts.slice(i, i + 100));
