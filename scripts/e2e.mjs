@@ -474,7 +474,8 @@ expect(await page.locator('.filters h3').isVisible(), 'لوحة التصفية �
 const groups = await page.locator('.filters .fgroup').count();
 expect(groups >= 3, `لوحة التصفية فيها ${groups} مجموعات (قسم/مقاس/لون/سعر/عروض)`);
 expect((await page.locator('.filters .fgroup a').filter({ hasText: 'فساتين' }).count()) > 0, 'قائمة الأقسام داخل الفلاتر');
-expect(await page.locator('.sortbar .chip.on').textContent().then(t => t.includes('رواجًا')), 'شريط الترتيب يبدأ بالأكثر رواجًا');
+// شريط الترقيم أيضًا صنفه sortbar ورقمه الحالي chip.on — نقصد شريط الترتيب الأول وحده
+expect(await page.locator('.sortbar').first().locator('.chip.on').first().textContent().then(t => t.includes('رواجًا')), 'شريط الترتيب يبدأ بالأكثر رواجًا');
 const before = await page.locator('.card').count();
 // فلتر السعر بالنطاقات الجاهزة
 await page.click('.filters .fgroup a:has-text("أقل من")'); await page.waitForLoadState('networkidle');

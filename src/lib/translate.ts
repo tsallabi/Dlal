@@ -130,7 +130,9 @@ export class Translator {
 export async function retranslatePending(db: D1Database, ai: any, limit = 40): Promise<{ products: number; variants: number; tried: number; remaining: number; held: number; variantsLeft: number }> {
   const tr = new Translator(db, ai, limit + 60);
   // الأقل محاولةً أولًا: عنوان عصيّ على الترجمة لا يبتلع كل دفعة ويمنع بقية الكتالوج
-  const { results } = await db.prepare("SELECT id,title_ar,title_src,supplier_name,tr_tries FROM products WHERE title_ar GLOB '*[一-龥]*' OR title_src GLOB '*[一-龥]*' OR supplier_name GLOB '*[一-龥]*' ORDER BY tr_tries ASC,(status='draft') DESC,sales DESC,id DESC LIMIT 400").all<any>();
+  const { results } = await db.prepare(`SELECT id,title_ar,title_src,supplier_name,tr_tries FROM products
+     WHERE title_ar GLOB '*[一-龥]*' OR supplier_name GLOB '*[一-龥]*' OR title_src GLOB '*[一-龥]*'
+     ORDER BY (title_ar GLOB '*[一-龥]*') DESC, tr_tries ASC, (status='draft') DESC, sales DESC, id DESC LIMIT 400`).all<any>();
   // العناوين الصينية أو الرديئة أولًا، ثم ما تبقى (موردون)
   const needs = (p: any) => hasCJK(p.title_ar) || !goodTitle(p.title_ar);
   results.sort((a, b) => Number(needs(b)) - Number(needs(a)));
@@ -139,6 +141,9 @@ export async function retranslatePending(db: D1Database, ai: any, limit = 40): P
     if (tried >= limit) break;
     const src = hasCJK(p.title_src) ? p.title_src : p.title_ar;
     const needTitle = hasCJK(p.title_ar) || !goodTitle(p.title_ar);
+    // المنتج الذي عنوانه عربي سليم واسم مورّده عربي لا يحتاج شيئًا: نتخطاه بلا أن يُحسب من الدفعة.
+    // (كان يُحسب فيبتلع الأربعين مكانًا ولا يصل الدور إلى العناوين الصينية الحقيقية.)
+    if (!needTitle && !hasCJK(p.supplier_name)) continue;
     const t = needTitle ? await tr.t(src, 'title') : p.title_ar;
     const sp = await tr.t(p.supplier_name);
     // عنوان صار عربيًا: المنتج المحجوز كمسودة يُنشر الآن (لا يُعرض عنوان صيني للزبونة أبدًا)
