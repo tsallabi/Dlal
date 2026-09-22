@@ -25,7 +25,9 @@ export async function runServerJobs(env: { DB: D1Database; AI?: any }, opts: { l
         // enrichOnly: المنتجات الناقصة (صورة واحدة أو بلا مقاسات) أولًا مهما كان وقت آخر فحص —
         // منتجات استُوردت من صفحة البحث تصل بصورة واحدة بلا ألوان ولا مقاسات ولا وزن.
         const dueSql = "SELECT source_offer_id,source_price_cny,category_id FROM products WHERE status='active' AND source='1688' AND source_offer_id GLOB '[0-9]*' AND length(source_offer_id)>=9 AND (last_checked_at IS NULL OR last_checked_at < datetime('now', '-' || ? || ' hours')) ORDER BY last_checked_at ASC, (sales*10+views) DESC LIMIT ?";
-        const thinSql = "SELECT p.source_offer_id,p.source_price_cny,p.category_id FROM products p WHERE p.status='active' AND p.source='1688' AND p.source_offer_id GLOB '[0-9]*' AND length(p.source_offer_id)>=9 AND ((SELECT COUNT(*) FROM product_images i WHERE i.product_id=p.id) <= 1 OR (SELECT COUNT(*) FROM variants v WHERE v.product_id=p.id) = 0 OR p.weight_g IS NULL) ORDER BY (p.sales*10+p.views) DESC, p.id LIMIT ?";
+        // المسودات أولًا: صفحة المنتج تحمل عنوانًا إنجليزيًا يُنتج ترجمة عربية أفضل بكثير من الصيني المحشو،
+        // فإثراؤها يملأ الصور والمقاسات والوزن ويُخرجها من الحجز إلى المتجر في خطوة واحدة.
+        const thinSql = "SELECT p.source_offer_id,p.source_price_cny,p.category_id FROM products p WHERE p.status IN ('active','draft') AND p.source='1688' AND p.source_offer_id GLOB '[0-9]*' AND length(p.source_offer_id)>=9 AND ((SELECT COUNT(*) FROM product_images i WHERE i.product_id=p.id) <= 1 OR (SELECT COUNT(*) FROM variants v WHERE v.product_id=p.id) = 0 OR p.weight_g IS NULL) ORDER BY (p.status='draft') DESC, (p.sales*10+p.views) DESC, p.id LIMIT ?";
         const batch = opts.maxItems ? maxItems : Math.min(job.max_new || 100, maxItems);
         const { results } = opts.enrichOnly
           ? await db.prepare(thinSql).bind(batch).all<any>()

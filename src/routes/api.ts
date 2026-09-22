@@ -180,7 +180,7 @@ api.post('/source/stats', async (c) => {
   const src = await db.prepare("SELECT COUNT(*) n FROM payment_log WHERE url LIKE 'SRC %'").first<any>();
   const cn = await db.prepare("SELECT COUNT(*) n, SUM(status='active') a FROM products WHERE title_ar GLOB '*[一-龥]*'").first<any>();
   // ما زال ينقصه فحص تفاصيل: صورة واحدة أو بلا مقاسات أو بلا وزن — هذه هي حصة الإثراء المتبقية
-  const thin = await db.prepare(`SELECT COUNT(*) n FROM products p WHERE p.status='active' AND p.source='1688'
+  const thin = await db.prepare(`SELECT COUNT(*) n FROM products p WHERE p.status IN ('active','draft') AND p.source='1688'
      AND ((SELECT COUNT(*) FROM product_images i WHERE i.product_id=p.id) <= 1
        OR (SELECT COUNT(*) FROM variants v WHERE v.product_id=p.id) = 0
        OR p.weight_g IS NULL)`).first<any>();
