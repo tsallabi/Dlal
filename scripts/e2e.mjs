@@ -3,6 +3,7 @@
 import { chromium } from 'playwright';
 import { mkdirSync, existsSync } from 'node:fs';
 import { createHmac } from 'node:crypto';
+import { createServer } from 'node:http';
 
 const BASE = process.env.BASE || 'http://localhost:8787';
 const OUT = process.env.OUT || './shots';
@@ -678,6 +679,26 @@ await login(page, '0910000000', 'admin123');
 await page.goto(BASE + '/admin/pricing');
 await page.fill('textarea[name=delivery_city_rates]', '');
 await page.locator('form:has(textarea[name=delivery_city_rates]) button:has-text("حفظ")').click(); await page.waitForLoadState('networkidle');
+
+// ---------- رصيد المزوّد نفد: النظام يقولها للمالك بوضوح بدل أن يمضي في الخطأ ----------
+// خادم وهمي يرد بنفس ما ردّت به TMAPI فعلًا على الموقع الحي
+const walletSrv = createServer((_q, res) => { res.writeHead(200, { 'content-type': 'application/json' }); res.end('{"code":5000,"msg":"insufficient wallet balance"}'); });
+await new Promise(r => walletSrv.listen(8801, r));
+await login(page, '0910000000', 'admin123');
+await page.goto(BASE + '/admin/source');
+const savedBase = await page.locator('input[name=src_base_url]').inputValue();
+await page.fill('input[name=src_base_url]', 'http://127.0.0.1:8801');
+await page.fill('input[name=test_id]', '999888777666');
+await page.click('button:has-text("اختبار: جلب منتج")'); await page.waitForLoadState('networkidle');
+await page.goto(BASE + '/admin/source');
+const wb = page.locator('.card-box:has(h3:text("صحة الكتالوج")) .flash').first();
+expect(await wb.count() > 0, 'لوحة الكتالوج تحذّر حين يرفض المزوّد الطلبات');
+const wbText = (await wb.textContent()).trim();
+expect(wbText.includes('insufficient wallet balance') && wbText.includes('TMAPI'), `التحذير ينقل نص المزوّد ويقول ما العمل: ${wbText.slice(0, 80)}`);
+await shot(page, 'admin-wallet-empty');
+await page.fill('input[name=src_base_url]', savedBase);
+await page.locator('form[action="/admin/source"] button:has-text("حفظ")').click(); await page.waitForLoadState('networkidle');
+walletSrv.close();
 
 // ---------- لوحة صحة الكتالوج: الأرقام التي يقودها المالك بنفسه ----------
 await login(page, '0910000000', 'admin123');
