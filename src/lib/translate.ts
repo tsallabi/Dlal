@@ -270,7 +270,7 @@ export async function retranslatePending(db: D1Database, ai: any, limit = 40): P
   // ٢٧ منتجًا حيًا أصلها الصيني محفوظ ومحاولاتها صفر: هي في الطابور ولا يصلها الدور أبدًا
   // لأن الترتيب يدفنها تحت آلاف الصفوف. ترتفع هنا إلى المرتبة الثانية بعد الصيني.
   const NO_AR = `(title_ar NOT GLOB '*[\u0621-\u064A]*')`;
-  const { results } = await db.prepare(`SELECT id,title_ar,title_src,supplier_name,tr_tries FROM products
+  const { results } = await db.prepare(`SELECT id,title_ar,title_src,supplier_name,tr_tries,needs_tr FROM products
      WHERE title_ar GLOB '*[一-龥]*' OR supplier_name GLOB '*[一-龥]*' OR title_src GLOB '*[一-龥]*' OR ${MASHED} OR ${NO_AR} OR ${BROKEN_SQL}
      ORDER BY (title_ar GLOB '*[一-龥]*') DESC, needs_tr DESC, ${BROKEN_SQL} DESC, ${NO_AR} DESC, ${MASHED} DESC, tr_tries ASC, (status='draft') DESC, sales DESC, id DESC LIMIT 400`).all<any>();
   // العناوين الصينية أو الرديئة أولًا، ثم ما تبقى (موردون)
@@ -283,7 +283,13 @@ export async function retranslatePending(db: D1Database, ai: any, limit = 40): P
     const needTitle = hasCJK(p.title_ar) || !goodTitle(p.title_ar) || !!brokenTitle(p.title_ar, p.title_src);
     // المنتج الذي عنوانه عربي سليم واسم مورّده عربي لا يحتاج شيئًا: نتخطاه بلا أن يُحسب من الدفعة.
     // (كان يُحسب فيبتلع الأربعين مكانًا ولا يصل الدور إلى العناوين الصينية الحقيقية.)
-    if (!needTitle && !hasCJK(p.supplier_name)) continue;
+    if (!needTitle && !hasCJK(p.supplier_name)) {
+      // معلَّم لكن عنوانه يمرّ من كل قاعدة عندنا: العلامة قديمة (سببها تكرار اسم مع منتج
+      // آخر، وهذا لا تُصلحه إعادة ترجمة). نمسحها هنا وإلا دار الطابور عليها بلا نهاية
+      // ولم يصل الدور إلى ما يُصلَح فعلًا — هذا الفرع كان يتخطّى قبل أن يمسح.
+      if (p.needs_tr) await db.prepare('UPDATE products SET needs_tr=0 WHERE id=?').bind(p.id).run();
+      continue;
+    }
     // `tr.t` تُعيد النص الأصلي حين تعجز كل النماذج. قبوله يعني استبدال عنوان عربي مكسور
     // بعنوان صيني — أسوأ. لا نقبل إلا ترجمة عربية سليمة غير مكسورة، وإلا تُترك كما هي.
     const cand = needTitle ? await tr.t(src, 'title') : p.title_ar;
