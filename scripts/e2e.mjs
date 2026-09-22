@@ -1218,6 +1218,29 @@ await page.goto(BASE + '/logout');
 const fr = await page.goto(BASE + freedSlug);
 expect(fr.status() === 200, 'صفحة المنتج المُطلَق تُفتح للزبونة');
 expect(await has(page, `حامل اختبار عربي ${cnOffer}`), 'الزبونة ترى عنوانه العربي في صفحته');
+// ---------- عنوان مكسور: كلمة عربية ملتصقة ببقية لاتينية («زippers») ----------
+// ١٣٧ منتجًا حيًا كانت تحمل هذا النص المكسور أمام الزبونة (٢٢/٠٩/٢٦). الكنس بلا نموذج.
+await login(page, '0910000000', 'admin123');
+await page.goto(BASE + heldHref);
+await page.fill('input[name=title_ar]', `${cnOffer} كيس شفاف للهاتف والسماعات مع زippers`);
+await page.click('form:has(input[name=title_ar]) button:has-text("حفظ")');
+await page.waitForLoadState('networkidle');
+const sweep = await page.evaluate(async (b) => {
+  const r = await fetch(b + '/api/source/translate', { method: 'POST', headers: { 'content-type': 'application/json', 'x-import-token': 'dev-import-token' }, body: JSON.stringify({ sweepFrom: 0 }) });
+  return r.json();
+}, BASE);
+expect(sweep.swept >= 1, `الكنس أصلح عنوانًا مكسورًا واحدًا على الأقل (${sweep.swept})`);
+await page.goto(BASE + heldHref);
+const swept = await page.locator('input[name=title_ar]').inputValue();
+expect(!/[\u0600-\u06FF][A-Za-z]|[A-Za-z][\u0600-\u06FF]/.test(swept), `لم يبقَ خلط أبجديات في العنوان (${swept})`);
+expect(swept === `${cnOffer} كيس شفاف للهاتف والسماعات`, `الكلمة المكسورة وحدها حُذفت وحرف العطف اليتيم معها (${swept})`);
+await page.goto(BASE + '/logout');
+await login(page, '0910000000', 'admin123');
+await page.goto(BASE + heldHref);
+await page.fill('input[name=title_ar]', `حامل اختبار عربي ${cnOffer}`);
+await page.click('form:has(input[name=title_ar]) button:has-text("حفظ")');
+await page.waitForLoadState('networkidle');
+
 // تنظيف: المنتج يبقى نشطًا وعنوانه الأصلي الصيني محفوظ في title_src، فيصير «توأمًا» لفحص
 // المكرر في التشغيل التالي فيُرفض استيراد العيّنة الصينية. نخفيه كما يخفي الأدمن أي قطعة.
 await login(page, '0910000000', 'admin123');

@@ -158,13 +158,29 @@ export async function releaseHeldDrafts(db: D1Database): Promise<number> {
   return r.meta?.changes ?? 0;
 }
 
+// كنس مجاني بلا استدعاء نموذج: عنوان بقي مكسورًا بعد محاولتي ترجمة تُحذف منه الكلمة المكسورة.
+// نتركه للنموذج أولًا لأن الحذف يُفقد معنى («كاردigan» ⟵ تختفي الكاردigan)، وهذا آخر ما نلجأ إليه
+// حتى لا يبقى نص مكسور أمام الزبونة إلى الأبد.
+export async function sweepMashedTitles(db: D1Database, minTries = 2): Promise<number> {
+  const { results } = await db.prepare(`SELECT id,title_ar FROM products
+     WHERE tr_tries >= ? AND (title_ar GLOB '*[\u0621-\u064A][a-zA-Z]*' OR title_ar GLOB '*[a-zA-Z][\u0621-\u064A]*') LIMIT 200`).bind(minTries).all<{ id: number; title_ar: string }>();
+  let n = 0;
+  for (const p of results) {
+    const fixed = dropMixedWords(p.title_ar);
+    if (fixed && goodTitle(fixed)) { await db.prepare('UPDATE products SET title_ar=?,updated_at=datetime(\'now\') WHERE id=?').bind(fixed, p.id).run(); n++; }
+  }
+  return n;
+}
+
 // إعادة ترجمة ما بقي صينيًا أو ما تُرجم ترجمة رديئة (تكرار) — تُستخدم من الأدمن ومن /api/source/translate
-export async function retranslatePending(db: D1Database, ai: any, limit = 40): Promise<{ products: number; variants: number; tried: number; remaining: number; held: number; variantsLeft: number; released: number }> {
+export async function retranslatePending(db: D1Database, ai: any, limit = 40): Promise<{ products: number; variants: number; tried: number; remaining: number; held: number; variantsLeft: number; released: number; swept: number }> {
   const tr = new Translator(db, ai, limit + 60);
   // الأقل محاولةً أولًا: عنوان عصيّ على الترجمة لا يبتلع كل دفعة ويمنع بقية الكتالوج
+  // العنوان المكسور («زippers»، «الكitchen») يدخل الطابور كما يدخله الصيني: كلاهما نص لا يُقرأ.
+  const MASHED = `(title_ar GLOB '*[\u0621-\u064A][a-zA-Z]*' OR title_ar GLOB '*[a-zA-Z][\u0621-\u064A]*')`;
   const { results } = await db.prepare(`SELECT id,title_ar,title_src,supplier_name,tr_tries FROM products
-     WHERE title_ar GLOB '*[一-龥]*' OR supplier_name GLOB '*[一-龥]*' OR title_src GLOB '*[一-龥]*'
-     ORDER BY (title_ar GLOB '*[一-龥]*') DESC, tr_tries ASC, (status='draft') DESC, sales DESC, id DESC LIMIT 400`).all<any>();
+     WHERE title_ar GLOB '*[一-龥]*' OR supplier_name GLOB '*[一-龥]*' OR title_src GLOB '*[一-龥]*' OR ${MASHED}
+     ORDER BY (title_ar GLOB '*[一-龥]*') DESC, ${MASHED} DESC, tr_tries ASC, (status='draft') DESC, sales DESC, id DESC LIMIT 400`).all<any>();
   // العناوين الصينية أو الرديئة أولًا، ثم ما تبقى (موردون)
   const needs = (p: any) => hasCJK(p.title_ar) || !goodTitle(p.title_ar);
   results.sort((a, b) => Number(needs(b)) - Number(needs(a)));
@@ -192,5 +208,6 @@ export async function retranslatePending(db: D1Database, ai: any, limit = 40): P
   const left = await db.prepare("SELECT COUNT(*) n,SUM(status='draft') d FROM products WHERE title_ar GLOB '*[一-龥]*'").first<{ n: number; d: number }>();
   const vLeft = await db.prepare("SELECT COUNT(*) n FROM variants WHERE color GLOB '*[一-龥]*' OR size GLOB '*[一-龥]*'").first<{ n: number }>();
   const released = await releaseHeldDrafts(db);
-  return { products: n, variants: nv, tried, remaining: left?.n ?? 0, held: left?.d ?? 0, variantsLeft: vLeft?.n ?? 0, released };
+  const swept = await sweepMashedTitles(db);
+  return { products: n, variants: nv, tried, remaining: left?.n ?? 0, held: left?.d ?? 0, variantsLeft: vLeft?.n ?? 0, released, swept };
 }
