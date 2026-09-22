@@ -301,7 +301,13 @@ export async function importProducts(db: D1Database, arr: any[], categoryId: num
       // كل مرور على منتج موجود محاولة إثراء تُعدّ، نجحت أو لم تنجح: بها يتقدّم الطابور ولا يدور
       const upd: string[] = ['enrich_tries=enrich_tries+1']; const binds: any[] = [];
       if ((hasCJK(cur?.title_ar) || !goodTitle(cur?.title_ar)) && !hasCJK(titleAr) && titleAr !== cur?.title_ar && (goodTitle(titleAr) || hasCJK(cur?.title_ar))) { upd.push('title_ar=?'); binds.push(titleAr.slice(0, 200)); upd.push("status=CASE WHEN status='draft' THEN 'active' ELSE status END"); }
-      if (it.minQty && Number(it.minQty) > 1 && (cur?.min_qty ?? 1) === 1) { upd.push('min_qty=?'); binds.push(Number(it.minQty)); }
+      // الإثراء يكتشف الحد الأدنى الحقيقي بعد أن يكون المنتج على الرف. رفعُه وحده لا يكفي:
+      // منتج نشط صار حدّه الأدنى قطعتين يُجبر الزبونة، فيجب أن يُخفى في الجملة نفسها.
+      // (سُرِّب منتج واحد بهذا الطريق بعد ترحيل 0023 — العطل يعود من باب الإثراء لا الاستيراد.)
+      if (it.minQty && Number(it.minQty) > 1 && (cur?.min_qty ?? 1) === 1) {
+        upd.push('min_qty=?'); binds.push(Number(it.minQty));
+        if (notRetail(it.title, Number(it.minQty), maxRetail)) upd.push("status=CASE WHEN status='active' THEN 'hidden' ELSE status END");
+      }
       if (it.weightG && Number(it.weightG) > 0 && !ex.weight_g) { upd.push('weight_g=?'); binds.push(Math.round(Number(it.weightG))); }
       if (it.volumeCm3 && Number(it.volumeCm3) > 0 && !ex.volume_cm3) { upd.push('volume_cm3=?'); binds.push(Math.round(Number(it.volumeCm3))); }
       if (supplierAr && (!cur?.supplier_name || hasCJK(cur.supplier_name))) { upd.push('supplier_name=?'); binds.push(supplierAr); }

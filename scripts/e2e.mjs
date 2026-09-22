@@ -1478,6 +1478,20 @@ await page.waitForLoadState('networkidle');
 await page.goto(BASE + '/admin/products?q=' + moq2Offer);
 expect((await page.locator(`tr:has-text("${moq2Offer}")`).first().textContent()).includes('hidden'),
   'حتى الحد الأدنى «قطعتان» يدخل مخفيًا — المتجر بالقطعة');
+// والثغرة الثانية: الإثراء يكتشف الحد الأدنى بعد أن يصير المنتج على الرف. نستورد قطعة
+// حدّها الأدنى ١ (فتكون نشطة) ثم يأتي الإثراء برقم ٣ — يجب أن تُخفى لا أن تبقى تُجبر.
+const leakOffer = '72' + String(Date.now()).slice(-10); const leakTag = uniqTag();
+const imp = async (body) => page.evaluate(async ([b, d]) => {
+  const r = await fetch(b + '/api/import', { method: 'POST', headers: { 'content-type': 'application/json', 'x-import-token': 'dev-import-token' }, body: JSON.stringify(d) });
+  return r.json();
+}, [BASE, body]);
+await imp({ category_id: 1, page_url: 'e2e:moq', items: [{ offerId: leakOffer, url: `https://detail.1688.com/offer/${leakOffer}.html`, title: `قطعة ${leakTag}`, priceCny: 6, images: ['https://cbu01.alicdn.com/img/ibank/l.jpg'], minQty: 1, inStock: true, weightG: 100 }] });
+await page.goto(BASE + '/admin/products?q=' + leakOffer);
+expect((await page.locator(`tr:has-text("${leakOffer}")`).first().textContent()).includes('active'), 'قطعة حدّها الأدنى ١ تدخل نشطة');
+await imp({ category_id: 1, page_url: 'e2e:moq2', items: [{ offerId: leakOffer, url: `https://detail.1688.com/offer/${leakOffer}.html`, title: `قطعة ${leakTag}`, priceCny: 6, images: [], variants: [], minQty: 3, inStock: true }] });
+await page.goto(BASE + '/admin/products?q=' + leakOffer);
+expect((await page.locator(`tr:has-text("${leakOffer}")`).first().textContent()).includes('hidden'),
+  'الإثراء الذي يرفع الحد الأدنى إلى ٣ يُخفي القطعة فورًا');
 // ولا يبقى على الرف منتج واحد يُجبر الزبونة
 const forced = await page.evaluate(async (b) => {
   const r = await fetch(b + '/api/source/stats', { method: 'POST', headers: { 'content-type': 'application/json', 'x-import-token': 'dev-import-token' }, body: '{}' });
