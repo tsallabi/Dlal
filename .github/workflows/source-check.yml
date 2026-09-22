@@ -48,6 +48,10 @@ on:
         description: "recompute air+sea prices for N products (empty = skip, 'all' = every product)"
         default: ""
         required: false
+      audit:
+        description: "yes = scan every catalogue title for broken translations and report counts + samples"
+        default: ""
+        required: false
       models:
         description: "yes = probe which Workers AI models still answer (the fallback chain silently died)"
         default: ""
@@ -81,6 +85,7 @@ jobs:
           RE: ${{ github.event.inputs.repeat }}
           WH: ${{ github.event.inputs.why }}
           MD: ${{ github.event.inputs.models }}
+          AU: ${{ github.event.inputs.audit }}
           JK: ${{ github.event.inputs.job_keyword }}
         run: |
           set -e
@@ -140,6 +145,11 @@ jobs:
               [ "$stall" -ge 3 ] && { echo "ثلاث دفعات بلا تقدّم — نتوقف"; break; }
               sleep 2
             done
+          fi
+          if [ "$AU" = "yes" ]; then
+            echo "=== تفتيش كل عناوين الكتالوج"
+            code=$(post '{}' audit); echo "HTTP $code"
+            python3 -c "import json;d=json.load(open('out.json'));print('فُحص:',d.get('scanned'));[print(f\"\n{k}  ({v['n']})\");[print('   ',e) for e in v['ex']] for k,v in (d.get('findings') or {}).items()];r=d.get('repeatedTitles') or {};print(f\"\nعناوين مكرّرة على ٣ منتجات فأكثر: {r.get('n')}\");[print('   ',e) for e in (r.get('ex') or [])]" 2>/dev/null || cat out.json
           fi
           if [ "$MD" = "yes" ]; then
             echo "=== which AI models answer"

@@ -234,6 +234,15 @@ await page.click('form[action$="/import/json"] button:has-text("استيراد")
 await page.waitForLoadState('networkidle');
 await page.goto(BASE + '/admin/products?broken=1');
 expect(!(await has(page, okOffer)), 'العنوان العربي السليم لا يقع في الفلتر');
+// تفتيش الكتالوج كله يجري على الخادم ويعيد أعدادًا وعيّنات — قراءة فقط بلا كريدت
+const audit = await page.evaluate(async (b) => {
+  const r = await fetch(b + '/api/source/audit', { method: 'POST', headers: { 'content-type': 'application/json', 'x-import-token': 'dev-import-token' }, body: '{}' });
+  return r.json();
+}, BASE);
+expect(audit.scanned > 0, `التفتيش يمرّ على الكتالوج كله (${audit.scanned} عنوانًا)`);
+const foundRepeat = Object.entries(audit.findings ?? {}).find(([k]) => /مكرّرة بلا مسافات/.test(k));
+expect(!!foundRepeat && foundRepeat[1].n >= 1, `التفتيش يجد العنوان المكرّر الملتصق (${foundRepeat?.[1]?.n ?? 0})`);
+expect((foundRepeat?.[1]?.ex ?? []).some(x => x.includes('الوسوم')), 'ويعرض عيّنة منه ليراها صاحب المشروع');
 
 // ---------- شروط البداية: الفحص يضبطها ولا يرثها ----------
 // تشغيلة سابقة قد تنهار وهي في وضع «حقيقي» مشيرة إلى خادم وهمي مغلق، فتسقط فحوص الدفع

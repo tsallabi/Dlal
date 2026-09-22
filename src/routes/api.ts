@@ -209,6 +209,53 @@ api.post('/source/run', async (c) => {
   return c.json(await runServerJobs(c.env, { limit: Math.min(3, b.limit ?? 1), jobId: b.job_id, byUserId: c.get('user')?.id ?? null, maxItems: b.max_items ?? 8, pages: b.pages, fromPage: b.from_page, enrichOnly: b.enrich_only === true, keyword: b.keyword }));
 });
 // حالة المتجر الحقيقية من القاعدة الحية (أرقام لكل قسم) — للفحص عن بُعد بلا لوحة إدارة
+// تفتيش الكتالوج كله بحثًا عن ترجمات مكسورة لم تلتقطها القواعد بعد.
+// يجري **على الخادم** حيث البيانات ويعيد أعدادًا وخمس عيّنات لكل نوع — قراءة فقط، بلا كريدت.
+// شغّله من workflow source-check بمدخل audit=yes كلما دخلت بضاعة جديدة.
+api.post('/source/audit', async (c) => {
+  if (!tokenOk(c)) return c.json({ error: 'رمز غير صحيح' }, 401);
+  const db = c.env.DB;
+  const rows: { id: number; t: string; src: string | null; cat: string | null }[] = [];
+  for (let after = 0; ; ) {
+    const { results } = await db.prepare(
+      `SELECT p.id, p.title_ar t, p.title_src src, c.name_ar cat FROM products p LEFT JOIN categories c ON c.id=p.category_id
+       WHERE p.status IN ('active','draft') AND p.id > ? ORDER BY p.id LIMIT 4000`).bind(after).all<any>();
+    if (!results.length) break;
+    rows.push(...results); after = results[results.length - 1].id;
+    if (rows.length >= 30000) break;
+  }
+  const hit: Record<string, { n: number; ex: string[] }> = {};
+  const add = (k: string, id: number, t: string) => {
+    hit[k] ??= { n: 0, ex: [] };
+    hit[k].n++;
+    if (hit[k].ex.length < 5) hit[k].ex.push(`${id}: ${t.slice(0, 90)}`);
+  };
+  const seen = new Map<string, number>();
+  for (const r of rows) {
+    const t = String(r.t ?? '').trim();
+    const words = t.split(/\s+/).filter(Boolean);
+    if (!t) { add('عنوان فارغ', r.id, '(فارغ)'); continue; }
+    const why = brokenTitle(t, r.src);
+    if (why) add(`مكسور: ${why}`, r.id, t);
+    if (/(\S{2,})\s+\1(\s|$)/.test(t)) add('كلمة مكرّرة مرتين متتاليتين', r.id, t);
+    if (words.length <= 1) add('عنوان من كلمة واحدة', r.id, t);
+    if (words.length === 2 && t.length < 12) add('عنوان قصير جدًا (كلمتان تحت ١٢ حرفًا)', r.id, t);
+    if (t.length > 120) add('عنوان أطول من ١٢٠ حرفًا', r.id, t);
+    if ((t.match(/\d+/g) ?? []).length >= 4) add('أرقام كثيرة في العنوان (٤ فأكثر)', r.id, t);
+    // الصيني له عدّاده المستقل فلا يُحسب هنا مرتين؛ نبحث عن رموز لا لغة لها
+    if (!/[\u4e00-\u9fff]/.test(t) && /[^\u0600-\u06FF\s\d(),.\/\-x×+%A-Za-z،؛:'"«»&]/.test(t)) add('رموز غريبة في العنوان', r.id, t);
+    if (/\b(الوسوم|العلامات|الكلمات المفتاحية|نص|عنوان المنتج)\b/.test(t)) add('كلمة من تعليمات النموذج تسرّبت', r.id, t);
+    const key = t.toLowerCase();
+    seen.set(key, (seen.get(key) ?? 0) + 1);
+  }
+  const dupTitles = [...seen.entries()].filter(([, n]) => n >= 3).sort((a, b) => b[1] - a[1]);
+  return c.json({
+    scanned: rows.length,
+    findings: Object.fromEntries(Object.entries(hit).sort((a, b) => b[1].n - a[1].n)),
+    repeatedTitles: { n: dupTitles.length, ex: dupTitles.slice(0, 5).map(([t, n]) => `${n}× ${t.slice(0, 70)}`) },
+  });
+});
+
 api.post('/source/stats', async (c) => {
   if (!tokenOk(c)) return c.json({ error: 'رمز غير صحيح' }, 401);
   const db = c.env.DB;
