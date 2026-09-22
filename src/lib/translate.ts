@@ -67,6 +67,13 @@ export const goodArabic = (t: string | null | undefined) => !!t && /[\u0600-\u06
 //  · «حمراء مزيفة لديكور المنزل» ⟵ 嘉兰百合 زنبق الجلوريوزا: ضاع اسم المنتج كله
 // الكلمة المشبوهة لا تكفي وحدها: خيمة إغاثة أصلها 抗震救灾 فيها «زلازل» صحيحة.
 // نطالب بوجود أثرها في العنوان الصيني، فإن غاب فهي هلوسة نموذج.
+// النموذج يخلط أبجديات أخرى لا لاتينية فقط: «بال스타يل» كورية، «تنورةチュチュ» يابانية،
+// «розية» سيريلية، «đế مسطح» فيتنامية. ١٤٣ عنوانًا حيًا في ٢٢/٠٩/٢٦.
+// اللاتينية مسموحة (XL، USB)، وكل ما عداها في عنوان عربي خطأ نموذج لا محالة.
+const FOREIGN_SCRIPT = /[\u1100-\u11FF\u3040-\u30FF\u3130-\u318F\uAC00-\uD7AF\u0400-\u04FF\u0E00-\u0E7F\u0370-\u03FF\u0102\u0103\u0110\u0111\u01A0\u01A1\u01AF\u01B0\u1EA0-\u1EF9]/;
+// كلمة مكرّرة مرتين متتاليتين: «سلة طويلة طويلة»، «للسيارات للسيارات»، «منصة منصة».
+// حارس التكرار القديم يشترط ثلاث مرات فلم يرَ ٢٧ عنوانًا حيًا.
+const DUP_ADJACENT = /(\S{2,})\s+\1(\s|$)/;
 const LEAD_ADJ = /^(حمراء|زرقاء|بيضاء|سوداء|خضراء|صفراء|وردية|ذهبية|فضية|بنفسجية|رمادية|كبيرة|صغيرة|جميلة|أنيقة|ناعمة|سميكة|خفيفة|مزيفة|صناعية|جديدة|فاخرة|مريحة|شفافة|طويلة|قصيرة)\s/;
 // السوابق العربية تلتصق بالكلمة: «للزلازل» = لِ + الزلازل. بدونها لا يُمسك شيء.
 const AR_PRE = '(?:^|\\s)[\u0648\u0641\u0628\u0643\u0644]{0,3}(?:\u0627\u0644)?';
@@ -91,6 +98,11 @@ export const BROKEN_SQL = `(
   OR (title_ar LIKE '%زلزال%' AND COALESCE(title_src,'') NOT LIKE '%震%')
   OR (title_ar LIKE '%قنبلة%' AND COALESCE(title_src,'') NOT LIKE '%炸%' AND COALESCE(title_src,'') NOT LIKE '%爆%')
   OR (title_ar LIKE '%قرصنة%' AND COALESCE(title_src,'') NOT LIKE '%盗%')
+  OR length(title_ar) > 120
+  OR title_ar GLOB '*[\uAC00-\uD7AF]*' OR title_ar GLOB '*[\u3040-\u30FF]*'
+  OR title_ar GLOB '*[\u0400-\u04FF]*' OR title_ar GLOB '*[\u0E00-\u0E7F]*'
+  OR title_ar GLOB '*[\u1EA0-\u1EF9]*' OR title_ar GLOB '*[\u0370-\u03FF]*'
+  OR needs_tr = 1
 )`;
 
 // يعيد سبب الكسر بالعربية ليراه الأدمن، أو null إن كان العنوان سليمًا
@@ -98,6 +110,9 @@ export function brokenTitle(titleAr: string | null | undefined, titleSrc: string
   const t = String(titleAr ?? '').trim(); const src = String(titleSrc ?? '');
   if (!t) return null;
   if (REPEAT_NOSPACE.test(t)) return 'كلمة مكرّرة بلا مسافات';
+  if (FOREIGN_SCRIPT.test(t)) return 'حروف من أبجدية أخرى (كورية أو يابانية أو سيريلية)';
+  if (DUP_ADJACENT.test(t)) return 'كلمة مكرّرة مرتين متتاليتين';
+  if (t.length > 120) return 'عنوان أطول من ١٢٠ حرفًا — حشو كلمات مفتاحية';
   if (GLUED(t)) return 'نص ملتصق بلا مسافات';
   if (LEAD_ADJ.test(t)) return 'يبدأ بصفة ولا اسم منتج فيه';
   for (const w of SUSPECT) if (w.re.test(t) && !w.src.some(x => src.includes(x))) return `كلمة «${w.why}» لا أصل لها في العنوان الصيني`;
@@ -257,7 +272,7 @@ export async function retranslatePending(db: D1Database, ai: any, limit = 40): P
   const NO_AR = `(title_ar NOT GLOB '*[\u0621-\u064A]*')`;
   const { results } = await db.prepare(`SELECT id,title_ar,title_src,supplier_name,tr_tries FROM products
      WHERE title_ar GLOB '*[一-龥]*' OR supplier_name GLOB '*[一-龥]*' OR title_src GLOB '*[一-龥]*' OR ${MASHED} OR ${NO_AR} OR ${BROKEN_SQL}
-     ORDER BY (title_ar GLOB '*[一-龥]*') DESC, ${BROKEN_SQL} DESC, ${NO_AR} DESC, ${MASHED} DESC, tr_tries ASC, (status='draft') DESC, sales DESC, id DESC LIMIT 400`).all<any>();
+     ORDER BY (title_ar GLOB '*[一-龥]*') DESC, needs_tr DESC, ${BROKEN_SQL} DESC, ${NO_AR} DESC, ${MASHED} DESC, tr_tries ASC, (status='draft') DESC, sales DESC, id DESC LIMIT 400`).all<any>();
   // العناوين الصينية أو الرديئة أولًا، ثم ما تبقى (موردون)
   const needs = (p: any) => hasCJK(p.title_ar) || !goodTitle(p.title_ar) || !!brokenTitle(p.title_ar, p.title_src);
   results.sort((a, b) => Number(needs(b)) - Number(needs(a)));
@@ -279,7 +294,9 @@ export async function retranslatePending(db: D1Database, ai: any, limit = 40): P
     // عنوان صار عربيًا: المنتج المحجوز كمسودة يُنشر الآن (لا يُعرض عنوان صيني للزبونة أبدًا)
     if ((t && t !== p.title_ar) || (sp && sp !== p.supplier_name)) {
       const pub = t && !hasCJK(t) ? ",status=CASE WHEN status='draft' THEN 'active' ELSE status END" : '';
-      await db.prepare(`UPDATE products SET title_src=COALESCE(title_src,title_ar),title_ar=?,supplier_name=?${pub},tr_tries=tr_tries+1 WHERE id=?`).bind(t ?? p.title_ar, sp ?? p.supplier_name, p.id).run(); n++;
+      // العلامة تُمسح فقط إن صار العنوان سليمًا فعلًا — وإلا بقيت ليعود الدور عليه
+      const clear = t && goodTitle(t) && !brokenTitle(t, src) ? ',needs_tr=0' : '';
+      await db.prepare(`UPDATE products SET title_src=COALESCE(title_src,title_ar),title_ar=?,supplier_name=?${pub}${clear},tr_tries=tr_tries+1 WHERE id=?`).bind(t ?? p.title_ar, sp ?? p.supplier_name, p.id).run(); n++;
     } else { await db.prepare('UPDATE products SET tr_tries=tr_tries+1 WHERE id=?').bind(p.id).run(); }
     tried++;
   }

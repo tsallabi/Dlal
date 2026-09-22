@@ -49,7 +49,7 @@ on:
         default: ""
         required: false
       audit:
-        description: "yes = scan every catalogue title for broken translations and report counts + samples"
+        description: "yes = scan every title and report; fix = also flag what it found for re-translation"
         default: ""
         required: false
       models:
@@ -146,10 +146,11 @@ jobs:
               sleep 2
             done
           fi
-          if [ "$AU" = "yes" ]; then
+          if [ -n "$AU" ] && [ "$AU" != "no" ]; then
             echo "=== تفتيش كل عناوين الكتالوج"
-            code=$(post '{}' audit); echo "HTTP $code"
-            python3 -c "import json;d=json.load(open('out.json'));print('فُحص:',d.get('scanned'));[print(f\"\n{k}  ({v['n']})\");[print('   ',e) for e in v['ex']] for k,v in (d.get('findings') or {}).items()];r=d.get('repeatedTitles') or {};print(f\"\nعناوين مكرّرة على ٣ منتجات فأكثر: {r.get('n')}\");[print('   ',e) for e in (r.get('ex') or [])]" 2>/dev/null || cat out.json
+            if [ "$AU" = "fix" ]; then AUBODY='{"fix":true}'; else AUBODY='{}'; fi
+            code=$(post "$AUBODY" audit); echo "HTTP $code"
+            python3 -c "import json;d=json.load(open('out.json'));print('فُحص:',d.get('scanned'),'| وُسم لإعادة الترجمة:',d.get('flaggedForRetranslation'),'من',d.get('wouldFlag'));[print(f\"\n{k}  ({v['n']})\");[print('   ',e) for e in v['ex']] for k,v in (d.get('findings') or {}).items()];r=d.get('repeatedTitles') or {};print(f\"\nعناوين مكرّرة على ٣ منتجات فأكثر: {r.get('n')}\");[print('   ',e) for e in (r.get('ex') or [])]" 2>/dev/null || cat out.json
           fi
           if [ "$MD" = "yes" ]; then
             echo "=== which AI models answer"

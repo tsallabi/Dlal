@@ -114,6 +114,11 @@ expect(/زلازل/.test(bt.quake ?? ''), `«مقابض للزلازل» من �
 expect(bt.quakeOk === null, `خيمة الإغاثة 抗震救灾 فيها «زلازل» صحيحة فلا تُعدّ كسرًا (${bt.quakeOk})`);
 expect(bt.noNoun === 'يبدأ بصفة ولا اسم منتج فيه', `«حمراء مزيفة…» بلا اسم منتج (${bt.noNoun})`);
 expect(bt.fine === null, `عنوان سليم يبقى سليمًا (${bt.fine})`);
+expect(/أبجدية أخرى/.test(bt.korean ?? ''), `«بال스타يل» كورية داخل عربية (${bt.korean})`);
+expect(/أبجدية أخرى/.test(bt.kana ?? ''), `«تنورةチュチュ» يابانية (${bt.kana})`);
+expect(/أبجدية أخرى/.test(bt.cyrillic ?? ''), `«розية» سيريلية (${bt.cyrillic})`);
+expect(/مرتين متتاليتين/.test(bt.dupWord ?? ''), `«للسيارات للسيارات» تكرار متجاور (${bt.dupWord})`);
+expect(/١٢٠ حرفًا/.test(bt.tooLong ?? ''), `عنوان فوق ١٢٠ حرفًا حشو كلمات (${(bt.tooLong ?? '').slice(0,40)})`);
 
 console.log(`\nنجح: ${passed} · فشل: ${problems.length}`);
 process.exit(problems.length ? 1 : 0);

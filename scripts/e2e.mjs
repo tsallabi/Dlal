@@ -243,6 +243,13 @@ expect(audit.scanned > 0, `التفتيش يمرّ على الكتالوج كل�
 const foundRepeat = Object.entries(audit.findings ?? {}).find(([k]) => /مكرّرة بلا مسافات/.test(k));
 expect(!!foundRepeat && foundRepeat[1].n >= 1, `التفتيش يجد العنوان المكرّر الملتصق (${foundRepeat?.[1]?.n ?? 0})`);
 expect((foundRepeat?.[1]?.ex ?? []).some(x => x.includes('الوسوم')), 'ويعرض عيّنة منه ليراها صاحب المشروع');
+// وبوضع «fix» يضع علامة إعادة الترجمة فيتصدّرون الطابور في الدفعة التالية
+const auditFix = await page.evaluate(async (b) => {
+  const r = await fetch(b + '/api/source/audit', { method: 'POST', headers: { 'content-type': 'application/json', 'x-import-token': 'dev-import-token' }, body: JSON.stringify({ fix: true }) });
+  return r.json();
+}, BASE);
+expect(auditFix.flaggedForRetranslation >= 1, `التفتيش يسم ما وجده لإعادة الترجمة (${auditFix.flaggedForRetranslation})`);
+expect(auditFix.flaggedForRetranslation === auditFix.wouldFlag, `يسم كل ما وجده لا بعضه (${auditFix.flaggedForRetranslation}/${auditFix.wouldFlag})`);
 
 // ---------- شروط البداية: الفحص يضبطها ولا يرثها ----------
 // تشغيلة سابقة قد تنهار وهي في وضع «حقيقي» مشيرة إلى خادم وهمي مغلق، فتسقط فحوص الدفع

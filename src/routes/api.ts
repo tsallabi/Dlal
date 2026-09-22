@@ -170,6 +170,11 @@ api.get('/logic-check', async (c) => {
       quakeOk: brokenTitle('خيمة طبية عازلة للزلازل للطوارئ', '应急救援帐篷抗震救灾消防演习'),
       noNoun: brokenTitle('حمراء مزيفة لديكور المنزل وتصوير الفوتوغرافيا', '嘉兰百合红色装饰仿真花'),
       fine: brokenTitle('عباءة سوداء بتطريز ذهبي مقاس XL', '黑色刺绣长袍'),
+      korean: brokenTitle('فستان أنيق بدون أكمام بال스타يل الفرنسي', '无袖连衣裙'),
+      kana: brokenTitle('فستان بناتي ليلة هالوين مع تنورةチュチュ', '万圣节儿童连衣裙'),
+      cyrillic: brokenTitle('مجموعة أدوات تجميل розية مع فرشاة', '化妆刷套装'),
+      dupWord: brokenTitle('المعدات الرياضية للسيارات للسيارات الرياضية', '汽车运动器材'),
+      tooLong: brokenTitle('ملابس ' + 'الصيف الجديدة للأطفال بتصميم عصري وألوان زاهية '.repeat(3), '童装'),
     },
     // نوع الإعلان: ماذا تستلم الزبونة فعلًا (حامل عرض فارغ، زهرة صناعية، بدلة ساونا)
     kinds: { rack: kindOf('蓝牙耳机展示架 手机壳挂件架'), fake: kindOf('仿真向日葵假花家居装饰'), sauna: kindOf('加厚面料男女款汗蒸服桑拿服'), prop: kindOf('木质蝴蝶墙贴摄影道具'), mannequin: kindOf('服装店模特展示'), none: kindOf('新款女士单肩包时尚百搭'), empty: kindOf(null) },
@@ -249,7 +254,26 @@ api.post('/source/audit', async (c) => {
     seen.set(key, (seen.get(key) ?? 0) + 1);
   }
   const dupTitles = [...seen.entries()].filter(([, n]) => n >= 3).sort((a, b) => b[1] - a[1]);
+  // عنوان يتقاسمه ثلاثة منتجات فأكثر: النموذج طوى منتجات مختلفة في اسم واحد، فالزبونة
+  // ترى سبعة عشر صفًّا بالاسم نفسه ولا تعرف أيها تريد. كلها تحتاج إعادة ترجمة.
+  const dupSet = new Set(dupTitles.map(([t]) => t));
+  const flag: number[] = [];
+  for (const r of rows) {
+    const t = String(r.t ?? '').trim();
+    if (brokenTitle(t, r.src) || dupSet.has(t.toLowerCase()) || (t.match(/\d+/g) ?? []).length >= 4) flag.push(r.id);
+  }
+  // `fix: true` يضع علامة needs_tr فيتصدّرون طابور الترجمة في الدفعة التالية
+  const body = await c.req.json<{ fix?: boolean }>().catch(() => ({} as any));
+  let flagged = 0;
+  if (body.fix && flag.length) {
+    for (let i = 0; i < flag.length; i += 200) {
+      const part = flag.slice(i, i + 200);
+      await db.prepare(`UPDATE products SET needs_tr=1 WHERE id IN (${part.map(() => '?').join(',')})`).bind(...part).run();
+      flagged += part.length;
+    }
+  }
   return c.json({
+    flaggedForRetranslation: flagged, wouldFlag: flag.length,
     scanned: rows.length,
     findings: Object.fromEntries(Object.entries(hit).sort((a, b) => b[1].n - a[1].n)),
     repeatedTitles: { n: dupTitles.length, ex: dupTitles.slice(0, 5).map(([t, n]) => `${n}× ${t.slice(0, 70)}`) },
