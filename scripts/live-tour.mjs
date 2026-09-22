@@ -7,6 +7,9 @@ import { mkdirSync, writeFileSync, existsSync } from 'node:fs';
 const BASE = (process.env.BASE || 'https://dlal.tsallabi.workers.dev').replace(/\/$/, '');
 const SHOTS = 'live-shots';
 const PRODUCTS = Number(process.env.PRODUCTS || 8);
+// الفحص العميق: ترقيم الصفحات والفرز والفلترة وجودة البضاعة وعيّنة أوسع من صفحات المنتجات
+const DEEP = process.env.DEEP === 'yes';
+const DEEP_PRODUCTS = Number(process.env.DEEP_PRODUCTS || 20);
 mkdirSync(SHOTS, { recursive: true });
 
 const problems = []; let passed = 0;
@@ -160,6 +163,65 @@ if (shipSlug) {
   }
 } else {
   expect(false, 'لم نجد منتجًا يعرض اختيار طريقة الشحن');
+}
+
+// ---------- فحص عميق: ترقيم الصفحات والفرز والفلترة وجودة البضاعة كما تراها الزبونة ----------
+if (DEEP) {
+  const cat = gridCat || '/c/all';
+  // صفحة ثانية حقيقية بمنتجات مختلفة لا تكرار للأولى
+  if (await open(cat, `القسم ${cat}`)) {
+    const p1 = await page.locator('a.card[href^="/p/"]').evaluateAll(as => as.map(a => a.getAttribute('href')));
+    await page.goto(BASE + cat + '?page=2', { waitUntil: 'domcontentloaded' }).catch(() => {});
+    const p2 = await page.locator('a.card[href^="/p/"]').evaluateAll(as => as.map(a => a.getAttribute('href')));
+    expect(p2.length > 0, `الصفحة الثانية من ${cat} فيها بضاعة (${p2.length})`);
+    expect(p2.filter(h => p1.includes(h)).length === 0, 'الصفحة الثانية لا تكرّر منتجات الأولى');
+  }
+  // الفرز بالسعر يرتّب فعلًا
+  const priceList = async (sort) => {
+    await page.goto(BASE + cat + '?sort=' + sort, { waitUntil: 'domcontentloaded' }).catch(() => {});
+    return page.locator('a.card .p').evaluateAll(els => els.map(e => {
+      const c = e.cloneNode(true); c.querySelectorAll('s').forEach(x => x.remove());
+      const head = (c.textContent || '').split('د.ل')[0].replace(/[\s\u066C]/g, '');
+      return parseFloat(head.replace(/\./g, '').replace(/[,\u066B]/g, '.').replace(/[^\d.]/g, '')) || 0;
+    }));
+  };
+  const asc = await priceList('price');
+  expect(asc.length > 1 && asc.every((v, i) => i === 0 || v >= asc[i - 1]), `الفرز بالأرخص مرتّب فعلًا (${asc.slice(0, 4).join(' ≤ ')})`);
+  const desc = await priceList('price_desc');
+  expect(desc.length > 1 && desc.every((v, i) => i === 0 || v <= desc[i - 1]), `الفرز بالأغلى مرتّب فعلًا (${desc.slice(0, 4).join(' ≥ ')})`);
+  expect(asc.every(v => v > 0), 'كل سعر معروض أكبر من صفر');
+
+  // جودة البضاعة كما تُرى: صور بديلة، سعر مفقود، بطاقة بلا عنوان
+  await open(cat, `القسم ${cat}`);
+  const q = await page.locator('a.card').evaluateAll(cards => cards.map(c => ({
+    ph: (c.querySelector('img')?.getAttribute('src') || '').includes('placeholder'),
+    noPrice: !(c.querySelector('.p')?.textContent || '').match(/\d/),
+    noTitle: !(c.querySelector('.t, h3, .title')?.textContent || '').trim(),
+  })));
+  const ph = q.filter(x => x.ph).length, np = q.filter(x => x.noPrice).length;
+  expect(np === 0, `كل بطاقة تحمل سعرًا (${np} بلا سعر من ${q.length})`);
+  expect(ph * 4 <= q.length, `صور البدائل قليلة في ${cat}: ${ph} من ${q.length}`);
+  console.log(`   ℹ ${cat}: ${q.length} بطاقة · ${ph} بصورة بديلة`);
+
+  // صفحات السياسات فيها محتوى حقيقي لا عناوين فارغة
+  for (const pg of ['/pages/faq', '/pages/returns', '/pages/shipping', '/pages/privacy', '/pages/terms', '/pages/how-to-order']) {
+    if (!(await open(pg, `صفحة ${pg}`))) continue;
+    const len = (await visibleText(page)).replace(/\s+/g, ' ').trim().length;
+    expect(len > 400, `${pg} فيها شرح حقيقي (${len} حرفًا)`);
+  }
+
+  // عيّنة أوسع من المنتجات: صور تُحمّل فعلًا وسعر ظاهر
+  await open('/new', 'وصل حديثًا');
+  const more = await page.locator('a.card[href^="/p/"]').evaluateAll((as, n) =>
+    [...new Set(as.map(a => a.getAttribute('href')))].slice(0, n), DEEP_PRODUCTS);
+  let noVar = 0, broken = 0;
+  for (const slug of more) {
+    if (!(await open(slug, `منتج ${slug}`))) continue;
+    broken += await page.locator('.pd img').evaluateAll(is => is.filter(i => i.complete && i.naturalWidth === 0).length);
+    if (!(await page.locator('.opts .chip').count())) noVar++;
+  }
+  expect(broken === 0, `لا صورة مكسورة في ${more.length} صفحة منتج (${broken})`);
+  console.log(`   ℹ ${more.length} منتجًا: ${noVar} بلا مقاسات/ألوان`);
 }
 
 // ---------- الجوال ----------

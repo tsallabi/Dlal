@@ -291,7 +291,8 @@ export async function importProducts(db: D1Database, arr: any[], categoryId: num
         it.variants.forEach((v: any) => enrich.push(db.prepare('INSERT INTO variants(product_id,source_sku_id,color,size,price_delta_lyd,in_stock,image_url) VALUES(?,?,?,?,?,?,?)')
           .bind(ex.id, v.skuId ?? null, v.color ?? null, v.size ?? null, v.priceCny ? Math.round((v.priceCny - price) * parseFloat(s.fx_cny_lyd) * 1.4 * 2) / 2 : 0, v.inStock === false ? 0 : 1, v.image ?? null)));
       }
-      const upd: string[] = []; const binds: any[] = [];
+      // كل مرور على منتج موجود محاولة إثراء تُعدّ، نجحت أو لم تنجح: بها يتقدّم الطابور ولا يدور
+      const upd: string[] = ['enrich_tries=enrich_tries+1']; const binds: any[] = [];
       if ((hasCJK(cur?.title_ar) || !goodTitle(cur?.title_ar)) && !hasCJK(titleAr) && titleAr !== cur?.title_ar && (goodTitle(titleAr) || hasCJK(cur?.title_ar))) { upd.push('title_ar=?'); binds.push(titleAr.slice(0, 200)); upd.push("status=CASE WHEN status='draft' THEN 'active' ELSE status END"); }
       if (it.minQty && Number(it.minQty) > 1 && (cur?.min_qty ?? 1) === 1) { upd.push('min_qty=?'); binds.push(Number(it.minQty)); }
       if (it.weightG && Number(it.weightG) > 0 && !ex.weight_g) { upd.push('weight_g=?'); binds.push(Math.round(Number(it.weightG))); }
@@ -339,12 +340,16 @@ admin.get('/products', async (c) => {
   let where = '1=1'; const binds: any[] = [];
   if (q) { where += ' AND (p.title_ar LIKE ? OR p.source_offer_id LIKE ?)'; binds.push(`%${q}%`, `%${q}%`); }
   if (st) { where += ' AND p.status=?'; binds.push(st); }
+  // ?stuck=1 — ما تعذّر إثراؤه بعد ثلاث محاولات من الإضافة المجانية: هؤلاء من يستحق الكريدت
+  if (c.req.query('stuck')) where += ` AND p.source='1688' AND p.enrich_tries >= 3 AND p.status IN ('active','draft')
+     AND ((SELECT COUNT(*) FROM product_images i WHERE i.product_id=p.id) <= 1
+       OR (SELECT COUNT(*) FROM variants v WHERE v.product_id=p.id) = 0 OR p.weight_g IS NULL)`;
   const rows = await c.env.DB.prepare(`SELECT ${PRODUCT_SELECT} FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE ${where} ORDER BY p.id DESC LIMIT 200`).bind(...binds).all<ProductRow>();
   const s = await loadSettings(c.env.DB);
   const untranslated = (await c.env.DB.prepare("SELECT COUNT(*) n FROM products WHERE title_ar GLOB '*[一-龥]*'").first<any>())?.n ?? 0;
   return shell(c, 'products', 'المنتجات', (
     <>
-      <Flash msg={c.req.query('imported') ? `تم استيراد ${c.req.query('imported')} منتج وتحديث ${c.req.query('updated')}` : c.req.query('translated') ? `تُرجم ${c.req.query('translated')} عنوانًا` : c.req.query('ok') ? 'تم الحفظ ✓' : undefined} /><Flash type="err" msg={c.req.query('noai') ? 'الترجمة تعمل على Cloudflare فقط (ربط Workers AI غير متاح هنا)' : undefined} />
+      <Flash msg={c.req.query('stuck') ? `منتجات تعذّر إثراؤها بعد ثلاث محاولات من الإضافة: صفحتها على 1688 لا تعطي الصور أو المقاسات أو الوزن. أثريها بالكريدت حين يتوفر — وحتى ذلك تُسعَّر بوزن القسم التقديري.` : c.req.query('imported') ? `تم استيراد ${c.req.query('imported')} منتج وتحديث ${c.req.query('updated')}` : c.req.query('translated') ? `تُرجم ${c.req.query('translated')} عنوانًا` : c.req.query('ok') ? 'تم الحفظ ✓' : undefined} /><Flash type="err" msg={c.req.query('noai') ? 'الترجمة تعمل على Cloudflare فقط (ربط Workers AI غير متاح هنا)' : undefined} />
       <form class="inline" style="margin-bottom:10px"><input type="text" name="q" placeholder="بحث بالاسم أو offerId" value={q} /><select name="status"><option value="">كل الحالات</option>{['active', 'draft', 'hidden', 'unavailable'].map(x => <option value={x} selected={st === x}>{x}</option>)}</select><button class="btn sm">بحث</button><a class="btn sm ghost" href="/admin/products/new">+ منتج يدوي</a><button class="btn sm ghost" formaction="/admin/products/translate" formmethod="post">🈶 ترجمة العناوين الصينية ({untranslated})</button></form>
       <div class="tbl-wrap"><table class="tbl"><tr><th></th><th>المنتج</th><th>القسم</th><th>سعر المصدر</th><th>سعر البيع</th><th>الحالة</th><th>مبيعات</th><th>آخر فحص</th><th></th></tr>
         {rows.results.map(p => <tr><td><img src={imgUrl(p.image)} /></td><td><a href={`/admin/products/${p.id}`}>{p.title_ar}</a><br /><a class="src-link" href={p.source_url ?? '#'} target="_blank">{p.source_offer_id}</a></td><td>{p.cat_name ?? '—'}</td><td>{p.source_price_cny} ¥</td><td><b>{fmt(p.price_lyd)}</b><br /><small style="color:#888">هامش ≈ {Math.round((1 - (p.source_price_cny * parseFloat(s.fx_cny_lyd)) / p.price_lyd) * 100)}%</small></td><td><span class={`status ${p.status === 'active' ? 'green' : p.status === 'unavailable' ? 'red' : 'gray'}`}>{p.status}</span>{!p.in_stock && <><br /><small style="color:#d3262b">نفد</small></>}</td><td>{p.sales}</td><td><small>{p.last_checked_at ? timeAgo(p.last_checked_at) : '—'}</small></td><td><a href={`/p/${p.slug}`} target="_blank">👁</a></td></tr>)}

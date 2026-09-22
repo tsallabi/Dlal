@@ -489,6 +489,11 @@ async function health(db: D1Database) {
   // آخر ما ردّه المزوّد: «insufficient wallet balance» يعني أن رصيد الاشتراك نفد ولا فائدة من أي تشغيل
   const lastErr = await db.prepare("SELECT response,created_at FROM payment_log WHERE url LIKE 'SRC %' AND ok=0 ORDER BY id DESC LIMIT 1").first<any>();
   const wallet = /insufficient|balance/i.test(String(lastErr?.response ?? '')) ? String(lastErr.response).slice(0, 200) : null;
+  // منتجات جُرِّب إثراؤها ثلاث مرات فأكثر وما زالت ناقصة: صفحتها لا تعطي ما نحتاج،
+  // فتخرج من طابور الإضافة المجانية وتُعرض هنا ليُثريها صاحب المشروع بالكريدت حين يتوفر.
+  const stuck = await db.prepare(`SELECT COUNT(*) n FROM products p WHERE p.status IN ('active','draft') AND p.source='1688'
+     AND p.enrich_tries >= 3 AND ((SELECT COUNT(*) FROM product_images i WHERE i.product_id=p.id) <= 1
+       OR (SELECT COUNT(*) FROM variants v WHERE v.product_id=p.id) = 0 OR p.weight_g IS NULL)`).first<{ n: number }>();
   const stockJob = await db.prepare("SELECT id FROM crawl_jobs WHERE type='stock' ORDER BY id LIMIT 1").first<{ id: number }>();
   const s = await loadSettings(db);
   // سعر الاستدعاء ٢٠ كريدت (مقيس من لوحة TMAPI ٢٢/٠٩/٢٦)؛ الباقة ٢٠٠٠٠٠ كريدت = ١٠٠٠٠ استدعاء
@@ -496,7 +501,7 @@ async function health(db: D1Database) {
   const budget = cap || 9000;
   const left = Math.max(0, budget - (month?.n ?? 0));
   const perHour = Math.max(1, Math.min(25, Math.floor(budget / (30 * 24))));
-  return { ...t, thin: thin?.n ?? 0, calls: calls?.n ?? 0, month: month?.n ?? 0, cap, budget, left, perHour,
+  return { ...t, thin: thin?.n ?? 0, stuck: stuck?.n ?? 0, calls: calls?.n ?? 0, month: month?.n ?? 0, cap, budget, left, perHour,
     days: perHour ? Math.floor(left / (perHour * 24)) : 0, credits: CREDIT_PER_CALL,
     wallet, walletAt: lastErr?.created_at ?? null, stockJob: stockJob?.id ?? null };
 }
@@ -532,6 +537,7 @@ ops.get('/source', async (c) => {
               <div class="kpi"><b style={h.cn_live ? 'color:#d3262b' : 'color:#1a9c5b'}>{h.cn_live}</b><span>عنوان صيني ظاهر (يجب أن يكون صفرًا)</span></div>
               <div class="kpi"><b>{h.draft}</b><span>محجوز حتى تكتمل ترجمته</span></div>
               <div class="kpi"><b>{h.thin}</b><span>ينقصه صور/مقاسات/وزن</span></div>
+              <div class="kpi"><b style={h.stuck ? 'color:#c77700' : ''}>{h.stuck}</b><span>تعذّر إثراؤه (٣ محاولات) — <a href="/admin/products?stuck=1">اعرضيها</a></span></div>
               <div class="kpi"><b>{h.oos}</b><span>نفد عند المورد</span></div>
               <div class="kpi"><b>{h.calls}</b><span>استدعاء للمزوّد (الكل)</span></div>
               <div class="kpi"><b style={h.left <= 0 ? 'color:#d3262b' : ''}>{h.month} / {h.budget}</b><span>هذا الشهر{h.left <= 0 ? ' — انتهت الميزانية' : ` (${(h.left * h.credits).toLocaleString('ar-LY')} كريدت متبقٍ)`}</span></div>

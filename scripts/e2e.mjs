@@ -708,6 +708,15 @@ walletSrv.close();
 // ---------- المنتج المحذوف من 1688 لا يُسأل عنه مرتين: هنا كان يضيع رصيد المزوّد ----------
 // مقيس على الموقع الحي: ٣٤٥٩ استدعاء تفصيل لـ ٦١٨ منتجًا فقط، منتج واحد ١٩٠ مرة، و١٣ ألف منتج
 // لم يُسأل عنه قط. السبب سببان: نص خطأ «Item not found» لم يطابق الشرط، واستعلام الإثراء بلا ذاكرة.
+// الاختبار يصنع عيّنته بنفسه: منتجات طازجة ناقصة الوزن و`last_checked_at` فارغ، فتكون مؤهَّلة
+// للإثراء مهما كانت حالة القاعدة. (بلا هذا كانت مهلة الـ٧٢ ساعة تستبعد كل ما فحصته تشغيلة سابقة.)
+const goneIds = [0, 1, 2].map(i => '66' + String(Date.now() + i).slice(-10));
+await page.evaluate(async ([b, ids]) => {
+  await fetch(b + '/api/import', { method: 'POST', headers: { 'content-type': 'application/json', 'x-import-token': 'dev-import-token' },
+    body: JSON.stringify({ page_url: 'ext:gone-fixture', items: ids.map((o, i) => ({
+      offerId: o, url: `https://detail.1688.com/offer/${o}.html`, title: `عيّنة إثراء ${o} رقم ${i}`,
+      priceCny: 30 + i, images: ['https://cbu01.alicdn.com/img/ibank/g.jpg'], minQty: 1, inStock: true })) }) });
+}, [BASE, goneIds]);
 const asked = [];
 const goneSrv = createServer((q, res) => {
   const id = (q.url.match(/item_id=(\d+)/) || [])[1];
@@ -743,6 +752,24 @@ await page.goto(BASE + '/admin/source');
 await page.click('button:has-text("أثرِ ١٠ منتجات الآن")'); await page.waitForLoadState('networkidle');
 const repeats = asked.filter(id => firstRound.includes(id));
 expect(repeats.length === 0, `الدفعة الثانية لا تعيد سؤال المزوّد عن نفس المنتجات (تكرار: ${repeats.length})`);
+// الفحص يُقاعد منتجات حقيقية بردّ مزوّد وهمي، فيجب أن يُعيدها كما وجدها وإلا أفرغ الكتالوج
+// تشغيلةً بعد تشغيلة (حدث فعلًا: ١٠٠ «غير متوفر» مقابل ٣٣ نشطًا، فعاد البحث بلا نتائج).
+const retired = [...new Set([...firstRound, ...asked])];
+for (const id of retired) {
+  await page.goto(BASE + '/admin/products?q=' + id);
+  const href = await page.locator(`tr:has-text("${id}") a[href^="/admin/products/"]`).first().getAttribute('href').catch(() => null);
+  if (!href) continue;
+  await page.goto(BASE + href);
+  await page.selectOption('select[name=status]', 'active');
+  await page.selectOption('select[name=in_stock]', '1');
+  await page.locator('form:has(input[name=title_ar]) button:has-text("حفظ")').click();
+  await page.waitForLoadState('networkidle');
+}
+const stillGone = await page.evaluate(async (b) => {
+  const r = await fetch(b + '/api/source/stats', { method: 'POST', headers: { 'content-type': 'application/json', 'x-import-token': 'dev-import-token' }, body: '{}' });
+  return (await r.json()).totals;
+}, BASE);
+expect(stillGone.active > 0, `الفحص أعاد المنتجات التي قاعدها (${stillGone.active} نشط)`);
 await page.goto(BASE + '/admin/source');
 await page.selectOption('select[name=src_provider]', realProv || 'none');
 await page.fill('input[name=src_base_url]', realBase);
@@ -755,7 +782,7 @@ goneSrv.close();
 await login(page, '0910000000', 'admin123');
 await page.goto(BASE + '/admin/source');
 const hk = page.locator('.card-box:has(h3:text("صحة الكتالوج")) .kpi');
-expect((await hk.count()) === 7, `لوحة صحة الكتالوج تعرض سبعة أرقام (${await hk.count()})`);
+expect((await hk.count()) === 8, `لوحة صحة الكتالوج تعرض ثمانية أرقام (${await hk.count()})`);
 const cnLive = num(await hk.nth(1).locator('b').textContent());
 expect(cnLive === 0, `لا عنوان صيني ظاهر للزبونة (${cnLive})`);
 expect(num(await hk.nth(0).locator('b').textContent()) > 0, 'عدد المنتجات المعروضة يظهر في اللوحة');
@@ -865,6 +892,7 @@ const dressOpt = await page.locator('form[action$="/import/json"] select[name=ca
   os => (os.find(o => o.textContent.includes('فساتين')) || {}).value);
 await page.selectOption('form[action$="/import/json"] select[name=category_id]', dressOpt);
 const arOffer = '69' + String(Date.now()).slice(-10);
+const fullOffer = '67' + String(Date.now()).slice(-10);
 await page.fill('form[action$="/import/json"] textarea[name=json]', JSON.stringify([{
   offerId: cnOffer, url: `https://detail.1688.com/offer/${cnOffer}.html`, title: cnTitle,
   priceCny: 42, images: ['https://cbu01.alicdn.com/img/ibank/test.jpg'], minQty: 1, inStock: true,
@@ -874,10 +902,49 @@ await page.fill('form[action$="/import/json"] textarea[name=json]', JSON.stringi
   priceCny: 55, images: ['https://cbu01.alicdn.com/img/ibank/ar.jpg'], minQty: 1, inStock: true,
   // متغيّر بصورة من مخدّم المورّد: يجب ألّا يصل رابطها الخام إلى مصدر الصفحة
   variants: [{ color: 'أحمر', size: 'M', image: 'https://cbu01.alicdn.com/img/ibank/O1CN-variant-test.jpg', inStock: true }],
+}, {
+  // منتج مكتمل (صور ومقاسات ووزن): يجب أن يأتي بعد الناقص في طابور الإضافة المجانية
+  offerId: fullOffer, url: `https://detail.1688.com/offer/${fullOffer}.html`, title: `قطعة مكتملة ${fullOffer}`,
+  priceCny: 60, images: ['https://cbu01.alicdn.com/img/ibank/f1.jpg', 'https://cbu01.alicdn.com/img/ibank/f2.jpg', 'https://cbu01.alicdn.com/img/ibank/f3.jpg'],
+  minQty: 1, inStock: true, weightG: 500,
+  variants: [{ color: 'أزرق', size: 'L', inStock: true }],
 }]));
 await page.click('form[action$="/import/json"] button:has-text("استيراد")');
 await page.waitForLoadState('networkidle');
-expect(page.url().includes('imported=2'), 'الأدمن يستورد منتجين من لصق JSON');
+expect(page.url().includes('imported=3'), 'الأدمن يستورد ثلاثة منتجات من لصق JSON');
+// ---------- طابور الإضافة المجانية: الناقص أولًا ----------
+// الإضافة تقرأ صفحة 1688 من متصفح المالك بلا أي تكلفة، فيجب أن تُنفق وقتها على ما ينقصه
+// صور/مقاسات/وزن لا على منتج مكتمل. هذا ما يُنجز ركام الإثراء بلا انتظار حصة المزوّد.
+const qres = await page.evaluate(async (b) => {
+  const r = await fetch(b + '/api/import/queue', { headers: { 'x-import-token': 'dev-import-token' } });
+  return r.json();
+}, BASE);
+const qids = qres.ids || [];
+expect(qids.length > 0, `طابور الإضافة يعيد منتجات للفحص (${qids.length})`);
+const iThin = qids.indexOf(arOffer), iFull = qids.indexOf(fullOffer);
+expect(iThin >= 0, 'المنتج الناقص موجود في طابور الإضافة');
+expect(iFull < 0 || iThin < iFull, `الناقص يسبق المكتمل في الطابور (ناقص ${iThin} · مكتمل ${iFull})`);
+// ---------- الاستئناف: منتج تعذّر إثراؤه يُترك ويُنتقل لما بعده، ولا يُعاد إلى رأس الطابور ----------
+// بلا هذا يبقى المنتج الذي لا تعطي صفحته وزنًا على الرأس أبدًا، فتدور الإضافة عليه ٤٠ ساعة
+// ولا تصل إلى بقية الكتالوج — نفس الفخّ الذي أحرق حصة المزوّد.
+const tryEnrich = async (off) => page.evaluate(async ([b, o]) => {
+  const r = await fetch(b + '/api/import', { method: 'POST', headers: { 'content-type': 'application/json', 'x-import-token': 'dev-import-token' },
+    body: JSON.stringify({ page_url: 'ext:test', items: [{ offerId: o, url: `https://detail.1688.com/offer/${o}.html`, title: `قطعة اختبار ${o}`, priceCny: 55, images: ['https://cbu01.alicdn.com/img/ibank/ar.jpg'], minQty: 1, inStock: true }] }) });
+  return r.json();
+}, [BASE, off]);
+const queueNow = async () => (await page.evaluate(async (b) => {
+  const r = await fetch(b + '/api/import/queue', { headers: { 'x-import-token': 'dev-import-token' } });
+  return (await r.json()).ids || [];
+}, BASE));
+const qPosBefore = (await queueNow()).indexOf(arOffer);
+for (let i = 0; i < 3; i++) await tryEnrich(arOffer);   // ثلاث محاولات لا تُكمل النقص
+const qPosAfter = (await queueNow()).indexOf(arOffer);
+expect(qPosAfter < 0 || qPosAfter > qPosBefore, `المنتج المتعذّر يتأخر في الطابور بدل أن يدور عليه (${qPosBefore} ⟵ ${qPosAfter})`);
+// ويظهر لصاحب المشروع ليُثريه بالكريدت
+await page.goto(BASE + '/admin/products?stuck=1');
+expect(await has(page, arOffer), 'المنتج المتعذّر يظهر في قائمة «تعذّر إثراؤه» بلوحة الأدمن');
+expect(await has(page, 'أثريها بالكريدت'), 'اللوحة تشرح لصاحب المشروع ما العمل بهذه المنتجات');
+await shot(page, 'admin-stuck-enrich');
 // منتج بلا تقييم حقيقي لا يُعرض بنجوم مُختلقة
 await page.goto(BASE + '/admin/products?q=' + arOffer);
 const arHref = await page.locator(`tr:has-text("${arOffer}") a[href^="/p/"]`).first().getAttribute('href');

@@ -36,7 +36,16 @@ api.post('/import', async (c) => {
 // قائمة الفحص: الأهم أولًا ثم الأقدم فحصًا
 api.get('/import/queue', async (c) => {
   if (!tokenOk(c)) return c.json({ error: 'رمز غير صحيح' }, 401);
-  const { results } = await c.env.DB.prepare("SELECT source_offer_id FROM products WHERE status='active' AND source='1688' ORDER BY (last_checked_at IS NULL) DESC, last_checked_at ASC, (sales*10+views) DESC LIMIT 300").all<{ source_offer_id: string }>();
+  // الإضافة تقرأ صفحة 1688 من متصفح صاحب المشروع: **بلا أي تكلفة** من حصة المزوّد.
+  // فالطابور يقدّم ما ينقصه صور/مقاسات/وزن، ثم المحجوزات (إثراؤها يُخرجها للمتجر)، ثم الأقدم فحصًا.
+  // بهذا تُنجز الإضافة المجانية ركام الإثراء بينما تبقى حصة الـAPI لفحص المخزون والأسعار.
+  const THIN = `((SELECT COUNT(*) FROM product_images i WHERE i.product_id=p.id) <= 1
+       OR (SELECT COUNT(*) FROM variants v WHERE v.product_id=p.id) = 0 OR p.weight_g IS NULL)`;
+  const { results } = await c.env.DB.prepare(`SELECT p.source_offer_id FROM products p
+     WHERE p.status IN ('active','draft') AND p.source='1688'
+       AND p.source_offer_id GLOB '[0-9]*' AND length(p.source_offer_id)>=9
+     ORDER BY (${THIN} AND p.enrich_tries < 3) DESC, (p.status='draft') DESC, p.enrich_tries ASC,
+              (p.last_checked_at IS NULL) DESC, p.last_checked_at ASC, (p.sales*10+p.views) DESC LIMIT 300`).all<{ source_offer_id: string }>();
   return c.json({ ids: results.map(r => r.source_offer_id) });
 });
 
@@ -47,7 +56,7 @@ api.post('/import/check', async (c) => {
   if (!p) return c.json({ ok: false });
   // تغيّر السعر أكثر من 15% يوقف المنتج لمراجعة الأدمن بدل بيعه بخسارة
   const bigChange = b.priceCny && Math.abs(b.priceCny - p.source_price_cny) / p.source_price_cny > 0.15;
-  await c.env.DB.prepare("UPDATE products SET in_stock=?,status=CASE WHEN ?=1 THEN 'hidden' ELSE status END,source_price_cny=COALESCE(?,source_price_cny),last_checked_at=datetime('now') WHERE id=?")
+  await c.env.DB.prepare("UPDATE products SET in_stock=?,status=CASE WHEN ?=1 THEN 'hidden' ELSE status END,source_price_cny=COALESCE(?,source_price_cny),enrich_tries=enrich_tries+1,last_checked_at=datetime('now') WHERE id=?")
     .bind(b.inStock ? 1 : 0, bigChange ? 1 : 0, b.priceCny, p.id).run();
   return c.json({ ok: true, flagged: !!bigChange });
 });
