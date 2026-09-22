@@ -473,6 +473,10 @@ ops.post('/crawler/:id', async (c) => {
 // ---------- مزوّد API لبيانات 1688 (طرف ثالث) ----------
 ops.use('/source*', requirePerm('catalog.manage'));
 // أرقام صحة الكتالوج: ما يراه الزبون فعلًا، وما ينقصه، وما هو محجوز — وكلها أزرار تشتغل من هنا
+// سعر الاستدعاء عند TMAPI: ٢٠ كريدت للاستدعاء الأساسي (مكتوب في تلميح لوحتهم، وقد يختلف
+// باختلاف الـendpoint). كل عرض للتكلفة هنا تقدير مبنيّ عليه لا فاتورة.
+export const CREDIT_PER_CALL = 20;
+
 async function health(db: D1Database) {
   const t = await db.prepare(`SELECT COUNT(*) n,
       SUM(status='active') active, SUM(status='draft') draft, SUM(in_stock=0) oos,
@@ -487,7 +491,14 @@ async function health(db: D1Database) {
   const wallet = /insufficient|balance/i.test(String(lastErr?.response ?? '')) ? String(lastErr.response).slice(0, 200) : null;
   const stockJob = await db.prepare("SELECT id FROM crawl_jobs WHERE type='stock' ORDER BY id LIMIT 1").first<{ id: number }>();
   const s = await loadSettings(db);
-  return { ...t, thin: thin?.n ?? 0, calls: calls?.n ?? 0, month: month?.n ?? 0, cap: parseInt(s.src_month_limit ?? '0') || 0, wallet, walletAt: lastErr?.created_at ?? null, stockJob: stockJob?.id ?? null };
+  // سعر الاستدعاء ٢٠ كريدت (مقيس من لوحة TMAPI ٢٢/٠٩/٢٦)؛ الباقة ٢٠٠٠٠٠ كريدت = ١٠٠٠٠ استدعاء
+  const cap = parseInt(s.src_month_limit ?? '0') || 0;
+  const budget = cap || 9000;
+  const left = Math.max(0, budget - (month?.n ?? 0));
+  const perHour = Math.max(1, Math.min(25, Math.floor(budget / (30 * 24))));
+  return { ...t, thin: thin?.n ?? 0, calls: calls?.n ?? 0, month: month?.n ?? 0, cap, budget, left, perHour,
+    days: perHour ? Math.floor(left / (perHour * 24)) : 0, credits: CREDIT_PER_CALL,
+    wallet, walletAt: lastErr?.created_at ?? null, stockJob: stockJob?.id ?? null };
 }
 
 ops.get('/source', async (c) => {
@@ -523,8 +534,14 @@ ops.get('/source', async (c) => {
               <div class="kpi"><b>{h.thin}</b><span>ينقصه صور/مقاسات/وزن</span></div>
               <div class="kpi"><b>{h.oos}</b><span>نفد عند المورد</span></div>
               <div class="kpi"><b>{h.calls}</b><span>استدعاء للمزوّد (الكل)</span></div>
-              <div class="kpi"><b style={h.cap > 0 && h.month >= h.cap ? 'color:#d3262b' : ''}>{h.month}{h.cap > 0 ? ` / ${h.cap}` : ''}</b><span>هذا الشهر{h.cap > 0 && h.month >= h.cap ? ' — بلغنا السقف' : ''}</span></div>
+              <div class="kpi"><b style={h.left <= 0 ? 'color:#d3262b' : ''}>{h.month} / {h.budget}</b><span>هذا الشهر{h.left <= 0 ? ' — انتهت الميزانية' : ` (${(h.left * h.credits).toLocaleString('ar-LY')} كريدت متبقٍ)`}</span></div>
             </div>
+            {!h.cap && <Flash msg={`لا يوجد سقف شهري مضبوط، فنعمل على ميزانية افتراضية ${h.budget} استدعاء. اكتبي السقف في الحقل أعلاه ليطابق باقتك: الباقة ٢٠٠٠٠٠ كريدت ÷ ٢٠ كريدت للاستدعاء = ١٠٠٠٠ استدعاء.`} />}
+            <p style="font-size:12px;color:#666;margin-top:8px">
+              التكلفة: <b>{h.credits} كريدت لكل استدعاء</b> (استدعاء واحد لكل منتج). الإثراء التلقائي يأخذ <b>{h.perHour}</b> منتجًا كل ساعة
+              ليوزّع الميزانية على الشهر — المتبقي يكفي نحو <b>{h.days}</b> يومًا. ضغطة «أثرِ ١٠ منتجات» تكلّف <b>{10 * h.credits}</b> كريدت.
+              {h.thin > 1000 && ' ما دام الناقص فوق ١٠٠٠ منتج، الميزانية تذهب لإكماله ولا تُنفق على جلب بضاعة جديدة تلقائيًا (البحث اليدوي من صفحة الزاحف يبقى متاحًا).'}
+            </p>
             <div class="inline" style="margin-top:10px;flex-wrap:wrap">
               <form method="post" action="/admin/source/enrich" class="inline"><button class="btn sm ok" disabled={!prov || !h.stockJob}>أثرِ ١٠ منتجات الآن</button></form>
               <form method="post" action="/admin/source/translate" class="inline"><button class="btn sm ghost" disabled={!c.env.AI}>ترجم ٢٠ عنوانًا الآن</button></form>

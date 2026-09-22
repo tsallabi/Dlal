@@ -47,21 +47,30 @@ export default {
   fetch: app.fetch,
   async scheduled(_ev: ScheduledEvent, env: Env['Bindings'], ctx: ExecutionContext) {
     const s = await loadSettings(env.DB);
-    if (s.src_key) ctx.waitUntil(runServerJobs(env, { limit: 4 }));   // مزوّد API من طرف ثالث
+    // ميزانية الشهر مقسومة على ساعاته: الحصة ١٠٠٠٠ استدعاء (٢٠٠ ألف كريدت ÷ ٢٠) وكان الكرون
+    // ينفق حتى ٥٨ في الساعة أي ٤١ ألفًا شهريًا، فتنتهي الحصة في ستة أيام. الآن يوزّعها على الشهر.
+    const budget = parseInt(s.src_month_limit ?? '') || 9000;
+    const perHour = Math.max(1, Math.min(25, Math.floor(budget / (30 * 24))));
+    // المتبقي من الميزانية هذا الشهر: نتوقف عند بلوغها بدل تجاوزها
+    const spent = (await env.DB.prepare("SELECT COUNT(*) n FROM payment_log WHERE url LIKE 'SRC %' AND created_at >= datetime('now','start of month')").first<{ n: number }>())?.n ?? 0;
+    const left = budget - spent;
+    // منتج ناقص الصور والوزن يُسعَّر بوزن مُخمَّن، وهذا خطر مال حقيقي على الشحن. فما دام في
+    // المخزون ركام ناقص، الميزانية تذهب لإكماله لا لجلب المزيد من الناقص. البحث اليدوي يبقى متاحًا.
+    const backlog = (await env.DB.prepare(`SELECT COUNT(*) n FROM products p WHERE p.status IN ('active','draft') AND p.source='1688'
+       AND ((SELECT COUNT(*) FROM product_images i WHERE i.product_id=p.id) <= 1 OR (SELECT COUNT(*) FROM variants v WHERE v.product_id=p.id) = 0 OR p.weight_g IS NULL)`).first<{ n: number }>())?.n ?? 0;
+    if (s.src_key && left > perHour && backlog <= 1000) ctx.waitUntil(runServerJobs(env, { limit: 4 }));   // مزوّد API من طرف ثالث
     // صيانة الكتالوج كل ساعة بلا تدخل: ترجمة ما بقي صينيًا (بلا استدعاءات مدفوعة)،
     // ثم إثراء دفعتين من الناقص (٥٠ منتجًا) بادئًا بالمحجوزات فتخرج للمتجر بعنوان عربي.
     ctx.waitUntil((async () => {
       try {
         if (env.AI) { const r = await retranslatePending(env.DB, env.AI, 40); console.log('cron translate', JSON.stringify(r)); }
         if (!s.src_key) return;
+        if (left <= 0) { console.log('cron enrich skipped: budget spent', spent, '/', budget); return; }
         const job = await env.DB.prepare("SELECT id FROM crawl_jobs WHERE type='stock' ORDER BY id LIMIT 1").first<{ id: number }>();
         if (!job) return;
-        for (let i = 0; i < 2; i++) {
-          const r = await runServerJobs(env, { jobId: job.id, enrichOnly: true, maxItems: 25 });
-          const x = (r.results ?? [{}])[0] as any;
-          console.log('cron enrich', x?.enriched ?? 0, x?.note ?? '');
-          if (!x || !x.enriched) break;
-        }
+        const r = await runServerJobs(env, { jobId: job.id, enrichOnly: true, maxItems: Math.min(perHour, left) });
+        const x = (r.results ?? [{}])[0] as any;
+        console.log('cron enrich', x?.enriched ?? 0, 'of', perHour, 'budget left', left, x?.note ?? '');
       } catch (e: any) { console.error('cron maintenance', e?.message ?? e); }
     })());
     if (!s.api1688_key || !s.api1688_tokens) return;

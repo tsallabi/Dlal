@@ -762,6 +762,15 @@ expect(num(await hk.nth(0).locator('b').textContent()) > 0, 'عدد المنتج
 expect((await page.locator('button:has-text("أثرِ ١٠ منتجات الآن")').count()) === 1, 'زر الإثراء موجود في اللوحة');
 expect((await page.locator('button:has-text("ترجم ٢٠ عنوانًا الآن")').count()) === 1, 'زر الترجمة موجود في اللوحة');
 expect(await has(page, 'سقف استدعاءات المزوّد في الشهر'), 'حقل السقف الشهري لاستدعاءات المزوّد موجود');
+// الميزانية بالكريدت: المالك يجب أن يرى ثمن الضغطة قبل أن يضغط، لا عدد استدعاءات مجرّدًا
+expect(await has(page, '20 كريدت لكل استدعاء'), 'اللوحة تقول سعر الاستدعاء صراحةً');
+expect(await has(page, 'ضغطة «أثرِ ١٠ منتجات» تكلّف'), 'اللوحة تقول كم تكلّف ضغطة الإثراء');
+expect(await has(page, 'كريدت متبقٍ') || await has(page, 'انتهت الميزانية'), 'اللوحة تعرض المتبقي من ميزانية الشهر');
+// اللوحة فيها أكثر من فقرة: ننتقي فقرة الوتيرة بنصّها لا بموضعها
+const pace = (await page.locator('.card-box:has(h3:text("صحة الكتالوج")) p', { hasText: 'كل ساعة' }).first().textContent()).replace(/\s+/g, ' ');
+const perHour = parseInt((pace.match(/يأخذ (\d+) منتجًا كل ساعة/) || [])[1] || '0');
+// الحصة ١٠٠٠٠ استدعاء شهريًا: أي وتيرة تتجاوز ١٤ في الساعة تلتهمها قبل نهاية الشهر
+expect(perHour >= 1 && perHour <= 14, `وتيرة الإثراء التلقائي توزّع الميزانية على الشهر (${perHour}/ساعة)`);
 await shot(page, 'admin-catalog-health');
 // السقف يوقف الاستيراد فعلًا: نضبطه على 1 ونحاول تشغيل مهمة
 await page.goto(BASE + '/admin/source');
