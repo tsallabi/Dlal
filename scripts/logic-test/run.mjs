@@ -118,6 +118,8 @@ expect(/أبجدية أخرى/.test(bt.korean ?? ''), `«بال스타يل» كو
 expect(/أبجدية أخرى/.test(bt.kana ?? ''), `«تنورةチュチュ» يابانية (${bt.kana})`);
 expect(/أبجدية أخرى/.test(bt.cyrillic ?? ''), `«розية» سيريلية (${bt.cyrillic})`);
 expect(/مرتين متتاليتين/.test(bt.dupWord ?? ''), `«للسيارات للسيارات» تكرار متجاور (${bt.dupWord})`);
+expect(bt.swept === 'إبريق شاي حراري مزدوج الطبقات من الستانلس ستيل 316',
+  `الكنس المجاني يحذف الكلمة الكورية «용» وحدها (${bt.swept})`);
 expect(/١٢٠ حرفًا/.test(bt.tooLong ?? ''), `عنوان فوق ١٢٠ حرفًا حشو كلمات (${(bt.tooLong ?? '').slice(0,40)})`);
 
 console.log(`\nنجح: ${passed} · فشل: ${problems.length}`);

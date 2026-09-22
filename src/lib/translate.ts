@@ -37,6 +37,10 @@ const tidyJoin = (t: string) => t
   .replace(/\s+(و|مع|من|في|على|ب|ل|,|،|-)\s*$/, '')
   .replace(/\s+([,،])/g, '$1').replace(/\s{2,}/g, ' ').trim();
 
+// النموذج يخلط أبجديات أخرى لا لاتينية فقط: «بال스타يل» كورية، «تنورةチュチュ» يابانية،
+// «розية» سيريلية، «đế مسطح» فيتنامية. ١٤٣ عنوانًا حيًا في ٢٢/٠٩/٢٦.
+// اللاتينية مسموحة (XL، USB)، وكل ما عداها في عنوان عربي خطأ نموذج لا محالة.
+const FOREIGN_SCRIPT = /[\u1100-\u11FF\u3040-\u30FF\u3130-\u318F\uAC00-\uD7AF\u0400-\u04FF\u0E00-\u0E7F\u0370-\u03FF\u0102\u0103\u0110\u0111\u01A0\u01A1\u01AF\u01B0\u1EA0-\u1EF9]/;
 // النموذج يلصق أحيانًا بقية كلمة لاتينية بكلمة عربية: «زippers»، «الكitchen»، «كاردigan»،
 // «بheel»، «مفتاحsheetmetal». نص مكسور يراه الزبون على الرف، فلا يُعدّ عنوانًا مقبولًا.
 // الشرط التصاق حرفين من أبجديتين بلا مسافة، فلا يمسّ «مقاس XL» ولا «USB» ولا «2XL».
@@ -44,10 +48,11 @@ export const mixedScript = (t: string | null | undefined) => /[\u0600-\u06FF][A-
 // إصلاح أخير قبل الرفض: نحذف الكلمة المكسورة وحدها إن بقي أغلب العنوان (مثل dropCJKWords)
 export function dropMixedWords(t: string): string | null {
   const words = t.split(/\s+/).filter(Boolean);
-  const kept = words.filter(w => !mixedScript(w));
+  // نحذف أيضًا الكلمة المكتوبة بأبجدية ثالثة («용»، «고급») — أعجزت النماذج الأربعة كلها
+  const kept = words.filter(w => !mixedScript(w) && !FOREIGN_SCRIPT.test(w));
   if (kept.length < 3 || kept.length < words.length * 0.6) return null;
   const out = tidyJoin(kept.join(' '));
-  return out.length >= 8 && !mixedScript(out) ? out : null;
+  return out.length >= 8 && !mixedScript(out) && !FOREIGN_SCRIPT.test(out) ? out : null;
 }
 
 // تكرار بلا مسافة واحدة: «الوسومالوسومالوسوم…» ملأ خمسة عناوين حية (شُعيرات، أقراط،
@@ -67,10 +72,6 @@ export const goodArabic = (t: string | null | undefined) => !!t && /[\u0600-\u06
 //  · «حمراء مزيفة لديكور المنزل» ⟵ 嘉兰百合 زنبق الجلوريوزا: ضاع اسم المنتج كله
 // الكلمة المشبوهة لا تكفي وحدها: خيمة إغاثة أصلها 抗震救灾 فيها «زلازل» صحيحة.
 // نطالب بوجود أثرها في العنوان الصيني، فإن غاب فهي هلوسة نموذج.
-// النموذج يخلط أبجديات أخرى لا لاتينية فقط: «بال스타يل» كورية، «تنورةチュチュ» يابانية،
-// «розية» سيريلية، «đế مسطح» فيتنامية. ١٤٣ عنوانًا حيًا في ٢٢/٠٩/٢٦.
-// اللاتينية مسموحة (XL، USB)، وكل ما عداها في عنوان عربي خطأ نموذج لا محالة.
-const FOREIGN_SCRIPT = /[\u1100-\u11FF\u3040-\u30FF\u3130-\u318F\uAC00-\uD7AF\u0400-\u04FF\u0E00-\u0E7F\u0370-\u03FF\u0102\u0103\u0110\u0111\u01A0\u01A1\u01AF\u01B0\u1EA0-\u1EF9]/;
 // كلمة مكرّرة مرتين متتاليتين: «سلة طويلة طويلة»، «للسيارات للسيارات»، «منصة منصة».
 // حارس التكرار القديم يشترط ثلاث مرات فلم يرَ ٢٧ عنوانًا حيًا.
 const DUP_ADJACENT = /(\S{2,})\s+\1(\s|$)/;
@@ -251,7 +252,8 @@ export async function releaseHeldDrafts(db: D1Database): Promise<number> {
 // حتى لا يبقى نص مكسور أمام الزبونة إلى الأبد.
 export async function sweepMashedTitles(db: D1Database, minTries = 2): Promise<number> {
   const { results } = await db.prepare(`SELECT id,title_ar FROM products
-     WHERE tr_tries >= ? AND (title_ar GLOB '*[\u0621-\u064A][a-zA-Z]*' OR title_ar GLOB '*[a-zA-Z][\u0621-\u064A]*') LIMIT 200`).bind(minTries).all<{ id: number; title_ar: string }>();
+     WHERE tr_tries >= ? AND (title_ar GLOB '*[\u0621-\u064A][a-zA-Z]*' OR title_ar GLOB '*[a-zA-Z][\u0621-\u064A]*'
+        OR title_ar GLOB '*[\uAC00-\uD7AF]*' OR title_ar GLOB '*[\u3040-\u30FF]*' OR title_ar GLOB '*[\u0400-\u04FF]*') LIMIT 200`).bind(minTries).all<{ id: number; title_ar: string }>();
   let n = 0;
   for (const p of results) {
     const fixed = dropMixedWords(p.title_ar);

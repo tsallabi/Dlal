@@ -175,6 +175,7 @@ api.get('/logic-check', async (c) => {
       cyrillic: brokenTitle('مجموعة أدوات تجميل розية مع فرشاة', '化妆刷套装'),
       dupWord: brokenTitle('المعدات الرياضية للسيارات للسيارات الرياضية', '汽车运动器材'),
       tooLong: brokenTitle('ملابس ' + 'الصيف الجديدة للأطفال بتصميم عصري وألوان زاهية '.repeat(3), '童装'),
+      swept: dropMixedWords('إبريق شاي حراري مزدوج الطبقات من الستانلس ستيل 316 용'),
     },
     // نوع الإعلان: ماذا تستلم الزبونة فعلًا (حامل عرض فارغ، زهرة صناعية، بدلة ساونا)
     kinds: { rack: kindOf('蓝牙耳机展示架 手机壳挂件架'), fake: kindOf('仿真向日葵假花家居装饰'), sauna: kindOf('加厚面料男女款汗蒸服桑拿服'), prop: kindOf('木质蝴蝶墙贴摄影道具'), mannequin: kindOf('服装店模特展示'), none: kindOf('新款女士单肩包时尚百搭'), empty: kindOf(null) },
