@@ -185,7 +185,7 @@ if (DEEP) {
       return parseFloat(head.replace(/\./g, '').replace(/[,\u066B]/g, '.').replace(/[^\d.]/g, '')) || 0;
     }));
   };
-  const asc = await priceList('price');
+  const asc = await priceList('price_asc');
   expect(asc.length > 1 && asc.every((v, i) => i === 0 || v >= asc[i - 1]), `الفرز بالأرخص مرتّب فعلًا (${asc.slice(0, 4).join(' ≤ ')})`);
   const desc = await priceList('price_desc');
   expect(desc.length > 1 && desc.every((v, i) => i === 0 || v <= desc[i - 1]), `الفرز بالأغلى مرتّب فعلًا (${desc.slice(0, 4).join(' ≥ ')})`);
