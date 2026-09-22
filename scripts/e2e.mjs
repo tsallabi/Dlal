@@ -1434,6 +1434,36 @@ await page.waitForLoadState('networkidle');
 expect(await page.locator('select[name=status]').inputValue() === 'hidden', 'الأدمن يخفي القطعة فتخرج من المتجر');
 await page.goto(BASE + '/logout');
 
+// ---------- الترقيم: نقرة على «٣» يجب أن تفتح الصفحة الثالثة لا الأولى ----------
+// صاحب المشروع: «مهما نقرت صفحة ٣ أو ٦ أو ٩ ترجع إلى صفحة رقم واحد». السبب كان أن
+// أرقام الصفحات تستعمل دالة روابط الفلاتر، وهي تحذف `page` عمدًا بعد أن تضعه.
+// المسار واحد لكل الأقسام (/c/… و/search و/new و/sale) فالفحص يغطيها جميعًا.
+await page.goto(BASE + '/logout');
+for (const path of ['/c/all', '/new']) {
+  await page.goto(BASE + path); await page.waitForLoadState('networkidle');
+  const pageChips = page.locator('.pager .chip, .chip');
+  const p3 = page.locator('a.chip', { hasText: /^3$/ }).first();
+  if (!(await p3.count())) continue;                       // القسم أقصر من ثلاث صفحات
+  const firstOnP1 = await page.locator('.card .t').first().textContent();
+  const href3 = await p3.getAttribute('href');
+  expect(/[?&]page=3(&|$)/.test(href3 ?? ''), `${path}: رابط الصفحة ٣ يحمل page=3 (${href3})`);
+  await p3.click(); await page.waitForLoadState('networkidle');
+  expect(/[?&]page=3(&|$)/.test(page.url()), `${path}: المتصفح وصل فعلًا إلى page=3 (${page.url()})`);
+  expect(await has(page, 'الصفحة 3'), `${path}: الصفحة تقول إنها الثالثة`);
+  const firstOnP3 = await page.locator('.card .t').first().textContent();
+  expect(firstOnP1 !== firstOnP3, `${path}: بضاعة الصفحة ٣ غير بضاعة الأولى`);
+  // «عرض المزيد» من الثالثة يذهب للرابعة لا للأولى
+  const more = page.locator('a.more-btn').first();
+  if (await more.count()) expect(/[?&]page=4(&|$)/.test((await more.getAttribute('href')) ?? ''), `${path}: «عرض المزيد» من الثالثة يذهب للرابعة`);
+  // وتغيير الفلتر من الصفحة الثالثة يعود للأولى عمدًا — وإلا وقعت الزبونة في صفحة فارغة
+  const sortLink = page.locator('a[href*="sort="]').first();
+  if (await sortLink.count()) {
+    const h = await sortLink.getAttribute('href');
+    expect(!/[?&]page=/.test(h ?? ''), `${path}: تغيير الفرز يُصفّر الصفحة (${h})`);
+  }
+}
+await shot(page, 'pager-page-3');
+
 // ---------- جوال ----------
 const m = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, locale: 'ar' });
 const mp = await m.newPage();

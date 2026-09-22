@@ -192,7 +192,11 @@ async function listPage(c: Context<Env>, opts: { title: string; where: string; b
   ]);
   const total = cnt?.n ?? 0;
   const pages = Math.ceil(total / per);
+  // رابط فلتر: تغيير الفلتر يُعيد إلى الصفحة الأولى عمدًا — وإلا وقعت الزبونة في صفحة ٩ فارغة
   const link = (k: string, v: string | null) => { const u = new URL(c.req.url); if (v) u.searchParams.set(k, v); else u.searchParams.delete(k); u.searchParams.delete('page'); return u.pathname + u.search; };
+  // رابط ترقيم: يجب ألا يحذف `page`. كانت أرقام الصفحات تستعمل `link` نفسها فتضع الرقم
+  // ثم تحذفه في السطر التالي، فكل نقرة على ٣ أو ٦ أو ٩ تعيد إلى الأولى في كل الأقسام.
+  const pageLink = (n: number) => { const u = new URL(c.req.url); u.searchParams.set('page', String(n)); return u.pathname + u.search; };
   const clearAll = () => { const u = new URL(c.req.url); ['min', 'max', 'size', 'color', 'page'].forEach(k => u.searchParams.delete(k)); return u.pathname + u.search; };
   const bb = await base(c);
   const active = bb.categories.find(x => x.slug === opts.active);
@@ -281,10 +285,10 @@ async function listPage(c: Context<Env>, opts: { title: string; where: string; b
             </div>
           )}
           <Grid ship={bb.ship} items={rows.results} favs={f} />
-          {pages > 1 && page < pages && <a class="more-btn" href={link('page', String(page + 1))}>عرض المزيد</a>}
+          {pages > 1 && page < pages && <a class="more-btn" href={pageLink(page + 1)}>عرض المزيد</a>}
           {pages > 1 && (
             <div class="sortbar" style="justify-content:center;padding-top:18px">
-              {Array.from({ length: pages }, (_, i) => i + 1).slice(0, 12).map(n => <a href={link('page', String(n))} class={`chip ${n === page ? 'on' : ''}`}>{n}</a>)}
+              {Array.from({ length: pages }, (_, i) => i + 1).slice(0, 12).map(n => <a href={pageLink(n)} class={`chip ${n === page ? 'on' : ''}`}>{n}</a>)}
             </div>
           )}
         </section>
