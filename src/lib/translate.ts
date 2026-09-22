@@ -50,8 +50,60 @@ export function dropMixedWords(t: string): string | null {
   return out.length >= 8 && !mixedScript(out) ? out : null;
 }
 
-const degenerate = (t: string) => { const w = t.split(/\s+/).filter(Boolean); if (w.length >= 4 && new Set(w).size / w.length < 0.5) return true; return /(\S{2,})(\s+\1){2,}/.test(t); };
+// تكرار بلا مسافة واحدة: «الوسومالوسومالوسوم…» ملأ خمسة عناوين حية (شُعيرات، أقراط،
+// دمبل، أحمرا شفاه) ومرّ من الحارس القديم لأنه يقسّم على المسافات ولا مسافة هنا إطلاقًا.
+const REPEAT_NOSPACE = /(.{2,12}?)\1{3,}/;
+// عنوان عربي طبيعي لا يتجاوز ٢٥ حرفًا بكلمة واحدة: غيابُ المسافات علامة نصٍّ ملتصق
+const GLUED = (t: string) => t.length > 25 && (t.match(/\s/g)?.length ?? 0) < 2;
+const degenerate = (t: string) => {
+  const w = t.split(/\s+/).filter(Boolean);
+  if (w.length >= 4 && new Set(w).size / w.length < 0.5) return true;
+  if (REPEAT_NOSPACE.test(t) || GLUED(t)) return true;
+  return /(\S{2,})(\s+\1){2,}/.test(t);
+};
 export const goodArabic = (t: string | null | undefined) => !!t && /[\u0600-\u06FF]/.test(t) && !hasCJK(t) && !mixedScript(t) && !degenerate(t) && t.length <= 220;
+// ترجمة عربية سليمة نحويًا لكنها ليست ترجمة العنوان:
+//  · «حقيبة رياضية… ومقابض للزلازل» ⟵ 登山杖 عصا تسلّق، لا زلزال في الأصل إطلاقًا
+//  · «حمراء مزيفة لديكور المنزل» ⟵ 嘉兰百合 زنبق الجلوريوزا: ضاع اسم المنتج كله
+// الكلمة المشبوهة لا تكفي وحدها: خيمة إغاثة أصلها 抗震救灾 فيها «زلازل» صحيحة.
+// نطالب بوجود أثرها في العنوان الصيني، فإن غاب فهي هلوسة نموذج.
+const LEAD_ADJ = /^(حمراء|زرقاء|بيضاء|سوداء|خضراء|صفراء|وردية|ذهبية|فضية|بنفسجية|رمادية|كبيرة|صغيرة|جميلة|أنيقة|ناعمة|سميكة|خفيفة|مزيفة|صناعية|جديدة|فاخرة|مريحة|شفافة|طويلة|قصيرة)\s/;
+// السوابق العربية تلتصق بالكلمة: «للزلازل» = لِ + الزلازل. بدونها لا يُمسك شيء.
+const AR_PRE = '(?:^|\\s)[\u0648\u0641\u0628\u0643\u0644]{0,3}(?:\u0627\u0644)?';
+const AR_END = '(?:\\s|$|[,\u060C.])';
+const sus = (stem: string) => new RegExp(`${AR_PRE}(?:${stem})${AR_END}`);
+const SUSPECT: { re: RegExp; src: string[]; why: string }[] = [
+  { re: sus('زلازل|زلزال'), src: ['地震', '抗震', '震'], why: 'زلازل' },
+  { re: sus('قنبلة|قنابل'), src: ['炸弹', '爆炸', '手雷'], why: 'قنبلة' },
+  { re: sus('جثة|جثث'), src: ['尸'], why: 'جثة' },
+  { re: sus('مخدرات|مخدر'), src: ['毒品', '麻醉'], why: 'مخدرات' },
+  { re: sus('قرصنة'), src: ['海盗', '盗版'], why: 'قرصنة' },
+];
+// المكافئ في SQL لاختيار المرشّحين من القاعدة (التكرار بلا مسافات يغطّيه شرط الالتصاق).
+// يُستعمل في طابور الترجمة وفي الإحصاءات وفي فلتر اللوحة — تعريف واحد لا ثلاثة.
+export const BROKEN_SQL = `(
+  (length(title_ar) > 25 AND (length(title_ar) - length(replace(title_ar,' ',''))) < 2)
+  OR title_ar LIKE 'حمراء %' OR title_ar LIKE 'زرقاء %' OR title_ar LIKE 'بيضاء %' OR title_ar LIKE 'سوداء %'
+  OR title_ar LIKE 'خضراء %' OR title_ar LIKE 'صفراء %' OR title_ar LIKE 'وردية %' OR title_ar LIKE 'ذهبية %'
+  OR title_ar LIKE 'فضية %' OR title_ar LIKE 'بنفسجية %' OR title_ar LIKE 'رمادية %' OR title_ar LIKE 'مزيفة %'
+  OR title_ar LIKE 'صناعية %' OR title_ar LIKE 'شفافة %' OR title_ar LIKE 'ناعمة %' OR title_ar LIKE 'سميكة %'
+  OR (title_ar LIKE '%زلازل%' AND COALESCE(title_src,'') NOT LIKE '%震%')
+  OR (title_ar LIKE '%زلزال%' AND COALESCE(title_src,'') NOT LIKE '%震%')
+  OR (title_ar LIKE '%قنبلة%' AND COALESCE(title_src,'') NOT LIKE '%炸%' AND COALESCE(title_src,'') NOT LIKE '%爆%')
+  OR (title_ar LIKE '%قرصنة%' AND COALESCE(title_src,'') NOT LIKE '%盗%')
+)`;
+
+// يعيد سبب الكسر بالعربية ليراه الأدمن، أو null إن كان العنوان سليمًا
+export function brokenTitle(titleAr: string | null | undefined, titleSrc: string | null | undefined): string | null {
+  const t = String(titleAr ?? '').trim(); const src = String(titleSrc ?? '');
+  if (!t) return null;
+  if (REPEAT_NOSPACE.test(t)) return 'كلمة مكرّرة بلا مسافات';
+  if (GLUED(t)) return 'نص ملتصق بلا مسافات';
+  if (LEAD_ADJ.test(t)) return 'يبدأ بصفة ولا اسم منتج فيه';
+  for (const w of SUSPECT) if (w.re.test(t) && !w.src.some(x => src.includes(x))) return `كلمة «${w.why}» لا أصل لها في العنوان الصيني`;
+  return null;
+}
+
 // عنوان منتج مقبول: عربي سليم وخالٍ من حشو 1688 المترجم حرفيًا
 const JUNK = /عبر الحدود|تجارة (أجنبية|خارجية)|الأسهم الحقيقية|أمازون|علي إكسبريس|بالجملة|مصدر البضائع|موسم (الخريف|الربيع|الصيف|الشتاء) الجديد|^\(?\s*20\d\d/;
 export const goodTitle = (t: string | null | undefined) => goodArabic(t) && !JUNK.test(t!);
@@ -185,16 +237,16 @@ export async function retranslatePending(db: D1Database, ai: any, limit = 40): P
   // لأن الترتيب يدفنها تحت آلاف الصفوف. ترتفع هنا إلى المرتبة الثانية بعد الصيني.
   const NO_AR = `(title_ar NOT GLOB '*[\u0621-\u064A]*')`;
   const { results } = await db.prepare(`SELECT id,title_ar,title_src,supplier_name,tr_tries FROM products
-     WHERE title_ar GLOB '*[一-龥]*' OR supplier_name GLOB '*[一-龥]*' OR title_src GLOB '*[一-龥]*' OR ${MASHED} OR ${NO_AR}
-     ORDER BY (title_ar GLOB '*[一-龥]*') DESC, ${NO_AR} DESC, ${MASHED} DESC, tr_tries ASC, (status='draft') DESC, sales DESC, id DESC LIMIT 400`).all<any>();
+     WHERE title_ar GLOB '*[一-龥]*' OR supplier_name GLOB '*[一-龥]*' OR title_src GLOB '*[一-龥]*' OR ${MASHED} OR ${NO_AR} OR ${BROKEN_SQL}
+     ORDER BY (title_ar GLOB '*[一-龥]*') DESC, ${BROKEN_SQL} DESC, ${NO_AR} DESC, ${MASHED} DESC, tr_tries ASC, (status='draft') DESC, sales DESC, id DESC LIMIT 400`).all<any>();
   // العناوين الصينية أو الرديئة أولًا، ثم ما تبقى (موردون)
-  const needs = (p: any) => hasCJK(p.title_ar) || !goodTitle(p.title_ar);
+  const needs = (p: any) => hasCJK(p.title_ar) || !goodTitle(p.title_ar) || !!brokenTitle(p.title_ar, p.title_src);
   results.sort((a, b) => Number(needs(b)) - Number(needs(a)));
   let n = 0, nv = 0, tried = 0;
   for (const p of results) {
     if (tried >= limit) break;
     const src = hasCJK(p.title_src) ? p.title_src : p.title_ar;
-    const needTitle = hasCJK(p.title_ar) || !goodTitle(p.title_ar);
+    const needTitle = hasCJK(p.title_ar) || !goodTitle(p.title_ar) || !!brokenTitle(p.title_ar, p.title_src);
     // المنتج الذي عنوانه عربي سليم واسم مورّده عربي لا يحتاج شيئًا: نتخطاه بلا أن يُحسب من الدفعة.
     // (كان يُحسب فيبتلع الأربعين مكانًا ولا يصل الدور إلى العناوين الصينية الحقيقية.)
     if (!needTitle && !hasCJK(p.supplier_name)) continue;
@@ -216,7 +268,7 @@ export async function retranslatePending(db: D1Database, ai: any, limit = 40): P
   for (const v of vs.results) { const cc = await tr.t(v.color, 'attr'); const sz = await tr.t(v.size, 'attr'); if (cc !== v.color || sz !== v.size) { await db.prepare('UPDATE variants SET color=?,size=? WHERE id=?').bind(cc, sz, v.id).run(); nv++; } }
   // كم بقي عليه نص لا يُقرأ (صيني أو مكسور) — ليعرف المُشغِّل متى يتوقف
   const left = await db.prepare(`SELECT COUNT(*) n,SUM(status='draft') d FROM products
-     WHERE title_ar GLOB '*[一-龥]*' OR ${MASHED} OR ${NO_AR}`).first<{ n: number; d: number }>();
+     WHERE title_ar GLOB '*[一-龥]*' OR ${MASHED} OR ${NO_AR} OR ${BROKEN_SQL}`).first<{ n: number; d: number }>();
   const vLeft = await db.prepare(`SELECT COUNT(*) n FROM variants
      WHERE color GLOB '*[一-龥]*' OR size GLOB '*[一-龥]*'
         OR color GLOB '*[\u0621-\u064A][a-zA-Z]*' OR color GLOB '*[a-zA-Z][\u0621-\u064A]*'

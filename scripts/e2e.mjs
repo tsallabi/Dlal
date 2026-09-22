@@ -206,6 +206,35 @@ await page.goto(BASE + '/search?q=' + encodeURIComponent(rackTag));
 const tag = await page.locator('.card .kind-tag').first().textContent().catch(() => '');
 expect(tag.trim() === 'حامل عرض', `بطاقة القسم تحمل الشارة (${tag || 'لا شارة'})`);
 
+// ---------- ترجمة سليمة نحويًا لكنها ليست ترجمة العنوان ----------
+// خمسة عناوين حية كانت «الوسومالوسومالوسوم…» (شُعيرات، أقراط، دمبل، أحمرا شفاه):
+// تكرار بلا مسافة واحدة مرّ من حارس التكرار القديم لأنه يقسّم على المسافات ولا مسافة هنا.
+await login(page, '0910000000', 'admin123');
+await page.goto(BASE + '/admin/import');
+const brokOffer = '69' + String(Date.now()).slice(-10); const brokTag = uniqTag();
+await page.fill('form[action$="/import/json"] textarea[name=json]', JSON.stringify([{
+  offerId: brokOffer, url: `https://detail.1688.com/offer/${brokOffer}.html`,
+  title: 'الوسومالوسومالوسومالوسومالوسومالوسوم' + brokTag,
+  priceCny: 9, images: ['https://cbu01.alicdn.com/img/ibank/brok.jpg'], minQty: 1, inStock: true, weightG: 150,
+}]));
+await page.click('form[action$="/import/json"] button:has-text("استيراد")');
+await page.waitForLoadState('networkidle');
+await page.goto(BASE + '/admin/products?broken=1');
+expect(await has(page, brokOffer), 'فلتر الترجمات المكسورة يجمعها للمراجعة');
+expect(await has(page, 'ترجمتُه مكسورة'), 'اللوحة تنبّه بعددها فوق القائمة');
+await shot(page, 'broken-titles');
+// ولا يلتقط السليم: نستورد عنوانًا عربيًا سليمًا ونتأكد أنه خارج الفلتر
+const okOffer = '70' + String(Date.now()).slice(-10); const okTag = uniqTag();
+await page.goto(BASE + '/admin/import');
+await page.fill('form[action$="/import/json"] textarea[name=json]', JSON.stringify([{
+  offerId: okOffer, url: `https://detail.1688.com/offer/${okOffer}.html`, title: `عباءة سوداء ${okTag}`,
+  priceCny: 30, images: ['https://cbu01.alicdn.com/img/ibank/ok.jpg'], minQty: 1, inStock: true, weightG: 400,
+}]));
+await page.click('form[action$="/import/json"] button:has-text("استيراد")');
+await page.waitForLoadState('networkidle');
+await page.goto(BASE + '/admin/products?broken=1');
+expect(!(await has(page, okOffer)), 'العنوان العربي السليم لا يقع في الفلتر');
+
 // ---------- شروط البداية: الفحص يضبطها ولا يرثها ----------
 // تشغيلة سابقة قد تنهار وهي في وضع «حقيقي» مشيرة إلى خادم وهمي مغلق، فتسقط فحوص الدفع
 // في التشغيلة التالية لسبب لا علاقة له بها. حدث هذا ثلاث مرات في ٢٢/٠٩/٢٦.
@@ -950,7 +979,7 @@ const stillGone = await page.evaluate(async (b) => {
 expect(stillGone.active > 0, `الفحص أعاد المنتجات التي قاعدها (${stillGone.active} نشط)`);
 // عدّادات النص المكسور: يجب أن تكون موجودة في الإحصاءات ليراها صاحب المشروع، وأن تؤول
 // إلى صفر كما يؤول chineseVisible. غيابها يعني أننا لا نرى العيب أصلًا.
-for (const k of ['mashedTitles', 'englishTitles', 'mashedVariants', 'chineseVisible'])
+for (const k of ['mashedTitles', 'englishTitles', 'mashedVariants', 'chineseVisible', 'brokenTitles'])
   expect(typeof stillGone[k] === 'number', `الإحصاءات تعدّ «${k}» (${stillGone[k]})`);
 await page.goto(BASE + '/admin/source');
 await page.selectOption('select[name=src_provider]', realProv || 'none');

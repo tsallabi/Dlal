@@ -13,7 +13,7 @@ import { requireRole } from '../lib/auth';
 import { attrValue, notRetail, kindOf } from '../lib/source';
 import { requirePerm, logActivity } from '../lib/perm';
 import { setOrderStatus, markOrderPaid } from '../lib/orders';
-import { Translator, hasCJK, goodTitle, retranslatePending, releaseHeldDrafts } from '../lib/translate';
+import { Translator, hasCJK, goodTitle, retranslatePending, releaseHeldDrafts, BROKEN_SQL } from '../lib/translate';
 
 const admin = new Hono<Env>();
 admin.use('*', requireRole('admin'));
@@ -363,6 +363,9 @@ admin.get('/products', async (c) => {
   if (moq > 1) { where += ' AND p.min_qty >= ?'; binds.push(moq); }
   // ?pack=1 — إعلانات مصانع التغليف والطباعة وOEM: تبيع العلبة الفارغة لا ما في الصورة
   if (c.req.query('pack')) where += ` AND ${PACK}`;
+  // ?broken=1 — ترجمات سليمة نحويًا لكنها ليست ترجمة العنوان (تكرار ملتصق، اسم منتج ضائع،
+  // كلمة لا أصل لها في الصيني). تدخل طابور الترجمة تلقائيًا، وهذا الفلتر لمراجعتها بالعين.
+  if (c.req.query('broken')) where += ` AND ${BROKEN_SQL}`;
   if (c.req.query('stuck')) where += ` AND p.source='1688' AND p.enrich_tries >= 3 AND p.status IN ('active','draft')
      AND ((SELECT COUNT(*) FROM product_images i WHERE i.product_id=p.id) <= 1
        OR (SELECT COUNT(*) FROM variants v WHERE v.product_id=p.id) = 0 OR p.weight_g IS NULL)`;
@@ -370,6 +373,7 @@ admin.get('/products', async (c) => {
   const s = await loadSettings(c.env.DB);
   const untranslated = (await c.env.DB.prepare("SELECT COUNT(*) n FROM products WHERE title_ar GLOB '*[一-龥]*'").first<any>())?.n ?? 0;
   const maxRetail = Math.max(2, parseInt(s.retail_max_moq ?? '') || 10);
+  const brokenN = (await c.env.DB.prepare(`SELECT COUNT(*) n FROM products WHERE status IN ('active','draft') AND ${BROKEN_SQL}`).first<{ n: number }>())?.n ?? 0;
   const lots = await c.env.DB.prepare(`SELECT
      SUM(p.status='active' AND p.min_qty >= ?) lotsOn, SUM(p.status='hidden' AND p.min_qty >= ?) lotsOff,
      SUM(p.status='active' AND ${PACK}) packOn, SUM(p.status='hidden' AND ${PACK}) packOff
@@ -378,6 +382,11 @@ admin.get('/products', async (c) => {
     <>
       <Flash msg={c.req.query('lots') ? `${c.req.query('act') === 'hide' ? 'أُخفيت' : 'أُعيدت للمتجر'} ${c.req.query('lots')} قطعة جملة` : c.req.query('stuck') ? `منتجات تعذّر إثراؤها بعد ثلاث محاولات من الإضافة: صفحتها على 1688 لا تعطي الصور أو المقاسات أو الوزن. أثريها بالكريدت حين يتوفر — وحتى ذلك تُسعَّر بوزن القسم التقديري.` : c.req.query('imported') ? `تم استيراد ${c.req.query('imported')} منتج وتحديث ${c.req.query('updated')}` : c.req.query('translated') ? `تُرجم ${c.req.query('translated')} عنوانًا` : c.req.query('ok') ? 'تم الحفظ ✓' : undefined} /><Flash type="err" msg={c.req.query('noai') ? 'الترجمة تعمل على Cloudflare فقط (ربط Workers AI غير متاح هنا)' : undefined} />
       <form class="inline" style="margin-bottom:10px"><input type="text" name="q" placeholder="بحث بالاسم أو offerId" value={q} /><select name="status"><option value="">كل الحالات</option>{['active', 'draft', 'hidden', 'unavailable'].map(x => <option value={x} selected={st === x}>{x}</option>)}</select><button class="btn sm">بحث</button><a class="btn sm ghost" href="/admin/products/new">+ منتج يدوي</a><button class="btn sm ghost" formaction="/admin/products/translate" formmethod="post">🈶 ترجمة العناوين الصينية ({untranslated})</button></form>
+      {/* ترجمة سليمة نحويًا لكنها ليست ترجمة العنوان — تدخل طابور الترجمة وحدها، وهذا للمراجعة بالعين */}
+      {brokenN > 0 && <p style="font-size:13px;margin:0 0 10px;padding:8px 10px;border-radius:8px;background:#fdecec;border:1px solid #f0b4b4;color:#8c2121">
+        <b>{brokenN}</b> عنوانًا ترجمتُه مكسورة (تكرار ملتصق، أو اسم المنتج ضائع، أو كلمة لا أصل لها في العنوان الصيني).
+        تُعاد ترجمتها تلقائيًا كل ساعة — <a href="/admin/products?broken=1">راجعيها بعينك</a>.
+      </p>}
       {/* بضاعة ليست للتجزئة: لوط جملة، أو إعلان مصنع تغليف يبيع العلبة الفارغة لا ما في الصورة */}
       <form method="post" action="/admin/products/wholesale" class="card-box" style="margin-bottom:10px;padding:10px">
         <b style="font-size:14px">بضاعة ليست للتجزئة</b>

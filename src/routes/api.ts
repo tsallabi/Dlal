@@ -9,7 +9,7 @@ import { computePrice, loadSettings } from '../lib/pricing';
 import { normWeightG, attrValue, kindOf } from '../lib/source';
 import { getProvider } from '../lib/source-providers';
 import { runServerJobs } from '../lib/crawl';
-import { retranslatePending, releaseHeldDrafts, diagnoseTitle, hasCJK, dropCJKWords, dictTranslate, mixedScript, dropMixedWords, goodTitle, sweepMashedTitles } from '../lib/translate';
+import { retranslatePending, releaseHeldDrafts, diagnoseTitle, hasCJK, dropCJKWords, dictTranslate, mixedScript, dropMixedWords, goodTitle, sweepMashedTitles, brokenTitle, BROKEN_SQL } from '../lib/translate';
 
 const api = new Hono<Env>();
 
@@ -163,6 +163,14 @@ api.get('/logic-check', async (c) => {
     mashed: Object.fromEntries(mashed.map(t => [t, { mixed: mixedScript(t), good: goodTitle(t), fixed: dropMixedWords(t) }])),
     okLatin: Object.fromEntries(okLatin.map(t => [t, { mixed: mixedScript(t), good: goodTitle(t) }])),
     dedupe: { same: sameProduct(w1, w2), different: sameProduct(w1, bag), noiseOnly: sameProduct('跨境 批发 新款', '外贸 现货 爆款'), fp: fingerprint(w1) },
+    // ترجمة سليمة نحويًا لكنها ليست ترجمة العنوان — أمثلة حقيقية من الرف الحي
+    brokenT: {
+      repeat: brokenTitle('الوسومالوسومالوسومالوسومالوسوم', '网红高档合金筷子'),
+      quake: brokenTitle('حقيبة رياضية للخارج مع حاملات ماء ومقابض للزلازل', '户外双肩运动背包登山杖外挂设计'),
+      quakeOk: brokenTitle('خيمة طبية عازلة للزلازل للطوارئ', '应急救援帐篷抗震救灾消防演习'),
+      noNoun: brokenTitle('حمراء مزيفة لديكور المنزل وتصوير الفوتوغرافيا', '嘉兰百合红色装饰仿真花'),
+      fine: brokenTitle('عباءة سوداء بتطريز ذهبي مقاس XL', '黑色刺绣长袍'),
+    },
     // نوع الإعلان: ماذا تستلم الزبونة فعلًا (حامل عرض فارغ، زهرة صناعية، بدلة ساونا)
     kinds: { rack: kindOf('蓝牙耳机展示架 手机壳挂件架'), fake: kindOf('仿真向日葵假花家居装饰'), sauna: kindOf('加厚面料男女款汗蒸服桑拿服'), prop: kindOf('木质蝴蝶墙贴摄影道具'), mannequin: kindOf('服装店模特展示'), none: kindOf('新款女士单肩包时尚百搭'), empty: kindOf(null) },
     // رأس عمود جدول المواصفات بدل القيمة: «المقاس» كمقاس و«اللون» كلون
@@ -227,14 +235,15 @@ api.post('/source/stats', async (c) => {
         AND (title_ar GLOB '*[\u0621-\u064A][a-zA-Z]*' OR title_ar GLOB '*[a-zA-Z][\u0621-\u064A]*')) t,
      (SELECT COUNT(*) FROM products WHERE status IN ('active','draft') AND title_ar NOT GLOB '*[\u0621-\u064A]*') e,
      (SELECT COUNT(*) FROM variants WHERE color GLOB '*[\u0621-\u064A][a-zA-Z]*' OR color GLOB '*[a-zA-Z][\u0621-\u064A]*'
-        OR size GLOB '*[\u0621-\u064A][a-zA-Z]*' OR size GLOB '*[a-zA-Z][\u0621-\u064A]*') v`).first<any>();
+        OR size GLOB '*[\u0621-\u064A][a-zA-Z]*' OR size GLOB '*[a-zA-Z][\u0621-\u064A]*') v,
+     (SELECT COUNT(*) FROM products WHERE status IN ('active','draft') AND ${BROKEN_SQL}) b`).first<any>();
   // ما زال ينقصه فحص تفاصيل: صورة واحدة أو بلا مقاسات أو بلا وزن — هذه هي حصة الإثراء المتبقية
   const thin = await db.prepare(`SELECT COUNT(*) n FROM products p WHERE p.status IN ('active','draft') AND p.source='1688'
      AND ((SELECT COUNT(*) FROM product_images i WHERE i.product_id=p.id) <= 1
        OR (SELECT COUNT(*) FROM variants v WHERE v.product_id=p.id) = 0
        OR p.weight_g IS NULL)`).first<any>();
   const { results: jobs } = await db.prepare('SELECT id,name,type,query,runner,active,max_pages,max_new,interval_hours,last_run_at,last_summary FROM crawl_jobs ORDER BY id').all<any>();
-  return c.json({ totals: { products: tot?.n ?? 0, active: tot?.a ?? 0, from1688: tot?.s ?? 0, providerCalls: src?.n ?? 0, outOfStock: tot?.oos ?? 0, chineseTitles: cn?.n ?? 0, chineseVisible: cn?.a ?? 0, heldDraft: tot?.dr ?? 0, needEnrich: thin?.n ?? 0, mashedTitles: broken?.t ?? 0, englishTitles: broken?.e ?? 0, mashedVariants: broken?.v ?? 0 }, categories: cats, jobs });
+  return c.json({ totals: { products: tot?.n ?? 0, active: tot?.a ?? 0, from1688: tot?.s ?? 0, providerCalls: src?.n ?? 0, outOfStock: tot?.oos ?? 0, chineseTitles: cn?.n ?? 0, chineseVisible: cn?.a ?? 0, heldDraft: tot?.dr ?? 0, needEnrich: thin?.n ?? 0, mashedTitles: broken?.t ?? 0, englishTitles: broken?.e ?? 0, mashedVariants: broken?.v ?? 0, brokenTitles: broken?.b ?? 0 }, categories: cats, jobs });
 });
 
 // لماذا يرفض النظام ترجمة عناوين بعينها؟ يعيد الردّ الخام وحكم كل بوابة على أول N عنوان عالق

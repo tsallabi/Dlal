@@ -106,5 +106,14 @@ expect(kd.mannequin === 'mannequin', `«模特» مجسّم عرض (${kd.mannequ
 expect(!kd.none, `حقيبة نسائية عادية بلا تصنيف (${kd.none})`);
 expect(!kd.empty, 'العنوان الفارغ بلا تصنيف');
 
+
+// --- ترجمة سليمة نحويًا لكنها ليست ترجمة العنوان
+const bt = d.brokenT;
+expect(bt.repeat === 'كلمة مكرّرة بلا مسافات', `«الوسومالوسوم…» يُكتشف (${bt.repeat})`);
+expect(/زلازل/.test(bt.quake ?? ''), `«مقابض للزلازل» من 登山杖 عصا تسلّق يُكتشف (${bt.quake})`);
+expect(bt.quakeOk === null, `خيمة الإغاثة 抗震救灾 فيها «زلازل» صحيحة فلا تُعدّ كسرًا (${bt.quakeOk})`);
+expect(bt.noNoun === 'يبدأ بصفة ولا اسم منتج فيه', `«حمراء مزيفة…» بلا اسم منتج (${bt.noNoun})`);
+expect(bt.fine === null, `عنوان سليم يبقى سليمًا (${bt.fine})`);
+
 console.log(`\nنجح: ${passed} · فشل: ${problems.length}`);
 process.exit(problems.length ? 1 : 0);
