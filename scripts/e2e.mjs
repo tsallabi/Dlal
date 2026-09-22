@@ -827,6 +827,15 @@ await page.fill('input[name=mypay_webhook_secret]', MP_SECRET);
 await page.locator('form:has(select[name=mypay_mode]) button:has-text("حفظ")').first().click();
 await page.waitForLoadState('networkidle');
 expect(await has(page, '/pay/sandbox/api/v1'), 'اللوحة تعرض عنوان الساندبوكس الحقيقي المركَّب');
+// «اختبار الاتصال» في وضع المحاكاة لا يلمس ماي باي: يجب أن يقولها صراحةً لا أن يظهر نجاحًا أخضر
+await page.selectOption('select[name=mypay_mode]', 'mock');
+await page.locator('form:has(select[name=mypay_mode]) button:has-text("حفظ")').first().click();
+await page.waitForLoadState('networkidle');
+await page.locator('button:has-text("اختبار الاتصال")').click();
+await page.waitForLoadState('networkidle');
+expect(await has(page, 'لم يُختبر شيء'), 'اختبار الاتصال في وضع المحاكاة يقول إنه لم يختبر البوابة');
+expect((await page.locator('.flash.ok').count()) === 0, 'لا رسالة نجاح خضراء مضلِّلة في وضع المحاكاة');
+await page.selectOption('select[name=mypay_mode]', 'live');
 // النطاق القديم api.mypay.ly محفوظ في قواعد قائمة ولا وجود له عندهم: يجب أن يُصحَّح تلقائيًا
 await page.fill('input[name=mypay_base_url]', 'https://api.mypay.ly');
 await page.locator('form:has(select[name=mypay_mode]) button:has-text("حفظ")').first().click();

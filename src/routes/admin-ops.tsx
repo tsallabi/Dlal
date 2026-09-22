@@ -180,7 +180,7 @@ ops.get('/payments', async (c) => {
   return shell(c, 'payments', 'المدفوعات وبوابة ماي باي', (
     <>
       <Flash msg={c.req.query('ok') ? 'تم الحفظ ✓' : undefined} />
-      {c.req.query('test') && <Flash type={c.req.query('test') === 'ok' ? 'ok' : 'err'} msg={`اختبار الاتصال: ${decodeURIComponent(c.req.query('detail') ?? '')}`} />}
+      {c.req.query('test') && <Flash type={c.req.query('test') === 'ok' ? 'ok' : 'err'} msg={c.req.query('test') === 'mock' ? decodeURIComponent(c.req.query('detail') ?? '') : `اختبار الاتصال: ${decodeURIComponent(c.req.query('detail') ?? '')}`} />}
       <div class="kpis">
         <div class="kpi"><b style="color:#1a9c5b">{fmt(sm.paid?.s ?? 0)}</b><span>مدفوعات ناجحة ({sm.paid?.n ?? 0})</span></div>
         <div class="kpi"><b style="color:#d68b00">{sm.pending?.n ?? 0}</b><span>بانتظار البوابة</span></div>
@@ -233,6 +233,8 @@ ops.post('/payments/test', requirePerm('payments.manage'), async (c) => {
   const f = await c.req.parseBody(); const s = await loadSettings(c.env.DB);
   const cfg = loadMyPay({ ...s, mypay_mode: String(f.mypay_mode), mypay_base_url: String(f.mypay_base_url), mypay_sandbox: String(f.mypay_sandbox ?? s.mypay_sandbox ?? 'yes'), mypay_client_id: String(f.mypay_client_id ?? s.mypay_client_id ?? ''), mypay_secret_id: String(f.mypay_secret_id ?? s.mypay_secret_id ?? '') }, c.env);
   const r = await checkConnection(cfg);
+  // المحاكاة ليست اتصالًا بماي باي: إظهارها خضراء يوهم صاحب المشروع أن البوابة اختُبرت وهي لم تُلمس
+  if (cfg.mode === 'mock') return c.redirect('/admin/payments?test=mock&detail=' + encodeURIComponent('لم يُختبر شيء: الوضع «محاكاة» فلا يخرج أي طلب إلى ماي باي. غيّري الوضع إلى «حقيقي» واحفظي ثم اختبري.'));
   return c.redirect(`/admin/payments?test=${r.ok ? 'ok' : 'fail'}&detail=${encodeURIComponent(`${r.status} — ${r.detail}`.slice(0, 300))}`);
 });
 
