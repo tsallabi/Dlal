@@ -95,5 +95,16 @@ expect(a2.realColor === 'أحمر', `«أحمر» لون حقيقي يبقى (${
 expect(a2.realSize === 'XL', `«XL» مقاس حقيقي يبقى (${a2.realSize})`);
 expect(a2.empty === null, 'القيمة الفارغة تُهمل');
 
+
+// --- نوع الإعلان: ما تستلمه الزبونة فعلًا. لا يُخفى بل يُشرح (طلب صاحب المشروع)
+const kd = d.kinds;
+expect(kd.rack === 'rack', `«展示架» حامل عرض (${kd.rack})`);
+expect(kd.fake === 'fake', `«仿真/假花» صناعي (${kd.fake})`);
+expect(kd.sauna === 'sauna', `«汗蒸服» بدلة ساونا (${kd.sauna})`);
+expect(kd.prop === 'prop', `«摄影道具» قطعة ديكور وتصوير (${kd.prop})`);
+expect(kd.mannequin === 'mannequin', `«模特» مجسّم عرض (${kd.mannequin})`);
+expect(!kd.none, `حقيبة نسائية عادية بلا تصنيف (${kd.none})`);
+expect(!kd.empty, 'العنوان الفارغ بلا تصنيف');
+
 console.log(`\nنجح: ${passed} · فشل: ${problems.length}`);
 process.exit(problems.length ? 1 : 0);

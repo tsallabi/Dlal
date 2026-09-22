@@ -6,7 +6,7 @@ import { importProducts } from './admin';
 import { classifyModesty } from '../lib/modesty';
 import { fingerprint, sameProduct } from '../lib/dedupe';
 import { computePrice, loadSettings } from '../lib/pricing';
-import { normWeightG, attrValue } from '../lib/source';
+import { normWeightG, attrValue, kindOf } from '../lib/source';
 import { getProvider } from '../lib/source-providers';
 import { runServerJobs } from '../lib/crawl';
 import { retranslatePending, releaseHeldDrafts, diagnoseTitle, hasCJK, dropCJKWords, dictTranslate, mixedScript, dropMixedWords, goodTitle, sweepMashedTitles } from '../lib/translate';
@@ -163,6 +163,8 @@ api.get('/logic-check', async (c) => {
     mashed: Object.fromEntries(mashed.map(t => [t, { mixed: mixedScript(t), good: goodTitle(t), fixed: dropMixedWords(t) }])),
     okLatin: Object.fromEntries(okLatin.map(t => [t, { mixed: mixedScript(t), good: goodTitle(t) }])),
     dedupe: { same: sameProduct(w1, w2), different: sameProduct(w1, bag), noiseOnly: sameProduct('跨境 批发 新款', '外贸 现货 爆款'), fp: fingerprint(w1) },
+    // نوع الإعلان: ماذا تستلم الزبونة فعلًا (حامل عرض فارغ، زهرة صناعية، بدلة ساونا)
+    kinds: { rack: kindOf('蓝牙耳机展示架 手机壳挂件架'), fake: kindOf('仿真向日葵假花家居装饰'), sauna: kindOf('加厚面料男女款汗蒸服桑拿服'), prop: kindOf('木质蝴蝶墙贴摄影道具'), mannequin: kindOf('服装店模特展示'), none: kindOf('新款女士单肩包时尚百搭'), empty: kindOf(null) },
     // رأس عمود جدول المواصفات بدل القيمة: «المقاس» كمقاس و«اللون» كلون
     attrs2: { cjkSize: attrValue('尺码'), cjkColor: attrValue('颜色：'), arSize: attrValue('المقاس'), arColor: attrValue('اللون'), realColor: attrValue('أحمر'), realSize: attrValue('XL'), empty: attrValue('  ') },
     // وزن المورّد: كيلو أم غرام؟ قيم حقيقية من TMAPI أنتجت رفّ حمام بـ٦٥٠ كغ

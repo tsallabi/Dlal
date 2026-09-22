@@ -6,12 +6,13 @@ export type ProductRow = {
   price_sea_lyd: number | null; in_stock: number; status: string; sales: number; rating: number; review_count: number; image: string | null; category_id: number | null;
   min_qty: number; description_ar: string | null; source_offer_id: string | null; source_url: string | null;
   source_price_cny: number; weight_g: number | null; views: number; supplier_name: string | null; last_checked_at: string | null;
+  kind?: string | null;
   cat_slug?: string; cat_name?: string; colors?: number;
 };
 
 export const PRODUCT_SELECT = `
   p.id,p.slug,p.title_ar,p.price_lyd,p.compare_price_lyd,p.price_sea_lyd,p.in_stock,p.status,p.sales,p.rating,p.review_count,p.category_id,p.min_qty,
-  p.description_ar,p.source_offer_id,p.source_url,p.source_price_cny,p.weight_g,p.views,p.supplier_name,p.last_checked_at,
+  p.description_ar,p.source_offer_id,p.source_url,p.source_price_cny,p.weight_g,p.views,p.supplier_name,p.last_checked_at,p.kind,
   (SELECT url FROM product_images i WHERE i.product_id=p.id ORDER BY sort LIMIT 1) AS image,
   (SELECT COUNT(DISTINCT v.color) FROM variants v WHERE v.product_id=p.id AND v.color IS NOT NULL AND v.color<>'') AS colors,
   c.slug AS cat_slug, c.name_ar AS cat_name`;

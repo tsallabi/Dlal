@@ -8,6 +8,7 @@ import { Grid, ProductCard } from '../views/product-card';
 import { Stars } from '../views/account';
 import { getCategories, PRODUCT_SELECT, fmt, imgUrl, orderCode, timeAgo, notify } from '../lib/db';
 import type { ProductRow } from '../lib/db';
+import { KIND_NOTE, type ListingKind } from '../lib/source';
 import { loadSettings, computePrice, shipRates, seaOn } from '../lib/pricing';
 import type { ShipMode, Settings } from '../lib/pricing';
 import { checkCoupon } from '../lib/coupons';
@@ -374,6 +375,8 @@ store.get('/p/:slug', async (c) => {
   const rates = shipRates(s, mode);
   // السعر المعروض يتبع طريقة الشحن المختارة، تمامًا كما في السلة والبطاقة
   const shown = mode === 'sea' && p.price_sea_lyd ? p.price_sea_lyd : p.price_lyd;
+  // ماذا تستلم الزبونة بالضبط: حامل عرض فارغ، زهرة صناعية، بدلة ساونا… العنوان وحده لا يكفي
+  const kn = p.kind && KIND_NOTE[p.kind as ListingKind] ? KIND_NOTE[p.kind as ListingKind] : null;
   const seaSave = p.price_sea_lyd && p.price_sea_lyd < p.price_lyd ? p.price_lyd - p.price_sea_lyd : 0;
   const b = await base(c);
   return c.html(
@@ -428,6 +431,7 @@ store.get('/p/:slug', async (c) => {
               {/* الحد الأدنى مأخوذ من عرض الجملة عند المورّد: الزبونة ترى سعر القطعة بخط كبير
                   وتظن أنها تدفعه، فتكتشف الإجمالي في السلة. نقوله لها هنا صراحةً. */}
               {p.min_qty > 1 && <div class="moq-note">تُباع بالكمية: أقل طلب <b>{p.min_qty} قطعة</b> — أي <b>{fmt(shown * p.min_qty)}</b> إجمالًا.</div>}
+              {kn && <div class="kind-note"><b>{kn.tag}</b> — {kn.note}</div>}
             </div>
             <div class="inline" style="margin:16px 0">
               <button class="btn brand" type="submit" disabled={!p.in_stock} style="flex:1">أضيفي إلى السلة</button>
@@ -619,6 +623,8 @@ async function cartTotals(c: Context<Env>, rows: any[], usePoints: boolean) {
 // وصف عربي حقيقي للمنتجات التي وصلت من صفحة بحث بلا وصف — أفضل من سطر «لا يوجد وصف»
 function autoDesc(p: any, s: any, rates: { days: string; ar: string }, colors: string[], sizes: string[]) {
   const L: string[] = [`${p.title_ar} — من قسم ${p.cat_name ?? 'متجرنا'}.`];
+  const kn = p.kind ? KIND_NOTE[p.kind as ListingKind] : null;
+  if (kn) L.push(kn.note);
   if (colors.length) L.push(`الألوان المتاحة: ${colors.slice(0, 8).join('، ')}.`);
   if (sizes.length) L.push(`المقاسات: ${sizes.slice(0, 10).join('، ')} (مقاسات آسيوية — راجعي دليل المقاسات أدناه).`);
   if (p.min_qty > 1) L.push(`الحد الأدنى للطلب ${p.min_qty} قطع.`);

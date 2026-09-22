@@ -10,7 +10,7 @@ import { classifyModesty } from '../lib/modesty';
 import { fingerprint, sameProduct } from '../lib/dedupe';
 import { loadSettings, computePrice } from '../lib/pricing';
 import { requireRole } from '../lib/auth';
-import { attrValue, notRetail } from '../lib/source';
+import { attrValue, notRetail, kindOf } from '../lib/source';
 import { requirePerm, logActivity } from '../lib/perm';
 import { setOrderStatus, markOrderPaid } from '../lib/orders';
 import { Translator, hasCJK, goodTitle, retranslatePending, releaseHeldDrafts } from '../lib/translate';
@@ -306,6 +306,7 @@ export async function importProducts(db: D1Database, arr: any[], categoryId: num
       if (supplierAr && (!cur?.supplier_name || hasCJK(cur.supplier_name))) { upd.push('supplier_name=?'); binds.push(supplierAr); }
       if (it.title) { upd.push('title_src=COALESCE(title_src,?)'); binds.push(String(it.title)); }
       if (fp) { upd.push('fingerprint=?'); binds.push(fp); }
+      const kd = kindOf(it.title); if (kd) { upd.push('kind=COALESCE(kind,?)'); binds.push(kd); }
       if (upd.length) enrich.push(db.prepare(`UPDATE products SET ${upd.join(',')} WHERE id=?`).bind(...binds, ex.id));
       if (enrich.length) { await db.batch(enrich); enriched++; }
       if (mod.intimate && lingerieId && ex.category_id !== lingerieId) await db.prepare('UPDATE products SET category_id=?,home_ok=0 WHERE id=?').bind(lingerieId, ex.id).run();
@@ -321,11 +322,11 @@ export async function importProducts(db: D1Database, arr: any[], categoryId: num
     const ins = await db.prepare(
       // last_checked_at يبقى NULL: المنتج وصل من نتيجة بحث ولم يُفحص تفصيليًا قط، وادّعاء أنه فُحص
       // كان يخفيه عن دورة الإثراء ويجعل «آخر فحص» في اللوحة رقمًا كاذبًا
-      `INSERT OR IGNORE INTO products(source,source_offer_id,source_url,slug,title_ar,title_src,description_ar,category_id,source_price_cny,price_lyd,compare_price_lyd,price_sea_lyd,weight_g,volume_cm3,min_qty,in_stock,status,supplier_name,last_checked_at,sales,rating,home_ok,fingerprint)
-       VALUES('1688',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL,?,?,?,?)`,
+      `INSERT OR IGNORE INTO products(source,source_offer_id,source_url,slug,title_ar,title_src,description_ar,category_id,source_price_cny,price_lyd,compare_price_lyd,price_sea_lyd,weight_g,volume_cm3,min_qty,in_stock,status,supplier_name,last_checked_at,sales,rating,home_ok,fingerprint,kind)
+       VALUES('1688',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL,?,?,?,?,?)`,
     ).bind(offerId, it.url ?? `https://detail.1688.com/offer/${offerId}.html`, slug, titleAr, it.title ?? null, it.descriptionAr ?? null,
       targetCat, price, pr.total_lyd, Math.random() < 0.4 ? Math.ceil(pr.total_lyd * 1.25 / 5) * 5 : null, prSea.total_lyd, it.weightG ?? null, it.volumeCm3 ?? null,
-      moq, it.inStock === false ? 0 : 1, notRetail(it.title, moq, maxRetail) ? 'hidden' : hasCJK(titleAr) ? 'draft' : 'active', supplierAr, parseInt(it.sales ?? 0) || 0, 0, homeOk, fp || null).run();
+      moq, it.inStock === false ? 0 : 1, notRetail(it.title, moq, maxRetail) ? 'hidden' : hasCJK(titleAr) ? 'draft' : 'active', supplierAr, parseInt(it.sales ?? 0) || 0, 0, homeOk, fp || null, kindOf(it.title)).run();
     const pid = ins.meta.last_row_id as number;
     if (!pid || !ins.meta.changes) { skipped++; continue; }   // تجاهل صفّ لم يُدرج (تعارض مع استيراد متزامن)
     const stmts: D1PreparedStatement[] = [];

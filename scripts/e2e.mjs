@@ -112,6 +112,13 @@ await page.uncheck('form[action$="/products/wholesale"] input[name=pack]');
 await page.locator('form[action$="/products/wholesale"] button:has-text("أعِدها")').click();
 await page.waitForLoadState('networkidle');
 expect(await has(page, 'أُعيدت للمتجر'), 'اللوحة تقول كم قطعة عادت');
+// «أعِدها» بحدّ ١٠٠ يشمل أيضًا عيّنة مصنع التغليف (٢٠٠ قطعة) التي تركتها تشغيلة سابقة،
+// فتعود بعنوانها الصيني إلى الرف ويسقط فحص «لا عنوان صيني ظاهر». نُعيد إخفاء التغليف وحده:
+// حدّ مستحيل + صندوق التغليف مؤشّر ⟵ الشرط يطابق إعلانات التغليف فقط ولا يمسّ غيرها.
+await page.fill('form[action$="/products/wholesale"] input[name=min]', '999999');
+await page.check('form[action$="/products/wholesale"] input[name=pack]');
+await page.locator('form[action$="/products/wholesale"] button:has-text("أخفِها")').click();
+await page.waitForLoadState('networkidle');
 await page.goto(BASE + '/logout');
 const back = await page.goto(BASE + moqHref);
 expect(back.status() === 200, `القطعة عادت للمتجر بعد الإظهار (${back.status()})`);
@@ -165,6 +172,39 @@ expect(packRes.status() === 404, `الزبونة لا ترى إعلان مصنع
 await login(page, '0910000000', 'admin123');
 await page.goto(BASE + '/admin/products?pack=1');
 expect(await has(page, packOffer), 'فلتر «إعلانات التغليف» يجمعها للمراجعة');
+
+// ---------- «ماذا أستلم بالضبط؟» — توضيح لا إخفاء ----------
+// صاحب المشروع رفض إخفاء الآلات وحوامل العرض والقماش وطلب شرحها (٢٢/٠٩/٢٦).
+// حامل العرض يصل فارغًا والبضاعة في صورته للتوضيح — يجب أن تقرأ الزبونة ذلك قبل الشراء.
+await page.goto(BASE + '/admin/import');
+const rackOffer = '68' + String(Date.now()).slice(-10); const rackTag = uniqTag();
+await page.fill('form[action$="/import/json"] textarea[name=json]', JSON.stringify([{
+  offerId: rackOffer, url: `https://detail.1688.com/offer/${rackOffer}.html`,
+  title: `展示架 ${rackTag}`,                      // «حامل عرض» — كلمتان فقط فلا تصطدم بعيّنة سابقة
+  priceCny: 40, images: ['https://cbu01.alicdn.com/img/ibank/rack.jpg'], minQty: 1, inStock: true, weightG: 900,
+}]));
+await page.click('form[action$="/import/json"] button:has-text("استيراد")');
+await page.waitForLoadState('networkidle');
+await page.goto(BASE + '/admin/products?q=' + rackOffer);
+const rackAdmin = await page.locator(`tr:has-text("${rackOffer}") a[href^="/admin/products/"]`).first().getAttribute('href');
+// النسخة المحلية بلا Workers AI فيبقى العنوان صينيًا ومحجوزًا مسودة — نعرّبه كما تفعل الترجمة على الحي
+await page.goto(BASE + rackAdmin);
+await page.fill('input[name=title_ar]', `حامل عرض أكسسوارات ${rackTag}`);
+await page.selectOption('select[name=status]', 'active');
+await page.click('form:has(input[name=title_ar]) button:has-text("حفظ")');
+await page.waitForLoadState('networkidle');
+const rackSlug = await page.locator('a:has-text("معاينة")').first().getAttribute('href');
+await page.goto(BASE + '/logout');
+await page.goto(BASE + rackSlug);
+const kindNote = await page.locator('.kind-note').first().textContent().catch(() => '');
+expect(/حامل عرض/.test(kindNote), `صفحة المنتج تقول ما هو (${(kindNote || 'لا يوجد سطر').slice(0, 45)})`);
+expect(/يصلكِ الحامل وحده فارغًا/.test(kindNote), 'وتقول صراحةً إن البضاعة في الصورة للتوضيح فقط');
+expect(await has(page, 'يصلكِ الحامل وحده فارغًا'), 'والوصف التلقائي يكرّرها لمن يقرأ الوصف');
+await shot(page, 'kind-note-rack');
+// وعلى البطاقة في القسم: شارة تقول ما هو قبل أن تضغط
+await page.goto(BASE + '/search?q=' + encodeURIComponent(rackTag));
+const tag = await page.locator('.card .kind-tag').first().textContent().catch(() => '');
+expect(tag.trim() === 'حامل عرض', `بطاقة القسم تحمل الشارة (${tag || 'لا شارة'})`);
 
 // ---------- شروط البداية: الفحص يضبطها ولا يرثها ----------
 // تشغيلة سابقة قد تنهار وهي في وضع «حقيقي» مشيرة إلى خادم وهمي مغلق، فتسقط فحوص الدفع

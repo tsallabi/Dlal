@@ -769,3 +769,7 @@ body{background:#fff}
 /* تنبيه الحد الأدنى: الزبونة يجب أن ترى الإجمالي الحقيقي قبل أن تضيف للسلة */
 .moq-note{margin-top:8px;padding:8px 10px;border-radius:8px;background:#fff6e5;border:1px solid #f0d090;font-size:13px;color:#7a5200}
 .moq-note b{color:#5c3d00}
+/* «ماذا أستلم بالضبط؟» — حامل عرض فارغ، زهرة صناعية، بدلة ساونا: توضيح لا إخفاء */
+.kind-note{margin-top:8px;padding:8px 10px;border-radius:8px;background:#eef4ff;border:1px solid #b9cdf0;font-size:13px;color:#22437e}
+.kind-note b{color:#12305f}
+.card .kind-tag{display:inline-block;margin-top:3px;padding:1px 7px;border-radius:999px;background:#eef4ff;border:1px solid #b9cdf0;color:#22437e;font-size:11px;font-weight:700}

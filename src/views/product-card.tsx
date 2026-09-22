@@ -1,6 +1,7 @@
 import type { FC } from 'hono/jsx';
 import type { ProductRow } from '../lib/db';
 import { fmt, imgUrl } from '../lib/db';
+import { KIND_NOTE, type ListingKind } from '../lib/source';
 
 // السعر بصيغة متاجر الموضة: الرقم الصحيح كبير والكسر صغير
 const Price: FC<{ v: number; deal?: boolean }> = ({ v, deal }) => {
@@ -36,6 +37,8 @@ export const ProductCard: FC<{ p: ProductRow; fav?: boolean; ship?: ShipCtx; bes
       <div class="body">
         <div class="t">{p.title_ar}</div>
         {best && <span class="best-pill">الأكثر مبيعًا في {p.cat_name ?? 'القسم'} ›</span>}
+        {/* شارة تقول ما هو قبل أن تضغط: «حامل عرض» يصل فارغًا و«صناعي» ليس زهرًا طبيعيًا */}
+        {p.kind && KIND_NOTE[p.kind as ListingKind] && <span class="kind-tag">{KIND_NOTE[p.kind as ListingKind].tag}</span>}
         {/* لا نجوم بلا تقييم حقيقي: المنتج الجديد يعرض عدد مبيعاته عند المورد أو كلمة «جديد» */}
         <div class="meta">{p.review_count > 0
           ? <><span class="star">★ {p.rating.toFixed(1)}</span><span>({p.review_count} تقييم)</span></>
