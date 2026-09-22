@@ -60,6 +60,22 @@ expect(Math.abs(tilesX2 - tilesX) > 50, `سهم البلاطات يمرّرها 
 await page.setViewportSize({ width: 1280, height: 860 });
 await page.goto(BASE + '/'); await page.waitForLoadState('networkidle');
 expect(await page.locator('.hdr-main .logo u').textContent() === 'بوابة الصين', 'الشعار يحمل «بوابة الصين» تحت الاسمين');
+// طوابق الأقسام: كل طابق شريط أفقي يمرَّر وله رابط إلى قسمه
+const floors = await page.locator('.floor').count();
+expect(floors >= 4, `الرئيسية تعرض ${floors} طوابق أقسام`);
+const fl = page.locator('.floor').first();
+expect((await fl.locator('.card').count()) >= 4, 'الطابق يعرض أربع بطاقات فأكثر');
+const flHref = await fl.locator('.feed-h .all').getAttribute('href');
+expect(flHref.startsWith('/c/'), 'رابط «عرض القسم» يفتح القسم نفسه');
+// على شاشة ضيقة يجب أن يفيض الشريط فيُمرَّر — على الشاشة العريضة تتسع البطاقات فلا فيض وهذا صحيح
+await page.setViewportSize({ width: 700, height: 900 });
+const scrollable = await page.locator('.floor .floor-row').first().evaluate(el => el.scrollWidth - el.clientWidth);
+expect(scrollable > 50, `شريط الطابق يفيض على شاشة الجوال فيُمرَّر (${scrollable}px)`);
+await page.setViewportSize({ width: 1280, height: 860 });
+await page.goto(BASE + '/'); await page.waitForLoadState('networkidle');
+await fl.locator('.feed-h .all').click(); await page.waitForLoadState('networkidle');
+expect(page.url().includes(flHref), 'الضغط على «عرض القسم» ينقل فعلًا إلى صفحة القسم');
+await page.goto(BASE + '/');
 // لا نص صيني أمام الزبونة في أي صفحة تصفّح
 const SHOPPER_PAGES = ['/', '/c/dresses', '/new', '/sale', '/search?q=%D9%81%D8%B3%D8%AA%D8%A7%D9%86'];
 for (const path of SHOPPER_PAGES) {

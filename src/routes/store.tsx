@@ -4,7 +4,7 @@ import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 import type { Env } from '../types';
 import { ORDER_STATUS, PAYMENT_METHODS, CITIES } from '../types';
 import { Layout, Flash } from '../views/layout';
-import { Grid } from '../views/product-card';
+import { Grid, ProductCard } from '../views/product-card';
 import { Stars } from '../views/account';
 import { getCategories, PRODUCT_SELECT, fmt, imgUrl, orderCode, timeAgo, notify } from '../lib/db';
 import type { ProductRow } from '../lib/db';
@@ -55,6 +55,13 @@ store.get('/', async (c) => {
   const recent = await recentlyViewed(c);
   const s = await loadSettings(db);
   const seaSaving = banner.results.find(p => p.price_sea_lyd && p.price_sea_lyd < p.price_lyd);
+  // طوابق الأقسام: ستة أقسام يظهر لكل منها ثمانية منتجات في شريط أفقي، فالكتالوج الكبير يُتصفَّح لا يُبحث فيه فقط
+  const floorCats = tiles.results.filter((x: any) => x.img).slice(0, 6);
+  const floors = await Promise.all(floorCats.map(async (ct: any) => ({
+    cat: ct,
+    items: (await db.prepare(`SELECT ${PRODUCT_SELECT} FROM products p LEFT JOIN categories c ON c.id=p.category_id
+        WHERE ${PUB} AND p.category_id=? ORDER BY (p.sales*8+p.views) DESC, p.id DESC LIMIT 8`).bind(ct.id).all<ProductRow>()).results,
+  })));
   return c.html(
     <Layout {...b}>
       {/* بانر ترويجي عريض: عنوان + منتجات بأسعارها */}
@@ -125,6 +132,14 @@ store.get('/', async (c) => {
       <div class="feed-h"><h2>اختيارات لك</h2></div>
       <Grid ship={b.ship} items={feed.results} favs={f} />
       <a class="more-btn" href="/trending">عرض المزيد</a>
+
+      {/* طوابق الأقسام */}
+      {floors.filter(fl => fl.items.length >= 4).map(fl => (
+        <section class="floor">
+          <div class="feed-h"><h2>{fl.cat.icon} {fl.cat.name_ar}</h2><a class="all" href={`/c/${fl.cat.slug}`}>عرض القسم ›</a></div>
+          <div class="floor-row">{fl.items.map(p => <ProductCard p={p} fav={f.has(p.id)} ship={b.ship} />)}</div>
+        </section>
+      ))}
 
       {recent.length > 0 && <><div class="feed-h"><h2>شاهدتِ مؤخرًا</h2></div><Grid ship={b.ship} items={recent} favs={f} /></>}
 

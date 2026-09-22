@@ -741,3 +741,11 @@ body{background:#fff}
 .pship .t b{background:#0b8a4b;color:#fff;font-size:11px;padding:1px 6px;margin-inline-start:5px}
 .pship .d{display:block;font-size:12px;color:var(--mut)}
 @media(max-width:560px){.pship{grid-template-columns:1fr}}
+
+/* طوابق الأقسام على الرئيسية: شريط أفقي يمرَّر باللمس */
+.floor{margin:26px 0}
+.floor .feed-h{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.floor .feed-h .all{font-size:13px;font-weight:700;color:var(--brand);white-space:nowrap}
+.floor-row{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(190px,1fr);gap:10px;overflow-x:auto;scroll-snap-type:x proximity;padding-bottom:6px;scrollbar-width:thin}
+.floor-row > .card{scroll-snap-align:start}
+@media(max-width:560px){.floor-row{grid-auto-columns:minmax(150px,70%)}}
