@@ -87,7 +87,7 @@ export class Translator {
 }
 
 // إعادة ترجمة ما بقي صينيًا أو ما تُرجم ترجمة رديئة (تكرار) — تُستخدم من الأدمن ومن /api/source/translate
-export async function retranslatePending(db: D1Database, ai: any, limit = 40): Promise<{ products: number; variants: number }> {
+export async function retranslatePending(db: D1Database, ai: any, limit = 40): Promise<{ products: number; variants: number; remaining: number }> {
   const tr = new Translator(db, ai, limit + 60);
   const { results } = await db.prepare("SELECT id,title_ar,title_src,supplier_name FROM products WHERE title_ar GLOB '*[一-龥]*' OR title_src GLOB '*[一-龥]*' OR supplier_name GLOB '*[一-龥]*' ORDER BY sales DESC,id DESC LIMIT 400").all<any>();
   // العناوين الصينية أو الرديئة أولًا، ثم ما تبقى (موردون)
@@ -104,5 +104,7 @@ export async function retranslatePending(db: D1Database, ai: any, limit = 40): P
   }
   const vs = await db.prepare("SELECT id,color,size FROM variants WHERE color GLOB '*[一-龥]*' OR size GLOB '*[一-龥]*' LIMIT 300").all<any>();
   for (const v of vs.results) { const cc = await tr.t(v.color, 'attr'); const sz = await tr.t(v.size, 'attr'); if (cc !== v.color || sz !== v.size) { await db.prepare('UPDATE variants SET color=?,size=? WHERE id=?').bind(cc, sz, v.id).run(); nv++; } }
-  return { products: n, variants: nv };
+  // كم بقي عليه نص صيني — ليعرف المُشغِّل متى يتوقف
+  const left = await db.prepare("SELECT COUNT(*) n FROM products WHERE title_ar GLOB '*[一-龥]*'").first<{ n: number }>();
+  return { products: n, variants: nv, remaining: left?.n ?? 0 };
 }
