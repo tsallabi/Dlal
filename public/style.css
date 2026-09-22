@@ -27,8 +27,12 @@ button,input,select,textarea{font:inherit}
 .hdr-strip .sep{width:1px;height:14px;background:var(--line)}
 
 .hdr-main{display:flex;align-items:center;gap:24px;height:72px}
-.logo{font-size:34px;font-weight:900;color:var(--ink);letter-spacing:4px;line-height:1;flex:none}
+/* الشعار: الاسم العربي ومعه اللاتيني بالحروف المتباعدة */
+.logo{display:flex;flex-direction:column;align-items:center;gap:1px;color:var(--ink);line-height:1;flex:none;padding:2px 0}
+.logo b{font-size:32px;font-weight:900;letter-spacing:2px;display:block}
+.logo i{font-style:normal;font-size:11px;font-weight:700;letter-spacing:6.5px;text-indent:6.5px;opacity:.72;display:block}
 .logo:hover{color:var(--brand)}
+@media(max-width:560px){.logo b{font-size:25px}.logo i{font-size:9.5px;letter-spacing:5px;text-indent:5px}}
 .search{flex:1;display:flex;max-width:640px;border:2px solid var(--ink);background:#fff;height:44px}
 .search input{flex:1;border:0;padding:0 14px;outline:0;background:transparent;font-size:14.5px;min-width:0}
 .search button{border:0;background:var(--ink);color:#fff;width:56px;display:grid;place-items:center;cursor:pointer;flex:none}

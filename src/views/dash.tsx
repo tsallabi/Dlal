@@ -24,7 +24,7 @@ export const AdminShell: FC<{ user: User; active: string; title: string; childre
         <link rel="stylesheet" href="/style.css" /><link rel="icon" href="/favicon.svg" />
       </head>
       <body class="admin-body">
-        <header class="hdr"><div class="hdr-top wrap"><a href="/" class="logo">تالين</a><span class="pill">لوحة الإدارة</span>
+        <header class="hdr"><div class="hdr-top wrap"><a href="/" class="logo"><b>تالين</b><i>TALIN</i></a><span class="pill">لوحة الإدارة</span>
           <nav class="hdr-links"><a href="/" target="_blank">المتجر ↗</a><a href="/partner" target="_blank">لوحة الشحن ↗</a><span class="me">{user.name} <small>· {STAFF_ROLES[user.staff_role ?? 'admin']?.ar}</small></span><a href="/logout">خروج</a></nav></div></header>
         <div class="dash wrap">
           <aside class="side">
@@ -46,7 +46,7 @@ export const PartnerShell: FC<{ user: User; partner: { name: string }; active: s
       <link rel="stylesheet" href="/style.css" /><link rel="icon" href="/favicon.svg" />
     </head>
     <body class="admin-body">
-      <header class="hdr"><div class="hdr-top wrap"><a href="/partner" class="logo">تالين</a><span class="pill" style="background:#0b6b66">لوحة الشحن — {partner.name}</span>
+      <header class="hdr"><div class="hdr-top wrap"><a href="/partner" class="logo"><b>تالين</b><i>TALIN</i></a><span class="pill" style="background:#0b6b66">لوحة الشحن — {partner.name}</span>
         <nav class="hdr-links"><span>{user.name}</span><a href="/logout">خروج</a></nav></div></header>
       <div class="dash wrap">
         <aside class="side">

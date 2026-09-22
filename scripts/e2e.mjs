@@ -427,6 +427,9 @@ expect(asc.every((v, i) => i === 0 || v >= asc[i - 1]), 'الترتيب بالس
 await page.goto(BASE + '/logout'); await page.goto(BASE + '/');
 expect(await page.locator('.hdr-strip a', { hasText: 'معلومات الشحن' }).isVisible(), 'الشريط العلوي يعرض معلومات الشحن');
 expect(await page.locator('.hdr-main .logo').isVisible() && await page.locator('.hdr-main .search input').isVisible(), 'الشعار وحقل البحث في الشريط الرئيسي');
+expect(await page.locator('.hdr-main .logo b').textContent() === 'تالين', 'الشعار يحمل الاسم العربي «تالين»');
+expect(await page.locator('.hdr-main .logo i').textContent() === 'TALIN', 'وتحته الاسم اللاتيني «TALIN»');
+expect((await page.title()).includes('تالين TALIN'), 'عنوان الصفحة يحمل الاسمين');
 expect((await page.locator('.hdr-icons > a').count()) >= 3, 'أيقونات الحساب والسلة والمفضلة في الرأس');
 expect(await page.locator('#allCats').isVisible(), 'زر «كل الأقسام» موجود');
 expect(await page.locator('#megaMenu').isHidden(), 'القائمة الكبيرة مغلقة في البداية');
