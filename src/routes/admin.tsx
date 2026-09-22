@@ -312,8 +312,10 @@ export async function importProducts(db: D1Database, arr: any[], categoryId: num
     }
     const slug = `${offerId}-${Math.random().toString(36).slice(2, 6)}`;
     const ins = await db.prepare(
+      // last_checked_at يبقى NULL: المنتج وصل من نتيجة بحث ولم يُفحص تفصيليًا قط، وادّعاء أنه فُحص
+      // كان يخفيه عن دورة الإثراء ويجعل «آخر فحص» في اللوحة رقمًا كاذبًا
       `INSERT OR IGNORE INTO products(source,source_offer_id,source_url,slug,title_ar,title_src,description_ar,category_id,source_price_cny,price_lyd,compare_price_lyd,price_sea_lyd,weight_g,volume_cm3,min_qty,in_stock,status,supplier_name,last_checked_at,sales,rating,home_ok,fingerprint)
-       VALUES('1688',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'),?,?,?,?)`,
+       VALUES('1688',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL,?,?,?,?)`,
     ).bind(offerId, it.url ?? `https://detail.1688.com/offer/${offerId}.html`, slug, titleAr, it.title ?? null, it.descriptionAr ?? null,
       targetCat, price, pr.total_lyd, Math.random() < 0.4 ? Math.ceil(pr.total_lyd * 1.25 / 5) * 5 : null, prSea.total_lyd, it.weightG ?? null, it.volumeCm3 ?? null,
       Math.max(1, parseInt(it.minQty ?? 1) || 1), it.inStock === false ? 0 : 1, hasCJK(titleAr) ? 'draft' : 'active', supplierAr, parseInt(it.sales ?? 0) || 0, 0, homeOk, fp || null).run();

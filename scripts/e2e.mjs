@@ -688,6 +688,10 @@ await new Promise(r => walletSrv.listen(8801, r));
 await login(page, '0910000000', 'admin123');
 await page.goto(BASE + '/admin/source');
 const savedBase = await page.locator('input[name=src_base_url]').inputValue();
+// المزوّد لا يُنشأ بلا مفتاح (getProvider يعيد null) فلا يُسجَّل أي خطأ ويبقى التحذير قديمًا:
+// الفحص يضبط مفتاحًا وهميًا بنفسه بدل الاتكال على إعداد قد يتركه فحص آخر فارغًا
+await page.selectOption('select[name=src_provider]', 'tmapi');
+await page.fill('input[name=src_key]', 'e2e-wallet-key');
 await page.fill('input[name=src_base_url]', 'http://127.0.0.1:8801');
 await page.fill('input[name=test_id]', '999888777666');
 await page.click('button:has-text("اختبار: جلب منتج")'); await page.waitForLoadState('networkidle');
@@ -700,6 +704,52 @@ await shot(page, 'admin-wallet-empty');
 await page.fill('input[name=src_base_url]', savedBase);
 await page.locator('form[action="/admin/source"] button:has-text("حفظ")').click(); await page.waitForLoadState('networkidle');
 walletSrv.close();
+
+// ---------- المنتج المحذوف من 1688 لا يُسأل عنه مرتين: هنا كان يضيع رصيد المزوّد ----------
+// مقيس على الموقع الحي: ٣٤٥٩ استدعاء تفصيل لـ ٦١٨ منتجًا فقط، منتج واحد ١٩٠ مرة، و١٣ ألف منتج
+// لم يُسأل عنه قط. السبب سببان: نص خطأ «Item not found» لم يطابق الشرط، واستعلام الإثراء بلا ذاكرة.
+const asked = [];
+const goneSrv = createServer((q, res) => {
+  const id = (q.url.match(/item_id=(\d+)/) || [])[1];
+  if (id) asked.push(id);
+  res.writeHead(200, { 'content-type': 'application/json' });
+  res.end('{"code":404,"msg":"Item not found"}');
+});
+await new Promise(r => goneSrv.listen(8802, r));
+await login(page, '0910000000', 'admin123');
+await page.goto(BASE + '/admin/source');
+const realBase = await page.locator('input[name=src_base_url]').inputValue();
+const realProv = await page.locator('select[name=src_provider]').inputValue();
+const realKey = await page.locator('input[name=src_key]').inputValue();
+// الاختبار يضبط كل ما يحتاجه صراحةً ولا يتّكل على إعداد تركه فحص سابق:
+// السقف الشهري تحديدًا يتركه فحص لاحق على ١ فيوقف الإثراء قبل أن يبدأ
+await page.selectOption('select[name=src_provider]', 'tmapi');
+await page.fill('input[name=src_base_url]', 'http://127.0.0.1:8802');
+await page.fill('input[name=src_key]', 'e2e-fake-key');
+await page.fill('input[name=src_month_limit]', '0');
+await page.locator('form[action="/admin/source"] button:has-text("حفظ")').click(); await page.waitForLoadState('networkidle');
+expect(!(await page.locator('button:has-text("أثرِ ١٠ منتجات الآن")').isDisabled()), 'زر الإثراء يعمل حين يكون المزوّد مضبوطًا');
+await page.click('button:has-text("أثرِ ١٠ منتجات الآن")'); await page.waitForLoadState('networkidle');
+const firstRound = [...asked];
+expect(firstRound.length > 0, `الإثراء سأل المزوّد عن ${firstRound.length} منتجًا`);
+// كل ما ردّ عليه المزوّد «غير موجود» يخرج من المتجر ومن دورة الإثراء
+await page.goto(BASE + '/admin/products?q=' + firstRound[0]);
+const goneStatus = (await page.locator(`tr:has-text("${firstRound[0]}") .status`).first().textContent()).trim();
+expect(goneStatus === 'unavailable', `المنتج المحذوف من 1688 يُعلَّم غير متوفر لا يبقى نشطًا (${goneStatus})`);
+await shot(page, 'admin-gone-product');
+// الضغطة الثانية يجب أن تنتقل إلى منتجات أخرى، لا أن تعيد سؤال نفس المنتجات وتدفع ثمنها مرتين
+asked.length = 0;
+await page.goto(BASE + '/admin/source');
+await page.click('button:has-text("أثرِ ١٠ منتجات الآن")'); await page.waitForLoadState('networkidle');
+const repeats = asked.filter(id => firstRound.includes(id));
+expect(repeats.length === 0, `الدفعة الثانية لا تعيد سؤال المزوّد عن نفس المنتجات (تكرار: ${repeats.length})`);
+await page.goto(BASE + '/admin/source');
+await page.selectOption('select[name=src_provider]', realProv || 'none');
+await page.fill('input[name=src_base_url]', realBase);
+await page.fill('input[name=src_key]', realKey);
+await page.fill('input[name=src_month_limit]', '0');
+await page.locator('form[action="/admin/source"] button:has-text("حفظ")').click(); await page.waitForLoadState('networkidle');
+goneSrv.close();
 
 // ---------- لوحة صحة الكتالوج: الأرقام التي يقودها المالك بنفسه ----------
 await login(page, '0910000000', 'admin123');

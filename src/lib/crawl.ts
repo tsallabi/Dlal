@@ -27,7 +27,7 @@ export async function runServerJobs(env: { DB: D1Database; AI?: any }, opts: { l
   const out: any[] = [];
   for (const job of jobs) {
     const started = new Date().toISOString();
-    const rep = { status: 'ok', pages: 0, found: 0, imported: 0, updated: 0, enriched: 0, checked: 0, dupes: 0, note: '' };
+    const rep = { status: 'ok', pages: 0, found: 0, imported: 0, updated: 0, enriched: 0, checked: 0, dupes: 0, gone: 0, note: '' };
     try {
       if (job.type === 'stock') {
         // الأقدم فحصًا أولًا؛ فقط منتجات لها معرف 1688 حقيقي (رقمي)
@@ -36,17 +36,32 @@ export async function runServerJobs(env: { DB: D1Database; AI?: any }, opts: { l
         const dueSql = "SELECT source_offer_id,source_price_cny,category_id FROM products WHERE status='active' AND source='1688' AND source_offer_id GLOB '[0-9]*' AND length(source_offer_id)>=9 AND (last_checked_at IS NULL OR last_checked_at < datetime('now', '-' || ? || ' hours')) ORDER BY last_checked_at ASC, (sales*10+views) DESC LIMIT ?";
         // المسودات أولًا: صفحة المنتج تحمل عنوانًا إنجليزيًا يُنتج ترجمة عربية أفضل بكثير من الصيني المحشو،
         // فإثراؤها يملأ الصور والمقاسات والوزن ويُخرجها من الحجز إلى المتجر في خطوة واحدة.
-        const thinSql = "SELECT p.source_offer_id,p.source_price_cny,p.category_id FROM products p WHERE p.status IN ('active','draft') AND p.source='1688' AND p.source_offer_id GLOB '[0-9]*' AND length(p.source_offer_id)>=9 AND ((SELECT COUNT(*) FROM product_images i WHERE i.product_id=p.id) <= 1 OR (SELECT COUNT(*) FROM variants v WHERE v.product_id=p.id) = 0 OR p.weight_g IS NULL) ORDER BY (p.status='draft') DESC, (p.sales*10+p.views) DESC, p.id LIMIT ?";
+        // كان هذا الاستعلام بلا ذاكرة: لا يستثني ما فُحص للتو ولا يرتّب به، فكل دفعة إثراء تعيد اختيار
+        // نفس الصفوف الأولى (كلها sales=0 وviews=0 فالترتيب صار بالـ id وحده). النتيجة المقيسة على
+        // الموقع الحي: ٣٤٥٩ استدعاء تفصيل لـ ٦١٨ منتجًا فقط — منتج واحد استُدعي ١٩٠ مرة — بينما ١٣ ألف
+        // منتج لم يُسأل عنه قط. الآن: ما لم يُفحص قط أولًا، ثم الأقدم فحصًا، ولا نعيد سؤال منتج قبل مهلة.
+        const thinSql = "SELECT p.source_offer_id,p.source_price_cny,p.category_id FROM products p WHERE p.status IN ('active','draft') AND p.source='1688' AND p.source_offer_id GLOB '[0-9]*' AND length(p.source_offer_id)>=9 AND ((SELECT COUNT(*) FROM product_images i WHERE i.product_id=p.id) <= 1 OR (SELECT COUNT(*) FROM variants v WHERE v.product_id=p.id) = 0 OR p.weight_g IS NULL) AND (p.last_checked_at IS NULL OR p.last_checked_at < datetime('now', '-' || ? || ' hours')) ORDER BY (p.status='draft') DESC, (p.last_checked_at IS NULL) DESC, p.last_checked_at ASC, (p.sales*10+p.views) DESC, p.id LIMIT ?";
+        // مهلة إعادة السؤال عن منتج سبق فحصه: المورّد لا يعطي وزنًا لبعض المنتجات أبدًا، فسؤاله كل ساعة
+        // عن نفس القطعة يحرق الرصيد بلا فائدة. ثلاثة أيام على الأقل.
+        const coolH = Math.max(parseInt(s.src_enrich_cooldown_h ?? '') || 0, 72);
         const batch = opts.maxItems ? maxItems : Math.min(job.max_new || 100, maxItems);
         const { results } = opts.enrichOnly
-          ? await db.prepare(thinSql).bind(batch).all<any>()
+          ? await db.prepare(thinSql).bind(coolH, batch).all<any>()
           : await db.prepare(dueSql).bind(job.interval_hours || 12, batch).all<any>();
         if (!results.length) { rep.note += opts.enrichOnly ? ' كل المنتجات مُثراة بالفعل.' : ' لا منتجات مستحقة للفحص الآن.'; }
         for (const p of results) {
           const r = await prov.item(p.source_offer_id); await logRaw(db, 'in', r.url, r.status, r.raw, r.ok);
           // رصيد المزوّد نفد أو تجاوزنا حدّ سرعته: إكمال الدفعة يحرق استدعاءات في أخطاء، فنتوقف برسالة واضحة
           if (!r.ok && FATAL.test(r.error ?? '')) { rep.status = 'error'; rep.note += ` توقفنا: ${r.error}`; break; }
-          if (!r.ok) { rep.note += ` ${p.source_offer_id}: ${r.error}`; if (/NotFound/i.test(r.error ?? '')) await db.prepare("UPDATE products SET in_stock=0,last_checked_at=datetime('now') WHERE source='1688' AND source_offer_id=?").bind(p.source_offer_id).run(); continue; }
+          // «Item not found» من TMAPI و«NotFound» من OTAPI: الشرط القديم بلا مسافة لم يطابق TMAPI أبدًا،
+          // فبقي المنتج المحذوف من 1688 نشطًا وناقصًا، فيُعاد سؤال المزوّد عنه في كل دفعة ويُدفع ثمنه كل مرة
+          // (١١٤١ استدعاءً ضائعًا مقيسًا على الموقع الحي). نعلّمه غير متوفر فيخرج من دورة الإثراء نهائيًا.
+          if (!r.ok) {
+            rep.note += ` ${p.source_offer_id}: ${r.error}`;
+            if (/not\s*found/i.test(r.error ?? '')) { await db.prepare("UPDATE products SET in_stock=0,status='unavailable',last_checked_at=datetime('now') WHERE source='1688' AND source_offer_id=?").bind(p.source_offer_id).run(); rep.gone = (rep.gone ?? 0) + 1; }
+            else await db.prepare("UPDATE products SET last_checked_at=datetime('now') WHERE source='1688' AND source_offer_id=?").bind(p.source_offer_id).run();
+            continue;
+          }
           const it = r.data!; const big = it.priceCny && Math.abs(it.priceCny - p.source_price_cny) / p.source_price_cny > 0.15;
           // السعر يُعاد حسابه في importProducts أدناه، فلا داعي لإخفاء المنتج؛ نسجّل القفزة فقط
           if (big) rep.note += ` ${p.source_offer_id}: السعر ${p.source_price_cny}→${it.priceCny}.`;
