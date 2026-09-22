@@ -32,6 +32,12 @@ export const goodArabic = (t: string | null | undefined) => !!t && /[\u0600-\u06
 // عنوان منتج مقبول: عربي سليم وخالٍ من حشو 1688 المترجم حرفيًا
 const JUNK = /عبر الحدود|تجارة (أجنبية|خارجية)|الأسهم الحقيقية|أمازون|علي إكسبريس|بالجملة|مصدر البضائع|موسم (الخريف|الربيع|الصيف|الشتاء) الجديد|^\(?\s*20\d\d/;
 export const goodTitle = (t: string | null | undefined) => goodArabic(t) && !JUNK.test(t!);
+// عنوان عربي فيه حشو 1688: نُنظّفه بدل رفضه — رفضه كان يُبقي العنوان صينيًا وهو أسوأ بكثير
+const JUNK_G = /عبر الحدود|تجارة (أجنبية|خارجية)|الأسهم الحقيقية|أمازون|علي إكسبريس|بالجملة|بيع بالجملة|مصدر البضائع|موسم (الخريف|الربيع|الصيف|الشتاء) الجديد|20\d\d/g;
+export function cleanTitle(t: string): string {
+  const out = t.replace(JUNK_G, ' ').replace(/[،,\-—_/|]{1,}\s*(?=[،,\-—_/|]|$)/g, ' ').replace(/\s{2,}/g, ' ').replace(/^[\s،,\-—_/|()]+|[\s،,\-—_/|()]+$/g, '').trim();
+  return out;
+}
 
 async function m2m(ai: any, text: string, source: 'chinese' | 'english'): Promise<string | null> {
   try { const r: any = await ai.run('@cf/meta/m2m100-1.2b', { text: text.slice(0, 300), source_lang: source, target_lang: 'arabic' }); const t = (r?.translated_text ?? '').trim(); return goodArabic(t) ? t.slice(0, 200) : null; } catch { return null; }
@@ -43,7 +49,8 @@ async function llm(ai: any, sys: string, user: string, models: string[]): Promis
   for (const model of models) {
     try {
       const r: any = await ai.run(model, { messages: [{ role: 'system', content: sys }, { role: 'user', content: user }], max_tokens: 120, temperature: 0.2 });
-      const t = String(r?.response ?? '').trim().split('\n')[0].replace(/^["'«»“”\s]+|["'«»“”\s.]+$/g, '').trim();
+      const raw = String(r?.response ?? '').trim().split('\n')[0].replace(/^["'«»“”\s]+|["'«»“”\s.]+$/g, '').trim();
+      const t = sys === SYS_TITLE && goodArabic(raw) && !goodTitle(raw) ? cleanTitle(raw) : raw;
       if (goodArabic(t) && (sys !== SYS_TITLE || goodTitle(t))) return t.slice(0, 200);
     } catch {}
   }
@@ -87,24 +94,30 @@ export class Translator {
 }
 
 // إعادة ترجمة ما بقي صينيًا أو ما تُرجم ترجمة رديئة (تكرار) — تُستخدم من الأدمن ومن /api/source/translate
-export async function retranslatePending(db: D1Database, ai: any, limit = 40): Promise<{ products: number; variants: number; remaining: number }> {
+export async function retranslatePending(db: D1Database, ai: any, limit = 40): Promise<{ products: number; variants: number; tried: number; remaining: number; held: number }> {
   const tr = new Translator(db, ai, limit + 60);
-  const { results } = await db.prepare("SELECT id,title_ar,title_src,supplier_name FROM products WHERE title_ar GLOB '*[一-龥]*' OR title_src GLOB '*[一-龥]*' OR supplier_name GLOB '*[一-龥]*' ORDER BY sales DESC,id DESC LIMIT 400").all<any>();
+  // الأقل محاولةً أولًا: عنوان عصيّ على الترجمة لا يبتلع كل دفعة ويمنع بقية الكتالوج
+  const { results } = await db.prepare("SELECT id,title_ar,title_src,supplier_name,tr_tries FROM products WHERE title_ar GLOB '*[一-龥]*' OR title_src GLOB '*[一-龥]*' OR supplier_name GLOB '*[一-龥]*' ORDER BY tr_tries ASC,(status='draft') DESC,sales DESC,id DESC LIMIT 400").all<any>();
   // العناوين الصينية أو الرديئة أولًا، ثم ما تبقى (موردون)
   const needs = (p: any) => hasCJK(p.title_ar) || !goodTitle(p.title_ar);
   results.sort((a, b) => Number(needs(b)) - Number(needs(a)));
-  let n = 0, nv = 0;
+  let n = 0, nv = 0, tried = 0;
   for (const p of results) {
-    if (n >= limit) break;
+    if (tried >= limit) break;
     const src = hasCJK(p.title_src) ? p.title_src : p.title_ar;
     const needTitle = hasCJK(p.title_ar) || !goodTitle(p.title_ar);
     const t = needTitle ? await tr.t(src, 'title') : p.title_ar;
     const sp = await tr.t(p.supplier_name);
-    if ((t && t !== p.title_ar) || (sp && sp !== p.supplier_name)) { await db.prepare('UPDATE products SET title_src=COALESCE(title_src,title_ar),title_ar=?,supplier_name=? WHERE id=?').bind(t ?? p.title_ar, sp ?? p.supplier_name, p.id).run(); n++; }
+    // عنوان صار عربيًا: المنتج المحجوز كمسودة يُنشر الآن (لا يُعرض عنوان صيني للزبونة أبدًا)
+    if ((t && t !== p.title_ar) || (sp && sp !== p.supplier_name)) {
+      const pub = t && !hasCJK(t) ? ",status=CASE WHEN status='draft' THEN 'active' ELSE status END" : '';
+      await db.prepare(`UPDATE products SET title_src=COALESCE(title_src,title_ar),title_ar=?,supplier_name=?${pub},tr_tries=tr_tries+1 WHERE id=?`).bind(t ?? p.title_ar, sp ?? p.supplier_name, p.id).run(); n++;
+    } else { await db.prepare('UPDATE products SET tr_tries=tr_tries+1 WHERE id=?').bind(p.id).run(); }
+    tried++;
   }
   const vs = await db.prepare("SELECT id,color,size FROM variants WHERE color GLOB '*[一-龥]*' OR size GLOB '*[一-龥]*' LIMIT 300").all<any>();
   for (const v of vs.results) { const cc = await tr.t(v.color, 'attr'); const sz = await tr.t(v.size, 'attr'); if (cc !== v.color || sz !== v.size) { await db.prepare('UPDATE variants SET color=?,size=? WHERE id=?').bind(cc, sz, v.id).run(); nv++; } }
   // كم بقي عليه نص صيني — ليعرف المُشغِّل متى يتوقف
-  const left = await db.prepare("SELECT COUNT(*) n FROM products WHERE title_ar GLOB '*[一-龥]*'").first<{ n: number }>();
-  return { products: n, variants: nv, remaining: left?.n ?? 0 };
+  const left = await db.prepare("SELECT COUNT(*) n,SUM(status='draft') d FROM products WHERE title_ar GLOB '*[一-龥]*'").first<{ n: number; d: number }>();
+  return { products: n, variants: nv, tried, remaining: left?.n ?? 0, held: left?.d ?? 0 };
 }

@@ -92,7 +92,8 @@ class Tmapi implements Provider {
       offerId: id, url: `https://detail.1688.com/offer/${id}.html`, title: String(g(it, 'title', 'subject', 'name') ?? ''), titleEn: g(it, 'title_en', 'title_translated'),
       priceCny: price, images: arr(g(it, 'main_imgs', 'images', 'item_imgs', 'pic_urls')).map(fixImg).filter(Boolean).slice(0, 8).concat(g(it, 'img', 'pic_url', 'main_pic') ? [fixImg(g(it, 'img', 'pic_url', 'main_pic'))] : []).filter((u, i, a) => a.indexOf(u) === i),
       sales: num(g(it, 'sale_info.sale_quantity_90days', 'sale_count', 'sale_info.sales', 'sales', 'sold')), minQty: Math.max(1, num(g(it, 'min_order_quantity', 'tiered_price_info.begin_num', 'sku_price_range.begin_num', 'sale_info.min_order', 'moq')) || 1),
-      inStock: g(it, 'is_sold_out') === true ? false : variants.length ? variants.some(v => v.inStock) : num(g(it, 'stock', 'quantity')) !== 0,
+      // نتيجة البحث لا تحمل حقل المخزون أصلًا: غيابه ليس نفادًا (كان يعلّم كل ما يأتي من البحث «نفد» فيختفي من المتجر)
+      inStock: g(it, 'is_sold_out') === true ? false : variants.length ? variants.some(v => v.inStock) : g(it, 'stock', 'quantity') === undefined ? true : num(g(it, 'stock', 'quantity')) > 0,
       supplier: g(it, 'seller_info.shop_name', 'shop_info.shop_name', 'seller_name', 'company_name'),
       // الوزن: skus[].package_info.weight بالكيلوغرام، أو delivery_info.unit_weight
       weightG: Math.round(1000 * (arr(g(it, 'skus')).map((k: any) => num(g(k, 'package_info.weight'))).find((w: number) => w > 0) ?? num(g(it, 'delivery_info.unit_weight')))) || undefined,

@@ -15,7 +15,12 @@ let lastPath = '', lastKey = '';
 const srv = createServer((req, res) => {
   lastPath = req.url; lastKey = req.headers.apikey ?? '';
   res.writeHead(200, { 'content-type': 'application/json' });
-  res.end(req.url.startsWith('/1688/item_detail') ? sample : JSON.stringify({ code: 404, msg: 'not found' }));
+  // نتيجة بحث حقيقية: بلا أي حقل مخزون — كان غيابه يُعلّم المنتج «نفد» فيختفي من المتجر
+  const search = JSON.stringify({ code: 200, msg: 'success', data: { items: [
+    { item_id: '700000000001', title: '夏季新款连衣裙', price: '18.50', img: '//cbu01.alicdn.com/img/ibank/a.jpg' },
+    { item_id: '700000000002', title: '女士外套', price: '42.00', img: '//cbu01.alicdn.com/img/ibank/b.jpg', is_sold_out: true },
+  ] } });
+  res.end(req.url.startsWith('/1688/item_detail') ? sample : req.url.startsWith('/1688/search/items') ? search : JSON.stringify({ code: 404, msg: 'not found' }));
 });
 await new Promise(r => srv.listen(PORT, r));
 
@@ -48,6 +53,18 @@ expect(x.weightG === 120, `الوزن 120 غرامًا من package_info.weight 
 expect(x.minQty === 1, `الحد الأدنى: ${x.minQty}`);
 expect(x.inStock === true, 'المنتج متوفر (is_sold_out=false)');
 expect(!!x.supplier, `المورد: ${x.supplier}`);
+
+// البحث: منتج بلا حقل مخزون يبقى متوفرًا، والمعلَّم is_sold_out وحده هو الذي ينفد
+const rs = await fetch(`${BASE}/api/source/test`, {
+  method: 'POST',
+  headers: { 'content-type': 'application/json', 'x-import-token': TOKEN },
+  body: JSON.stringify({ kw: '连衣裙', provider: 'tmapi', base_url: `http://127.0.0.1:${PORT}`, key: 'ak_live_TEST', lang: 'zh' }),
+});
+const ds = await rs.json();
+const items = ds.data ?? [];
+expect(ds.ok === true && items.length === 2, `البحث أعاد منتجين (${items.length})`);
+expect(items[0]?.inStock === true, 'منتج البحث بلا حقل مخزون يبقى متوفرًا');
+expect(items[1]?.inStock === false, 'منتج مُعلَّم is_sold_out=true يُعلَّم نافدًا');
 
 srv.close();
 console.log(`\nنجح: ${passed} · فشل: ${problems.length}`);

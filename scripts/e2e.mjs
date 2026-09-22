@@ -60,6 +60,14 @@ expect(Math.abs(tilesX2 - tilesX) > 50, `سهم البلاطات يمرّرها 
 await page.setViewportSize({ width: 1280, height: 860 });
 await page.goto(BASE + '/'); await page.waitForLoadState('networkidle');
 expect(await page.locator('.hdr-main .logo u').textContent() === 'بوابة الصين', 'الشعار يحمل «بوابة الصين» تحت الاسمين');
+// لا نص صيني أمام الزبونة في أي صفحة تصفّح
+const SHOPPER_PAGES = ['/', '/c/dresses', '/new', '/sale', '/search?q=%D9%81%D8%B3%D8%AA%D8%A7%D9%86'];
+for (const path of SHOPPER_PAGES) {
+  await page.goto(BASE + path);
+  const cjk = ((await page.locator('body').textContent()).match(/[一-鿿]/g) || []).join('');
+  expect(!cjk, `${path} بلا نص صيني${cjk ? ` (وجدنا «${cjk.slice(0, 20)}»)` : ''}`);
+}
+await page.goto(BASE + '/');
 await shot(page, 'home');
 await page.click('.cats a:has-text("فساتين")'); await page.waitForLoadState('networkidle');
 expect(page.url().includes('/c/dresses'), 'الضغط على قسم فساتين يفتح صفحة القسم');
@@ -642,6 +650,39 @@ expect(await page.locator('#chatBody .ch-msg.staff').count() >= 1, 'رد الف�
 await shot(page, 'chat-staff-reply');
 await page.goto(BASE + '/account/tickets/' + chatCode);
 expect(await has(page, staffReply), 'المحادثة نفسها محفوظة في صندوق الرسائل داخل الحساب');
+
+// ---------- منتج وصل قبل أن تُترجم ترجمته: يُحجز مسودة ولا يراه الزبون ----------
+await login(page, '0910000000', 'admin123');
+await page.goto(BASE + '/admin/import');
+const cnOffer = '68' + String(Date.now()).slice(-10);
+const cnTitle = '跨境外贸女装连衣裙夏季新款';
+const dressOpt = await page.locator('form[action$="/import/json"] select[name=category_id] option').evaluateAll(
+  os => (os.find(o => o.textContent.includes('فساتين')) || {}).value);
+await page.selectOption('form[action$="/import/json"] select[name=category_id]', dressOpt);
+await page.fill('form[action$="/import/json"] textarea[name=json]', JSON.stringify([{
+  offerId: cnOffer, url: `https://detail.1688.com/offer/${cnOffer}.html`, title: cnTitle,
+  priceCny: 42, images: ['https://cbu01.alicdn.com/img/ibank/test.jpg'], minQty: 1, inStock: true,
+}]));
+await page.click('form[action$="/import/json"] button:has-text("استيراد")');
+await page.waitForLoadState('networkidle');
+expect(page.url().includes('imported=1'), 'الأدمن يستورد منتجًا صينيًا من لصق JSON');
+await page.goto(BASE + '/admin/products?status=draft');
+expect(await has(page, cnOffer), 'المنتج غير المترجم يُحجز في حالة مسودة داخل لوحة الأدمن');
+await shot(page, 'admin-untranslated-draft');
+const draftSlug = await page.locator(`tr:has-text("${cnOffer}") a[href^="/p/"]`).first().getAttribute('href').catch(() => null);
+await page.goto(BASE + '/logout');
+for (const path of ['/', '/c/dresses', '/new', '/search?q=%D9%81%D8%B3%D8%AA%D8%A7%D9%86']) {
+  await page.goto(BASE + path);
+  const cjk = ((await page.locator('body').textContent()).match(/[一-鿿]/g) || []).join('');
+  expect(!cjk, `${path} يبقى بلا نص صيني بعد الاستيراد${cjk ? ` («${cjk.slice(0, 20)}»)` : ''}`);
+}
+if (draftSlug) {
+  const rd = await page.goto(BASE + draftSlug);
+  expect(rd.status() === 404, 'صفحة المنتج غير المترجم لا تُفتح للزبونة');
+} else {
+  expect(true, 'المنتج غير المترجم بلا رابط عام في المتجر');
+}
+await shot(page, 'home-no-chinese');
 
 // ---------- جوال ----------
 const m = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, locale: 'ar' });

@@ -292,7 +292,7 @@ export async function importProducts(db: D1Database, arr: any[], categoryId: num
           .bind(ex.id, v.skuId ?? null, v.color ?? null, v.size ?? null, v.priceCny ? Math.round((v.priceCny - price) * parseFloat(s.fx_cny_lyd) * 1.4 * 2) / 2 : 0, v.inStock === false ? 0 : 1, v.image ?? null)));
       }
       const upd: string[] = []; const binds: any[] = [];
-      if ((hasCJK(cur?.title_ar) || !goodTitle(cur?.title_ar)) && !hasCJK(titleAr) && titleAr !== cur?.title_ar && (goodTitle(titleAr) || hasCJK(cur?.title_ar))) { upd.push('title_ar=?'); binds.push(titleAr.slice(0, 200)); }
+      if ((hasCJK(cur?.title_ar) || !goodTitle(cur?.title_ar)) && !hasCJK(titleAr) && titleAr !== cur?.title_ar && (goodTitle(titleAr) || hasCJK(cur?.title_ar))) { upd.push('title_ar=?'); binds.push(titleAr.slice(0, 200)); upd.push("status=CASE WHEN status='draft' THEN 'active' ELSE status END"); }
       if (it.minQty && Number(it.minQty) > 1 && (cur?.min_qty ?? 1) === 1) { upd.push('min_qty=?'); binds.push(Number(it.minQty)); }
       if (it.weightG && Number(it.weightG) > 0 && !ex.weight_g) { upd.push('weight_g=?'); binds.push(Math.round(Number(it.weightG))); }
       if (it.volumeCm3 && Number(it.volumeCm3) > 0 && !ex.volume_cm3) { upd.push('volume_cm3=?'); binds.push(Math.round(Number(it.volumeCm3))); }
@@ -313,10 +313,10 @@ export async function importProducts(db: D1Database, arr: any[], categoryId: num
     const slug = `${offerId}-${Math.random().toString(36).slice(2, 6)}`;
     const ins = await db.prepare(
       `INSERT OR IGNORE INTO products(source,source_offer_id,source_url,slug,title_ar,title_src,description_ar,category_id,source_price_cny,price_lyd,compare_price_lyd,price_sea_lyd,weight_g,volume_cm3,min_qty,in_stock,status,supplier_name,last_checked_at,sales,rating,home_ok,fingerprint)
-       VALUES('1688',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'active',?,datetime('now'),?,?,?,?)`,
+       VALUES('1688',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'),?,?,?,?)`,
     ).bind(offerId, it.url ?? `https://detail.1688.com/offer/${offerId}.html`, slug, titleAr, it.title ?? null, it.descriptionAr ?? null,
       targetCat, price, pr.total_lyd, Math.random() < 0.4 ? Math.ceil(pr.total_lyd * 1.25 / 5) * 5 : null, prSea.total_lyd, it.weightG ?? null, it.volumeCm3 ?? null,
-      Math.max(1, parseInt(it.minQty ?? 1) || 1), it.inStock === false ? 0 : 1, supplierAr, parseInt(it.sales ?? 0) || 0, 4.5 + Math.random() * 0.5, homeOk, fp || null).run();
+      Math.max(1, parseInt(it.minQty ?? 1) || 1), it.inStock === false ? 0 : 1, hasCJK(titleAr) ? 'draft' : 'active', supplierAr, parseInt(it.sales ?? 0) || 0, 4.5 + Math.random() * 0.5, homeOk, fp || null).run();
     const pid = ins.meta.last_row_id as number;
     if (!pid || !ins.meta.changes) { skipped++; continue; }   // تجاهل صفّ لم يُدرج (تعارض مع استيراد متزامن)
     const stmts: D1PreparedStatement[] = [];
