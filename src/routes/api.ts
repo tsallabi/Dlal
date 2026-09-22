@@ -8,7 +8,7 @@ import { fingerprint, sameProduct } from '../lib/dedupe';
 import { computePrice, loadSettings } from '../lib/pricing';
 import { getProvider } from '../lib/source-providers';
 import { runServerJobs } from '../lib/crawl';
-import { retranslatePending, diagnoseTitle, hasCJK, dropCJKWords, dictTranslate } from '../lib/translate';
+import { retranslatePending, releaseHeldDrafts, diagnoseTitle, hasCJK, dropCJKWords, dictTranslate } from '../lib/translate';
 
 const api = new Hono<Env>();
 
@@ -243,8 +243,9 @@ api.post('/source/models', async (c) => {
 
 api.post('/source/translate', async (c) => {
   if (!tokenOk(c)) return c.json({ error: 'رمز غير صحيح' }, 401);
-  if (!c.env.AI) return c.json({ error: 'لا يوجد Workers AI' }, 400);
   const b = await c.req.json<{ limit?: number }>().catch(() => ({} as any));
+  // إطلاق المسودات المحجوزة لا يحتاج نموذجًا: يعمل حتى حيث لا يوجد Workers AI (النسخة المحلية)
+  if (!c.env.AI) return c.json({ error: 'لا يوجد Workers AI', released: await releaseHeldDrafts(c.env.DB) }, 200);
   return c.json(await retranslatePending(c.env.DB, c.env.AI, Math.min(60, b.limit ?? 30)));
 });
 // تشخيص صفحة 1688 مفتوحة في متصفح المستخدم: تُرسل الإضافة ما وجدته فعلًا لنضبط القارئ على البنية الحقيقية

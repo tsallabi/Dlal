@@ -129,8 +129,19 @@ export class Translator {
   }
 }
 
+// مسودة حجزها النظام لأن عنوانها كان صينيًا، ثم صار عنوانها عربيًا بطريق آخر (تحرير، إثراء، استيراد ثانٍ)،
+// كانت تبقى محجوزة إلى الأبد: النشر كان معلّقًا على أن تُغيّر دفعةُ الترجمة شيئًا في نفس التمريرة.
+// هذا الفحص ينشرها بلا أي استدعاء نموذج، ويقتصر على ما حجزه النظام (title_src موجود = جاء من مستورد)
+// فلا يمسّ منتجًا سوّاه الأدمن مسودةً بيده — وإخفاء المنتج عمدًا حالته 'hidden' لا 'draft'.
+export async function releaseHeldDrafts(db: D1Database): Promise<number> {
+  const r = await db.prepare(`UPDATE products SET status='active'
+     WHERE status='draft' AND title_src IS NOT NULL
+       AND title_ar NOT GLOB '*[一-龥]*' AND title_ar GLOB '*[ء-ي]*'`).run();
+  return r.meta?.changes ?? 0;
+}
+
 // إعادة ترجمة ما بقي صينيًا أو ما تُرجم ترجمة رديئة (تكرار) — تُستخدم من الأدمن ومن /api/source/translate
-export async function retranslatePending(db: D1Database, ai: any, limit = 40): Promise<{ products: number; variants: number; tried: number; remaining: number; held: number; variantsLeft: number }> {
+export async function retranslatePending(db: D1Database, ai: any, limit = 40): Promise<{ products: number; variants: number; tried: number; remaining: number; held: number; variantsLeft: number; released: number }> {
   const tr = new Translator(db, ai, limit + 60);
   // الأقل محاولةً أولًا: عنوان عصيّ على الترجمة لا يبتلع كل دفعة ويمنع بقية الكتالوج
   const { results } = await db.prepare(`SELECT id,title_ar,title_src,supplier_name,tr_tries FROM products
@@ -162,5 +173,6 @@ export async function retranslatePending(db: D1Database, ai: any, limit = 40): P
   // كم بقي عليه نص صيني — ليعرف المُشغِّل متى يتوقف
   const left = await db.prepare("SELECT COUNT(*) n,SUM(status='draft') d FROM products WHERE title_ar GLOB '*[一-龥]*'").first<{ n: number; d: number }>();
   const vLeft = await db.prepare("SELECT COUNT(*) n FROM variants WHERE color GLOB '*[一-龥]*' OR size GLOB '*[一-龥]*'").first<{ n: number }>();
-  return { products: n, variants: nv, tried, remaining: left?.n ?? 0, held: left?.d ?? 0, variantsLeft: vLeft?.n ?? 0 };
+  const released = await releaseHeldDrafts(db);
+  return { products: n, variants: nv, tried, remaining: left?.n ?? 0, held: left?.d ?? 0, variantsLeft: vLeft?.n ?? 0, released };
 }

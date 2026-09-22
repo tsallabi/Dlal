@@ -12,7 +12,7 @@ import { loadSettings, computePrice } from '../lib/pricing';
 import { requireRole } from '../lib/auth';
 import { requirePerm, logActivity } from '../lib/perm';
 import { setOrderStatus, markOrderPaid } from '../lib/orders';
-import { Translator, hasCJK, goodTitle, retranslatePending } from '../lib/translate';
+import { Translator, hasCJK, goodTitle, retranslatePending, releaseHeldDrafts } from '../lib/translate';
 
 const admin = new Hono<Env>();
 admin.use('*', requireRole('admin'));
@@ -352,7 +352,7 @@ admin.get('/products', async (c) => {
 });
 
 admin.post('/products/translate', async (c) => {
-  if (!c.env.AI) return c.redirect('/admin/products?noai=1');
+  if (!c.env.AI) { const rel = await releaseHeldDrafts(c.env.DB); return c.redirect(`/admin/products?noai=1&translated=${rel}`); }
   const r = await retranslatePending(c.env.DB, c.env.AI, 40);
   await logActivity(c.env.DB, c.get('user')!.id, 'products.translate', String(r.products + r.variants));
   return c.redirect(`/admin/products?translated=${r.products + r.variants}`);

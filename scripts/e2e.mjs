@@ -844,6 +844,32 @@ if (draftSlug) {
 }
 await shot(page, 'home-no-chinese');
 
+// ---------- مسودة صار عنوانها عربيًا بطريق آخر: يجب أن تُنشر لا أن تبقى محجوزة للأبد ----------
+// (على الموقع الحي بقي منتج جاهز تمامًا — عنوان عربي، ٦ صور، وزن، سعران — محجوزًا مسودةً
+//  لأن النشر كان معلّقًا على أن تُغيّر دفعة الترجمة شيئًا في نفس التمريرة.)
+await login(page, '0910000000', 'admin123');
+await page.goto(BASE + '/admin/products?status=draft&q=' + cnOffer);
+const heldHref = await page.locator(`tr:has-text("${cnOffer}") a[href^="/admin/products/"]`).first().getAttribute('href');
+await page.goto(BASE + heldHref);
+// ١) نعطيها عنوانًا عربيًا من لوحة الأدمن: نموذج التحرير يحفظ الحالة كما هي، فتبقى مسودةً
+//    وإن صار عنوانها سليمًا — وهذه هي الحالة العالقة بالضبط
+await page.fill('input[name=title_ar]', `حامل اختبار عربي ${cnOffer}`);
+await page.click('form:has(input[name=title_ar]) button:has-text("حفظ")');
+await page.waitForLoadState('networkidle');
+expect(await page.locator('select[name=status]').inputValue() === 'draft', 'المسودة تبقى محجوزة رغم أن عنوانها صار عربيًا');
+await shot(page, 'admin-stuck-draft');
+// ٢) زر الترجمة يُطلقها بلا أي استدعاء نموذج (النسخة المحلية بلا Workers AI)
+await page.goto(BASE + '/admin/products');
+await page.click('button:has-text("ترجمة العناوين الصينية")');
+await page.waitForLoadState('networkidle');
+await page.goto(BASE + heldHref);
+expect(await page.locator('select[name=status]').inputValue() === 'active', 'المسودة العربية تُنشر تلقائيًا ولا تبقى مخزونًا خفيًا');
+const freedSlug = await page.locator('a:has-text("معاينة")').first().getAttribute('href');
+await page.goto(BASE + '/logout');
+const fr = await page.goto(BASE + freedSlug);
+expect(fr.status() === 200, 'صفحة المنتج المُطلَق تُفتح للزبونة');
+expect(await has(page, `حامل اختبار عربي ${cnOffer}`), 'الزبونة ترى عنوانه العربي في صفحته');
+
 // ---------- جوال ----------
 const m = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, locale: 'ar' });
 const mp = await m.newPage();
