@@ -14,6 +14,7 @@ import pages from './routes/pages';
 import adminOps from './routes/admin-ops';
 import api1688Admin, { getClient, syncStock } from './routes/api1688-admin';
 import { loadSettings } from './lib/pricing';
+import { retranslatePending } from './lib/translate';
 import { Client1688, type Tokens } from './lib/api1688';
 import { runServerJobs } from './lib/crawl';
 
@@ -47,6 +48,22 @@ export default {
   async scheduled(_ev: ScheduledEvent, env: Env['Bindings'], ctx: ExecutionContext) {
     const s = await loadSettings(env.DB);
     if (s.src_key) ctx.waitUntil(runServerJobs(env, { limit: 4 }));   // مزوّد API من طرف ثالث
+    // صيانة الكتالوج كل ساعة بلا تدخل: ترجمة ما بقي صينيًا (بلا استدعاءات مدفوعة)،
+    // ثم إثراء دفعتين من الناقص (٥٠ منتجًا) بادئًا بالمحجوزات فتخرج للمتجر بعنوان عربي.
+    ctx.waitUntil((async () => {
+      try {
+        if (env.AI) { const r = await retranslatePending(env.DB, env.AI, 40); console.log('cron translate', JSON.stringify(r)); }
+        if (!s.src_key) return;
+        const job = await env.DB.prepare("SELECT id FROM crawl_jobs WHERE type='stock' ORDER BY id LIMIT 1").first<{ id: number }>();
+        if (!job) return;
+        for (let i = 0; i < 2; i++) {
+          const r = await runServerJobs(env, { jobId: job.id, enrichOnly: true, maxItems: 25 });
+          const x = (r.results ?? [{}])[0] as any;
+          console.log('cron enrich', x?.enriched ?? 0, x?.note ?? '');
+          if (!x || !x.enriched) break;
+        }
+      } catch (e: any) { console.error('cron maintenance', e?.message ?? e); }
+    })());
     if (!s.api1688_key || !s.api1688_tokens) return;
     const client = new Client1688(s.api1688_key, s.api1688_secret, JSON.parse(s.api1688_tokens) as Tokens,
       async (t) => { await env.DB.prepare("INSERT INTO settings(key,value) VALUES('api1688_tokens',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(JSON.stringify(t)).run(); });
