@@ -172,13 +172,15 @@ async function listPage(c: Context<Env>, opts: { title: string; where: string; b
   const color = url.searchParams.get('color');
   const page = Math.max(1, parseInt(url.searchParams.get('page') ?? '1'));
   const per = 30;
+  // السعر المعروض يتبع طريقة الشحن، فالفرز والفلترة يتبعانه أيضًا — وإلا رتّبنا بسعر لا تراه الزبونة
+  const PRICE = shipMode(c) === 'sea' ? 'COALESCE(p.price_sea_lyd,p.price_lyd)' : 'p.price_lyd';
   let where = opts.where;
   const binds = [...opts.binds];
-  if (min) { where += ' AND p.price_lyd>=?'; binds.push(min); }
-  if (max) { where += ' AND p.price_lyd<=?'; binds.push(max); }
+  if (min) { where += ` AND ${PRICE}>=?`; binds.push(min); }
+  if (max) { where += ` AND ${PRICE}<=?`; binds.push(max); }
   if (size) { where += ' AND EXISTS(SELECT 1 FROM variants v WHERE v.product_id=p.id AND v.size=?)'; binds.push(size); }
   if (color) { where += ' AND EXISTS(SELECT 1 FROM variants v WHERE v.product_id=p.id AND v.color=?)'; binds.push(color); }
-  const order = { popular: 'p.sales DESC,p.views DESC', new: 'p.id DESC', price_asc: 'p.price_lyd ASC', price_desc: 'p.price_lyd DESC', rating: 'p.review_count DESC,p.rating DESC,p.sales DESC' }[sort] ?? 'p.sales DESC';
+  const order = { popular: 'p.sales DESC,p.views DESC', new: 'p.id DESC', price_asc: `${PRICE} ASC`, price_desc: `${PRICE} DESC`, rating: 'p.review_count DESC,p.rating DESC,p.sales DESC' }[sort] ?? 'p.sales DESC';
   const [rows, cnt, sizes, colors, f] = await Promise.all([
     db.prepare(`SELECT ${PRODUCT_SELECT} FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE ${where} ORDER BY ${order} LIMIT ? OFFSET ?`).bind(...binds, per, (page - 1) * per).all<ProductRow>(),
     db.prepare(`SELECT COUNT(*) n FROM products p WHERE ${where}`).bind(...binds).first<{ n: number }>(),

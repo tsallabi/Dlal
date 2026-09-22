@@ -487,8 +487,18 @@ if (colorLinks) {
 expect(colorLinks > 0, `فلتر الألوان يعرض ${colorLinks} لونًا بنقاط ملونة`);
 // الترتيب بالسعر
 await page.click('.sortbar a:has-text("السعر: من الأقل")'); await page.waitForLoadState('networkidle');
-const asc = await page.$$eval('.card .p', els => els.map(e => parseFloat(e.textContent.replace(/[^\d٫.]/g, '').replace('٫', '.'))));
+// السعر المشطوب داخل نفس العنصر: نحذفه قبل القراءة وإلا التصق الرقمان («84 د.ل105 د.ل» ⟵ 84105)
+const asc = (await page.$$eval('.card .p', els => els.map(e => { const c = e.cloneNode(true); c.querySelectorAll('s').forEach(n => n.remove()); return c.textContent; }))).map(num);
 expect(asc.every((v, i) => i === 0 || v >= asc[i - 1]), 'الترتيب بالسعر تصاعديًا صحيح');
+// وفي وضع الشحن البحري يجب أن يتبع الترتيب السعر البحري المعروض لا الجوي المخفي
+await page.goto(BASE + '/p/' + productSlug);
+await page.locator('.pship label').nth(1).click(); await page.waitForLoadState('networkidle');
+await page.goto(BASE + '/c/dresses?sort=price_asc');
+const ascSea = (await page.$$eval('.card .p', els => els.map(e => { const c = e.cloneNode(true); c.querySelectorAll('s').forEach(n => n.remove()); return c.textContent; }))).map(num);
+expect(ascSea.every((v, i) => i === 0 || v >= ascSea[i - 1]), `الترتيب بالسعر صحيح في وضع البحري أيضًا (${ascSea.slice(0, 4).join(' ، ')})`);
+await page.goto(BASE + '/p/' + productSlug);
+await page.locator('.pship label').nth(0).click(); await page.waitForLoadState('networkidle');
+await page.goto(BASE + '/c/dresses?sort=price_asc');
 
 // ---------- هيكل المتجر: الرأس والقائمة الكبيرة والتذييل وبطاقة المنتج ----------
 await page.goto(BASE + '/logout'); await page.goto(BASE + '/');
@@ -762,6 +772,11 @@ const m = await browser.newContext({ viewport: { width: 390, height: 844 }, isMo
 const mp = await m.newPage();
 await mp.goto(BASE + '/'); await mp.waitForLoadState('networkidle');
 expect(await mp.locator('.bottom-nav').isVisible(), 'شريط التنقل السفلي يظهر في الجوال');
+// بطاقتان في الصف كما في متاجر الموضة، لا بطاقة عملاقة واحدة
+const cols = await mp.evaluate(() => getComputedStyle(document.querySelector('.grid')).gridTemplateColumns.split(' ').length);
+expect(cols === 2, `شبكة المنتجات في الجوال عمودان (${cols})`);
+const cw = await mp.locator('.grid .card').first().evaluate(el => el.getBoundingClientRect().width);
+expect(cw > 140 && cw < 200, `عرض البطاقة في الجوال معقول (${Math.round(cw)}px)`);
 await mp.screenshot({ path: `${OUT}/${String(++n).padStart(2, '0')}-mobile-home.png` });
 await mp.goto(BASE + '/p/' + productSlug); await mp.waitForLoadState('networkidle');
 await mp.screenshot({ path: `${OUT}/${String(++n).padStart(2, '0')}-mobile-product.png` });
