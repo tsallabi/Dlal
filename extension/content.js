@@ -74,7 +74,10 @@
     const attrs = attrTable();
     const colors = splitList(pick(attrs, /^(Color|颜色|色系)/i));
     const sizes = splitList(pick(attrs, /^(Size|尺码|尺寸|规格)/i));
-    const weightG = parseFloat(pick(attrs, /^(Weight|重量|净重)/i)) || 0;
+    // جدول المواصفات لا يذكر الوحدة دائمًا: رقم أقل من ٥٠ كيلوغرامات، وإلا غرامات.
+    // (نفس قاعدة normWeightG في الخادم — المورّد الذي يكتب 0.65 يقصد ٦٥٠ غ لا ٦٥٠ ملغ.)
+    const wRaw = parseFloat(pick(attrs, /^(Weight|重量|净重)/i)) || 0;
+    const weightG = wRaw > 0 && wRaw < 50 ? Math.round(wRaw * 1000) : Math.round(wRaw);
 
     const variants = [];
     try {   // إن وُجدت بيانات SKU في الصفحة (عند تسجيل الدخول) فهي الأدق

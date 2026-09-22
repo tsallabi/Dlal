@@ -1,3 +1,17 @@
+// وزن المورّد يأتي عادةً بالكيلوغرام، وبعضهم يكتبه بالغرام في نفس الحقل. ضربُ الغرامات
+// في ١٠٠٠ ثانيةً أنتج رفّ حمام وزنه ٦٥٠ كغ وكوبًا حراريًا بـ٥٠٠ كغ، فظهرا على الرف بـ٥٤٬٦٠٠
+// و٤١٬٩٣٠ د.ل (٢٢/٠٩/٢٦). لا قطعة نشحنها جوًّا أو بحرًا تتجاوز ٥٠ كغ، فما فوقها يُعاد تفسيره
+// غرامات، وما بقي مستحيلًا يُهمل فيُستعمل تقدير القسم بدله.
+export const MAX_WEIGHT_G = 50000;
+export function normWeightG(raw: number | null | undefined, unit: 'kg' | 'raw' = 'kg'): number | undefined {
+  const v = Number(raw);
+  if (!isFinite(v) || v <= 0) return undefined;
+  // 'raw' = رقم من جدول مواصفات بلا وحدة: أقل من ٥٠ يعني كيلوغرامات، وإلا غرامات
+  let g = unit === 'kg' || v < 50 ? Math.round(v * 1000) : Math.round(v);
+  if (g > MAX_WEIGHT_G) g = Math.round(v);
+  return g >= 1 && g <= MAX_WEIGHT_G ? g : undefined;
+}
+
 // طبقة مصدر المنتجات — تُبدَّل دون تغيير باقي النظام
 // اليوم: BrowserImportSource (الموظف يتصفح 1688 ويضغط "استورد")
 // غدًا:  Api1688Source (بعد الحصول على AppKey من open.1688.com)

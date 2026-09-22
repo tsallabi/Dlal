@@ -9,6 +9,7 @@
  * access_token صالح 36000 ثانية، refresh_token صالح 6 أشهر.
  */
 import type { SourceProduct } from './source';
+import { normWeightG } from './source';
 
 export type Tokens = {
   access_token: string; refresh_token: string; expires_at: number; refresh_expires_at?: number;
@@ -95,7 +96,7 @@ export class Client1688 {
       minQty: parseInt(p.saleInfo?.minOrderQuantity ?? 1) || 1,
       images: (p.image?.images ?? []).map((u: string) => u.startsWith('http') ? u : `https://cbu01.alicdn.com/${u}`),
       supplier: p.supplierLoginId, variants: skus, inStock: (p.saleInfo?.amountOnSale ?? 1) > 0 && p.status === 'published',
-      weightG: p.shippingInfo?.unitWeight ? Math.round(parseFloat(p.shippingInfo.unitWeight) * 1000) : undefined,
+      weightG: normWeightG(parseFloat(p.shippingInfo?.unitWeight ?? '')),
     };
   }
 

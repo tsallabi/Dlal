@@ -1,6 +1,7 @@
 // مزوّدو بيانات 1688 من طرف ثالث (يسحبون من الصين ويقدمون API) — يعمل الاستيراد من الخادم بلا متصفح
 // المدعومان: OTAPI (otapi.net) و TMAPI (tmapi.top). كل رد خام يُعاد مع النتيجة ليُعرض في لوحة الإدارة.
 import type { Settings } from './pricing';
+import { normWeightG } from './source';
 
 export type NormItem = { offerId: string; url: string; title: string; titleEn?: string; priceCny: number; images: string[]; sales?: number; minQty: number; inStock: boolean; supplier?: string; weightG?: number; volumeCm3?: number; variants: { skuId?: string; color?: string; size?: string; colorEn?: string; sizeEn?: string; priceCny?: number; inStock?: boolean; image?: string }[] };
 export type ProviderResult<T> = { ok: boolean; data: T; raw: string; url: string; status: number; error?: string };
@@ -96,7 +97,7 @@ class Tmapi implements Provider {
       inStock: g(it, 'is_sold_out') === true ? false : variants.length ? variants.some(v => v.inStock) : g(it, 'stock', 'quantity') === undefined ? true : num(g(it, 'stock', 'quantity')) > 0,
       supplier: g(it, 'seller_info.shop_name', 'shop_info.shop_name', 'seller_name', 'company_name'),
       // الوزن: skus[].package_info.weight بالكيلوغرام، أو delivery_info.unit_weight
-      weightG: Math.round(1000 * (arr(g(it, 'skus')).map((k: any) => num(g(k, 'package_info.weight'))).find((w: number) => w > 0) ?? num(g(it, 'delivery_info.unit_weight')))) || undefined,
+      weightG: normWeightG(arr(g(it, 'skus')).map((k: any) => num(g(k, 'package_info.weight'))).find((w: number) => w > 0) ?? num(g(it, 'delivery_info.unit_weight'))),
       // الحجم: من أبعاد الطرد (سم) أو الحقل volume — يُحاسب عليه الشحن الجوي
       volumeCm3: (() => {
         const pk = arr(g(it, 'skus')).map((k: any) => g(k, 'package_info')).find((x: any) => x && (num(x.volume) > 0 || num(x.length) > 0));

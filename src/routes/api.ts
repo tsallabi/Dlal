@@ -6,6 +6,7 @@ import { importProducts } from './admin';
 import { classifyModesty } from '../lib/modesty';
 import { fingerprint, sameProduct } from '../lib/dedupe';
 import { computePrice, loadSettings } from '../lib/pricing';
+import { normWeightG } from '../lib/source';
 import { getProvider } from '../lib/source-providers';
 import { runServerJobs } from '../lib/crawl';
 import { retranslatePending, releaseHeldDrafts, diagnoseTitle, hasCJK, dropCJKWords, dictTranslate, mixedScript, dropMixedWords, goodTitle, sweepMashedTitles } from '../lib/translate';
@@ -162,6 +163,8 @@ api.get('/logic-check', async (c) => {
     mashed: Object.fromEntries(mashed.map(t => [t, { mixed: mixedScript(t), good: goodTitle(t), fixed: dropMixedWords(t) }])),
     okLatin: Object.fromEntries(okLatin.map(t => [t, { mixed: mixedScript(t), good: goodTitle(t) }])),
     dedupe: { same: sameProduct(w1, w2), different: sameProduct(w1, bag), noiseOnly: sameProduct('跨境 批发 新款', '外贸 现货 爆款'), fp: fingerprint(w1) },
+    // وزن المورّد: كيلو أم غرام؟ قيم حقيقية من TMAPI أنتجت رفّ حمام بـ٦٥٠ كغ
+    weights: { kg: normWeightG(0.65) ?? null, gramsInKgField: normWeightG(650) ?? null, absurd: normWeightG(650000) ?? null, zero: normWeightG(0) ?? null, specKg: normWeightG(0.3, 'raw') ?? null, specG: normWeightG(800, 'raw') ?? null },
     pricing: {
       light: computePrice(s, 25, 800, null, 1500),                       // صغيرة وثقيلة
       bulky: computePrice(s, 25, 300, null, 40000),                      // كبيرة وخفيفة

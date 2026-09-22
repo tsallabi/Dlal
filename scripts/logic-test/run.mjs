@@ -74,5 +74,15 @@ expect(lot1.total_lyd - lot100.total_lyd >= (lot1.domestic_ship_lyd - lot100.dom
 expect(lot100Sea.total_lyd <= lot100.total_lyd,
   `البحري ليس أغلى من الجوي (${lot100Sea.total_lyd} ≤ ${lot100.total_lyd})`);
 
+
+// --- وزن المورّد: بعضهم يكتب الغرامات في حقل الكيلو فينفجر سعر الشحن
+const wt = d.weights;
+expect(wt.kg === 650, `٠٫٦٥ كغ ⟵ ${wt.kg} غ`);
+expect(wt.gramsInKgField === 650, `٦٥٠ في حقل الكيلو تُقرأ غرامات لا ٦٥٠ كغ (${wt.gramsInKgField})`);
+expect(wt.absurd === null, `٦٥٠٫٠٠٠ وزن مستحيل يُهمل فيُستعمل تقدير القسم (${wt.absurd})`);
+expect(wt.zero === null, 'الوزن صفر أو مفقود يُهمل');
+expect(wt.specKg === 300, `٠٫٣ في جدول المواصفات كيلوغرامات (${wt.specKg} غ)`);
+expect(wt.specG === 800, `٨٠٠ في جدول المواصفات غرامات (${wt.specG} غ)`);
+
 console.log(`\nنجح: ${passed} · فشل: ${problems.length}`);
 process.exit(problems.length ? 1 : 0);
