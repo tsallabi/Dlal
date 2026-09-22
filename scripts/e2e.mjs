@@ -777,6 +777,9 @@ const cols = await mp.evaluate(() => getComputedStyle(document.querySelector('.g
 expect(cols === 2, `شبكة المنتجات في الجوال عمودان (${cols})`);
 const cw = await mp.locator('.grid .card').first().evaluate(el => el.getBoundingClientRect().width);
 expect(cw > 140 && cw < 200, `عرض البطاقة في الجوال معقول (${Math.round(cw)}px)`);
+// لا نص يخرج من حدود بطاقته (شرائح الشحن كانت تمتد خارج البطاقة الضيقة)
+const spill = await mp.$$eval('.card .body', els => els.filter(e => e.scrollWidth > e.clientWidth + 1).length);
+expect(spill === 0, `لا محتوى يتجاوز عرض بطاقته في الجوال (${spill} بطاقة)`);
 await mp.screenshot({ path: `${OUT}/${String(++n).padStart(2, '0')}-mobile-home.png` });
 await mp.goto(BASE + '/p/' + productSlug); await mp.waitForLoadState('networkidle');
 await mp.screenshot({ path: `${OUT}/${String(++n).padStart(2, '0')}-mobile-product.png` });

@@ -40,9 +40,9 @@ export const ProductCard: FC<{ p: ProductRow; fav?: boolean; ship?: ShipCtx; bes
         <div class="meta">{p.review_count > 0
           ? <><span class="star">★ {p.rating.toFixed(1)}</span><span>({p.review_count} تقييم)</span></>
           : <span>{p.sales > 0 ? `بيع منه ${p.sales}+ قطعة` : 'وصل حديثًا'}</span>}</div>
-        <span class="ship">{sh.mode === 'sea' && sea ? `بحري · يصل خلال ${sh.sea}` : `جوي · يصل خلال ${sh.air}`}</span>
-        {sea && sh.mode === 'air' ? <span class="ship sea">🚢 بحري {fmt(sea)} · {sh.sea}</span> : null}
-        {sea && sh.mode === 'sea' ? <span class="ship sea">✈️ جوي {fmt(p.price_lyd)} · {sh.air}</span> : null}
+        <span class="ship">{sh.mode === 'sea' && sea ? 'بحري' : 'جوي'}<i> · يصل خلال</i> {sh.mode === 'sea' && sea ? sh.sea : sh.air}</span>
+        {sea && sh.mode === 'air' ? <span class="ship sea">🚢 بحري {fmt(sea)}<i> · {sh.sea}</i></span> : null}
+        {sea && sh.mode === 'sea' ? <span class="ship sea">✈️ جوي {fmt(p.price_lyd)}<i> · {sh.air}</i></span> : null}
         <div class="buy">
           <div class={`p ${off ? 'deal' : ''}`}><Price v={shown} />{off > 0 && <s>{fmt(p.compare_price_lyd!)}</s>}</div>
           <button class="add" type="button" data-add={p.id} aria-label="أضيفي إلى السلة" title="أضيفي إلى السلة">+</button>

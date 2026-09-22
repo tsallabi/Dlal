@@ -106,7 +106,8 @@ button,input,select,textarea{font:inherit}
 .card .p.deal{color:var(--err)}
 .card .add{border:0;background:var(--ink);color:#fff;width:30px;height:30px;border-radius:50%;cursor:pointer;display:grid;place-items:center;flex:none;font-size:17px;line-height:1;padding:0}
 .card .add:hover{background:var(--brand)}
-.card .ship{font-size:10.5px;color:#0b6b66;border:1px solid #cce8e6;background:#f2fbfa;padding:0 5px;font-weight:700;align-self:flex-start}
+.card .ship{font-size:10.5px;color:#0b6b66;border:1px solid #cce8e6;background:#f2fbfa;padding:0 5px;font-weight:700;align-self:flex-start;white-space:nowrap}
+.card .ship i{font-style:normal}
 
 /* product page */
 .pd{display:grid;grid-template-columns:1fr 1fr;gap:26px;margin-top:16px}
@@ -748,7 +749,7 @@ body{background:#fff}
 .floor .feed-h .all{font-size:13px;font-weight:700;color:var(--brand);white-space:nowrap}
 .floor-row{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(190px,1fr);gap:10px;overflow-x:auto;scroll-snap-type:x proximity;padding-bottom:6px;scrollbar-width:thin}
 .floor-row > .card{scroll-snap-align:start}
-@media(max-width:560px){.floor-row{grid-auto-columns:minmax(150px,70%)}}
+@media(max-width:560px){.floor-row{grid-auto-columns:minmax(140px,44%)}}
 
 /* الجوال: بطاقتان في الصف كما في متاجر الموضة — بطاقة واحدة عملاقة تُطيل الصفحة بلا داعٍ */
 @media(max-width:560px){
@@ -758,6 +759,7 @@ body{background:#fff}
   .card .p{font-size:16px}
   .card .ship{font-size:9.5px;padding:0 4px;line-height:1.7}
   .card .best-pill{font-size:10px}
+  .card .ship i{display:none}   /* المدة تكفي مرة واحدة على السطر الأول في الجوال */
   .card .fav{opacity:1;width:26px;height:26px;font-size:13px;line-height:26px}
   .card .add{width:28px;height:28px;font-size:15px}
 }
