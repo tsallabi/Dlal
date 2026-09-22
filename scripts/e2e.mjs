@@ -813,6 +813,8 @@ await page.fill('form[action$="/import/json"] textarea[name=json]', JSON.stringi
   // عنوان بكلمات فريدة لكل تشغيل: كاشف المكرر يرفض نسخة ثانية من قطعة تشبه ما في القسم، وهو سلوك صحيح
   offerId: arOffer, url: `https://detail.1688.com/offer/${arOffer}.html`, title: `قطعة اختبار ${arOffer}`,
   priceCny: 55, images: ['https://cbu01.alicdn.com/img/ibank/ar.jpg'], minQty: 1, inStock: true,
+  // متغيّر بصورة من مخدّم المورّد: يجب ألّا يصل رابطها الخام إلى مصدر الصفحة
+  variants: [{ color: 'أحمر', size: 'M', image: 'https://cbu01.alicdn.com/img/ibank/O1CN-variant-test.jpg', inStock: true }],
 }]));
 await page.click('form[action$="/import/json"] button:has-text("استيراد")');
 await page.waitForLoadState('networkidle');
@@ -822,6 +824,11 @@ await page.goto(BASE + '/admin/products?q=' + arOffer);
 const arHref = await page.locator(`tr:has-text("${arOffer}") a[href^="/p/"]`).first().getAttribute('href');
 await page.goto(BASE + arHref);
 expect(await has(page, 'لا تقييمات بعد'), 'المنتج بلا تقييمات يقول ذلك صراحةً بدل نجوم مُختلقة');
+// جولة الموقع الحي كشفت أن رابط صورة المتغيّر كان يُكتب خامًا في `variantsJson`،
+// فيظهر مخدّم المورّد ورقم حسابه لمن يفتح مصدر الصفحة. الصور تمرّ بالوسيط كلها.
+const arSrc = await page.content();
+expect(!/alicdn\.com|1688\.com|taobao\.com/.test(arSrc), 'صفحة المنتج لا تكتب رابط المورّد الخام في مصدرها');
+expect(/variantsJson/.test(arSrc) ? /"image_url":"\/img\//.test(arSrc) : true, 'صورة المتغيّر تُكتب كرابط وسيط لا كرابط مورّد');
 expect((await page.locator('.pd .meta .star').count()) === 0, 'لا نجوم على منتج لم يقيّمه أحد');
 await page.goto(BASE + '/c/dresses');
 const starless = await page.locator('.card .meta').filter({ hasText: 'وصل حديثًا' }).count();
@@ -869,6 +876,15 @@ await page.goto(BASE + '/logout');
 const fr = await page.goto(BASE + freedSlug);
 expect(fr.status() === 200, 'صفحة المنتج المُطلَق تُفتح للزبونة');
 expect(await has(page, `حامل اختبار عربي ${cnOffer}`), 'الزبونة ترى عنوانه العربي في صفحته');
+// تنظيف: المنتج يبقى نشطًا وعنوانه الأصلي الصيني محفوظ في title_src، فيصير «توأمًا» لفحص
+// المكرر في التشغيل التالي فيُرفض استيراد العيّنة الصينية. نخفيه كما يخفي الأدمن أي قطعة.
+await login(page, '0910000000', 'admin123');
+await page.goto(BASE + heldHref);
+await page.selectOption('select[name=status]', 'hidden');
+await page.click('form:has(input[name=title_ar]) button:has-text("حفظ")');
+await page.waitForLoadState('networkidle');
+expect(await page.locator('select[name=status]').inputValue() === 'hidden', 'الأدمن يخفي القطعة فتخرج من المتجر');
+await page.goto(BASE + '/logout');
 
 // ---------- جوال ----------
 const m = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, locale: 'ar' });

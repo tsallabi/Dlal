@@ -419,7 +419,9 @@ store.get('/p/:slug', async (c) => {
                 {fitTotal > 0 && <div class="fit"><span>رأي الزبونات في المقاس:</span> <b>{fitPct('true')}%</b> مطابق · <b>{fitPct('small')}%</b> أصغر · <b>{fitPct('large')}%</b> أكبر</div>}
               </div>
             )}
-            <script type="application/json" id="variantsJson" dangerouslySetInnerHTML={{ __html: JSON.stringify(vars.results.filter(v => noCJK(v.color ?? '—') && noCJK(v.size ?? '—'))).replace(/</g, '\\u003c') }}></script>
+            {/* صورة المتغيّر تمرّ بالوسيط قبل أن تُكتب في الصفحة: الرابط الخام يكشف مورّد 1688 ورقم حسابه
+                لمن يفتح مصدر الصفحة، والقاعدة أن الزبونة لا ترى رابط المصدر أبدًا */}
+            <script type="application/json" id="variantsJson" dangerouslySetInnerHTML={{ __html: JSON.stringify(vars.results.filter(v => noCJK(v.color ?? '—') && noCJK(v.size ?? '—')).map(v => ({ ...v, image_url: v.image_url ? imgUrl(v.image_url) : null }))).replace(/</g, '\\u003c') }}></script>
             <div class="opts"><h4>الكمية</h4>
               <div class="qty"><button type="button" data-q="-1">−</button><input type="number" name="qty" value={p.min_qty} min={p.min_qty} /><button type="button" data-q="1">+</button></div>
               {p.min_qty > 1 && <span style="font-size:12px;color:#888;margin-inline-start:8px">الحد الأدنى {p.min_qty} قطع</span>}
