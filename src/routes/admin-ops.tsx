@@ -481,8 +481,10 @@ async function health(db: D1Database) {
       AND ((SELECT COUNT(*) FROM product_images i WHERE i.product_id=p.id) <= 1
         OR (SELECT COUNT(*) FROM variants v WHERE v.product_id=p.id) = 0 OR p.weight_g IS NULL)`).first<any>();
   const calls = await db.prepare("SELECT COUNT(*) n FROM payment_log WHERE url LIKE 'SRC %'").first<any>();
+  const month = await db.prepare("SELECT COUNT(*) n FROM payment_log WHERE url LIKE 'SRC %' AND created_at >= datetime('now','start of month')").first<any>();
   const stockJob = await db.prepare("SELECT id FROM crawl_jobs WHERE type='stock' ORDER BY id LIMIT 1").first<{ id: number }>();
-  return { ...t, thin: thin?.n ?? 0, calls: calls?.n ?? 0, stockJob: stockJob?.id ?? null };
+  const s = await loadSettings(db);
+  return { ...t, thin: thin?.n ?? 0, calls: calls?.n ?? 0, month: month?.n ?? 0, cap: parseInt(s.src_month_limit ?? '0') || 0, stockJob: stockJob?.id ?? null };
 }
 
 ops.get('/source', async (c) => {
@@ -502,6 +504,8 @@ ops.get('/source', async (c) => {
             <label>المزوّد</label><select name="src_provider"><option value="none" selected={!s.src_provider || s.src_provider === 'none'}>— بلا (استخدم إضافة المتصفح) —</option>{Object.entries(PROVIDERS).map(([k, v]) => <option value={k} selected={s.src_provider === k}>{v.ar}</option>)}</select>
             <label>عنوان API الأساسي</label><input type="url" name="src_base_url" value={s.src_base_url ?? ''} placeholder="https://otapi.net أو https://api.tmapi.top" dir="ltr" />
             <label>المفتاح (instanceKey / apiToken)</label><input type="password" name="src_key" value={s.src_key ?? ''} dir="ltr" />
+            <label>سقف استدعاءات المزوّد في الشهر (0 = بلا سقف)</label><input type="number" name="src_month_limit" value={s.src_month_limit ?? '0'} min="0" dir="ltr" />
+            <p style="font-size:12px;color:#666;margin:4px 0 0">يحمي حصة اشتراكك: عند بلوغ السقف يتوقف الاستيراد والإثراء التلقائيان حتى أول الشهر أو حتى ترفعيه. الترجمة لا تُحسب لأنها لا تستهلك من الحصة.</p>
             <label>لغة البيانات المطلوبة من المزوّد</label><select name="src_lang"><option value="zh" selected={(s.src_lang ?? 'zh') === 'zh'}>صينية (ثم تُترجم عندنا بالذكاء الاصطناعي)</option><option value="en" selected={s.src_lang === 'en'}>إنجليزية</option><option value="ar" selected={s.src_lang === 'ar'}>عربية (إن دعمها المزوّد)</option></select>
             <div class="inline" style="margin-top:10px"><button class="btn sm">حفظ</button>
               <input type="text" name="test_id" placeholder="معرف منتج 1688 للاختبار" style="width:200px" dir="ltr" /><button class="btn sm ghost" formaction="/admin/source/test">اختبار: جلب منتج</button>
@@ -514,7 +518,8 @@ ops.get('/source', async (c) => {
               <div class="kpi"><b>{h.draft}</b><span>محجوز حتى تكتمل ترجمته</span></div>
               <div class="kpi"><b>{h.thin}</b><span>ينقصه صور/مقاسات/وزن</span></div>
               <div class="kpi"><b>{h.oos}</b><span>نفد عند المورد</span></div>
-              <div class="kpi"><b>{h.calls}</b><span>استدعاء للمزوّد حتى الآن</span></div>
+              <div class="kpi"><b>{h.calls}</b><span>استدعاء للمزوّد (الكل)</span></div>
+              <div class="kpi"><b style={h.cap > 0 && h.month >= h.cap ? 'color:#d3262b' : ''}>{h.month}{h.cap > 0 ? ` / ${h.cap}` : ''}</b><span>هذا الشهر{h.cap > 0 && h.month >= h.cap ? ' — بلغنا السقف' : ''}</span></div>
             </div>
             <div class="inline" style="margin-top:10px;flex-wrap:wrap">
               <form method="post" action="/admin/source/enrich" class="inline"><button class="btn sm ok" disabled={!prov || !h.stockJob}>أثرِ ١٠ منتجات الآن</button></form>
@@ -556,8 +561,9 @@ ops.post('/source', async (c) => {
     src_base_url: fixBase(provider, String(f.src_base_url ?? '')),
     src_key: String(f.src_key ?? '').trim(),
     src_lang: String(f.src_lang ?? '').trim(),
+    src_month_limit: String(Math.max(0, parseInt(String(f.src_month_limit ?? '0')) || 0)),
   };
-  const keys = ['src_provider', 'src_base_url', 'src_key', 'src_lang'];
+  const keys = ['src_provider', 'src_base_url', 'src_key', 'src_lang', 'src_month_limit'];
   await db.batch(keys.map(k => db.prepare("INSERT INTO settings(key,value,updated_at) VALUES(?,?,datetime('now')) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at").bind(k, vals[k])));
   await logActivity(db, c.get('user')!.id, 'source.settings', String(f.src_provider));
   return c.redirect('/admin/source?ok=1');

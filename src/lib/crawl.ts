@@ -11,6 +11,12 @@ async function logRaw(db: D1Database, direction: 'out' | 'in', url: string, stat
 export async function runServerJobs(env: { DB: D1Database; AI?: any }, opts: { limit?: number; jobId?: number; byUserId?: number | null; maxItems?: number; pages?: number; fromPage?: number; enrichOnly?: boolean; keyword?: string } = {}) {
   const db = env.DB; const s = await loadSettings(db); const prov = getProvider(s);
   if (!prov) return { ran: 0, error: 'لا يوجد مزوّد API مضبوط' };
+  // سقف شهري اختياري لاستدعاءات المزوّد: يحمي حصة الاشتراك من الاستنزاف بالتشغيل التلقائي
+  const cap = parseInt(s.src_month_limit ?? '0') || 0;
+  if (cap > 0) {
+    const used = await db.prepare("SELECT COUNT(*) n FROM payment_log WHERE url LIKE 'SRC %' AND created_at >= datetime('now','start of month')").first<{ n: number }>();
+    if ((used?.n ?? 0) >= cap) return { ran: 0, error: `بلغنا السقف الشهري لاستدعاءات المزوّد (${used?.n}/${cap}) — ارفعه من /admin/source إن أردت المتابعة` };
+  }
   const maxItems = Math.max(1, Math.min(opts.maxItems ?? 8, 25));
   // مهمة المخزون لا تُقيَّد بـ last_run_at: تعمل كل مرة وتفحص فقط المنتجات المستحقة (أقدم من interval_hours)
   const where = opts.jobId ? 'j.id=?' : "j.active=1 AND j.runner IN ('any','server') AND (j.run_now=1 OR j.type='stock' OR j.last_run_at IS NULL OR j.last_run_at < datetime('now', '-' || j.interval_hours || ' hours'))";

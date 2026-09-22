@@ -648,13 +648,24 @@ await shot(page, 'admin-reports-profit');
 await login(page, '0910000000', 'admin123');
 await page.goto(BASE + '/admin/source');
 const hk = page.locator('.card-box:has(h3:text("صحة الكتالوج")) .kpi');
-expect((await hk.count()) === 6, `لوحة صحة الكتالوج تعرض ستة أرقام (${await hk.count()})`);
+expect((await hk.count()) === 7, `لوحة صحة الكتالوج تعرض سبعة أرقام (${await hk.count()})`);
 const cnLive = num(await hk.nth(1).locator('b').textContent());
 expect(cnLive === 0, `لا عنوان صيني ظاهر للزبونة (${cnLive})`);
 expect(num(await hk.nth(0).locator('b').textContent()) > 0, 'عدد المنتجات المعروضة يظهر في اللوحة');
 expect((await page.locator('button:has-text("أثرِ ١٠ منتجات الآن")').count()) === 1, 'زر الإثراء موجود في اللوحة');
 expect((await page.locator('button:has-text("ترجم ٢٠ عنوانًا الآن")').count()) === 1, 'زر الترجمة موجود في اللوحة');
+expect(await has(page, 'سقف استدعاءات المزوّد في الشهر'), 'حقل السقف الشهري لاستدعاءات المزوّد موجود');
 await shot(page, 'admin-catalog-health');
+// السقف يوقف الاستيراد فعلًا: نضبطه على 1 ونحاول تشغيل مهمة
+await page.goto(BASE + '/admin/source');
+await page.fill('input[name=src_month_limit]', '1');
+await page.click('form[action="/admin/source"] button:has-text("حفظ")'); await page.waitForLoadState('networkidle');
+await page.click('form[action="/admin/source/run"] button'); await page.waitForLoadState('networkidle');
+expect(await has(page, 'السقف الشهري') || await has(page, 'شُغّلت 0'), 'بلوغ السقف يمنع تشغيل مهام المزوّد');
+await page.goto(BASE + '/admin/source');
+await page.fill('input[name=src_month_limit]', '0');
+await page.click('form[action="/admin/source"] button:has-text("حفظ")'); await page.waitForLoadState('networkidle');
+expect((await page.locator('input[name=src_month_limit]').inputValue()) === '0', 'إلغاء السقف يعيد التشغيل');
 
 // ---------- الحشمة: لا ملابس نوم ولا داخلية على الرئيسية ----------
 await login(page, '0910000000', 'admin123');
