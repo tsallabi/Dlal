@@ -713,13 +713,26 @@ const cnTitle = '跨境外贸女装连衣裙夏季新款';
 const dressOpt = await page.locator('form[action$="/import/json"] select[name=category_id] option').evaluateAll(
   os => (os.find(o => o.textContent.includes('فساتين')) || {}).value);
 await page.selectOption('form[action$="/import/json"] select[name=category_id]', dressOpt);
+const arOffer = '69' + String(Date.now()).slice(-10);
 await page.fill('form[action$="/import/json"] textarea[name=json]', JSON.stringify([{
   offerId: cnOffer, url: `https://detail.1688.com/offer/${cnOffer}.html`, title: cnTitle,
   priceCny: 42, images: ['https://cbu01.alicdn.com/img/ibank/test.jpg'], minQty: 1, inStock: true,
+}, {
+  offerId: arOffer, url: `https://detail.1688.com/offer/${arOffer}.html`, title: 'فستان سهرة مطرز بأكمام طويلة',
+  priceCny: 55, images: ['https://cbu01.alicdn.com/img/ibank/ar.jpg'], minQty: 1, inStock: true,
 }]));
 await page.click('form[action$="/import/json"] button:has-text("استيراد")');
 await page.waitForLoadState('networkidle');
-expect(page.url().includes('imported=1'), 'الأدمن يستورد منتجًا صينيًا من لصق JSON');
+expect(page.url().includes('imported=2'), 'الأدمن يستورد منتجين من لصق JSON');
+// منتج بلا تقييم حقيقي لا يُعرض بنجوم مُختلقة
+await page.goto(BASE + '/admin/products?q=' + arOffer);
+const arHref = await page.locator(`tr:has-text("${arOffer}") a[href^="/p/"]`).first().getAttribute('href');
+await page.goto(BASE + arHref);
+expect(await has(page, 'لا تقييمات بعد'), 'المنتج بلا تقييمات يقول ذلك صراحةً بدل نجوم مُختلقة');
+expect((await page.locator('.pd .meta .star').count()) === 0, 'لا نجوم على منتج لم يقيّمه أحد');
+await page.goto(BASE + '/c/dresses');
+const starless = await page.locator('.card .meta').filter({ hasText: 'وصل حديثًا' }).count();
+expect(starless >= 1, 'بطاقة المنتج الجديد تقول «وصل حديثًا» بدل تقييم مُختلق');
 await page.goto(BASE + '/admin/products?status=draft');
 expect(await has(page, cnOffer), 'المنتج غير المترجم يُحجز في حالة مسودة داخل لوحة الأدمن');
 await shot(page, 'admin-untranslated-draft');

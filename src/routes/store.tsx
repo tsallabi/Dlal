@@ -178,7 +178,7 @@ async function listPage(c: Context<Env>, opts: { title: string; where: string; b
   if (max) { where += ' AND p.price_lyd<=?'; binds.push(max); }
   if (size) { where += ' AND EXISTS(SELECT 1 FROM variants v WHERE v.product_id=p.id AND v.size=?)'; binds.push(size); }
   if (color) { where += ' AND EXISTS(SELECT 1 FROM variants v WHERE v.product_id=p.id AND v.color=?)'; binds.push(color); }
-  const order = { popular: 'p.sales DESC,p.views DESC', new: 'p.id DESC', price_asc: 'p.price_lyd ASC', price_desc: 'p.price_lyd DESC', rating: 'p.rating DESC,p.review_count DESC' }[sort] ?? 'p.sales DESC';
+  const order = { popular: 'p.sales DESC,p.views DESC', new: 'p.id DESC', price_asc: 'p.price_lyd ASC', price_desc: 'p.price_lyd DESC', rating: 'p.review_count DESC,p.rating DESC,p.sales DESC' }[sort] ?? 'p.sales DESC';
   const [rows, cnt, sizes, colors, f] = await Promise.all([
     db.prepare(`SELECT ${PRODUCT_SELECT} FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE ${where} ORDER BY ${order} LIMIT ? OFFSET ?`).bind(...binds, per, (page - 1) * per).all<ProductRow>(),
     db.prepare(`SELECT COUNT(*) n FROM products p WHERE ${where}`).bind(...binds).first<{ n: number }>(),
@@ -373,7 +373,9 @@ store.get('/p/:slug', async (c) => {
         </div>
         <div>
           <h1>{p.title_ar}</h1>
-          <div class="meta" style="font-size:13px;color:#666"><a href="#reviews"><Stars n={p.rating} /> {p.rating.toFixed(1)} ({p.review_count} تقييم)</a> · {p.sales}+ بيعت · {p.views} مشاهدة</div>
+          <div class="meta" style="font-size:13px;color:#666">{p.review_count > 0
+            ? <><a href="#reviews"><Stars n={p.rating} /> {p.rating.toFixed(1)} ({p.review_count} تقييم)</a> · </>
+            : <>لا تقييمات بعد — كوني أول من يقيّمه · </>}{p.sales}+ بيعت · {p.views} مشاهدة</div>
           <div class="price" style="margin-top:8px">{fmt(shown)}{off > 0 && <s>{fmt(p.compare_price_lyd!)}</s>}{off > 0 && <span class="tag" style="position:static;margin-inline-start:8px;font-size:13px;background:#b5124f;color:#fff;padding:2px 8px;border-radius:4px">-{off}%</span>}</div>
           <div class="price-note">السعر شامل الشحن من الصين والجمارك. التوصيل داخل ليبيا {fmt(parseFloat(s.delivery_lyd))} (مجاني فوق {fmt(parseFloat(s.free_ship_over_lyd))}). تكسبين <b>{Math.floor(shown * parseFloat(s.points_per_lyd || '1'))} نقطة</b> عند التسليم.</div>
           {seaOn(s) && p.price_sea_lyd ? (
@@ -439,7 +441,7 @@ store.get('/p/:slug', async (c) => {
         </div>
       </div>
       <section id="reviews" class="card-box" style="margin-top:20px">
-        <div class="sec-h" style="margin:0 0 10px"><h2>التقييمات ({p.review_count})</h2><span><Stars n={p.rating} size={18} /> <b>{p.rating.toFixed(1)}</b> / 5</span></div>
+        <div class="sec-h" style="margin:0 0 10px"><h2>التقييمات ({p.review_count})</h2>{p.review_count > 0 && <span><Stars n={p.rating} size={18} /> <b>{p.rating.toFixed(1)}</b> / 5</span>}</div>
         {reviews.results.length === 0 ? <p style="color:#888">لا تقييمات منشورة بعد. كوني أول من يقيّم بعد استلام طلبك.</p> : reviews.results.map(r => (
           <div class="review"><div class="rv-h"><b>{r.name.split(' ')[0]} {r.name.split(' ')[1]?.slice(0, 1) ?? ''}.</b><Stars n={r.rating} /><small style="color:#888">{timeAgo(r.created_at)}</small>{r.size_fit && <span class="status">{{ small: 'المقاس أصغر', true: 'المقاس مطابق', large: 'المقاس أكبر' }[r.size_fit as string]}</span>}</div><p>{r.body}</p>{r.image_url && <a href={r.image_url} target="_blank"><img src={r.image_url} class="rv-img" alt="" /></a>}</div>
         ))}

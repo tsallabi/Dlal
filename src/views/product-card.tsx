@@ -36,7 +36,10 @@ export const ProductCard: FC<{ p: ProductRow; fav?: boolean; ship?: ShipCtx; bes
       <div class="body">
         <div class="t">{p.title_ar}</div>
         {best && <span class="best-pill">الأكثر مبيعًا في {p.cat_name ?? 'القسم'} ›</span>}
-        <div class="meta"><span class="star">★ {p.rating.toFixed(1)}</span><span>({p.sales > 0 ? `${p.sales}+` : 'جديد'})</span></div>
+        {/* لا نجوم بلا تقييم حقيقي: المنتج الجديد يعرض عدد مبيعاته عند المورد أو كلمة «جديد» */}
+        <div class="meta">{p.review_count > 0
+          ? <><span class="star">★ {p.rating.toFixed(1)}</span><span>({p.review_count} تقييم)</span></>
+          : <span>{p.sales > 0 ? `بيع منه ${p.sales}+ قطعة` : 'وصل حديثًا'}</span>}</div>
         <span class="ship">{sh.mode === 'sea' && sea ? `بحري · يصل خلال ${sh.sea}` : `جوي · يصل خلال ${sh.air}`}</span>
         {sea && sh.mode === 'air' ? <span class="ship sea">🚢 بحري {fmt(sea)} · {sh.sea}</span> : null}
         {sea && sh.mode === 'sea' ? <span class="ship sea">✈️ جوي {fmt(p.price_lyd)} · {sh.air}</span> : null}

@@ -316,7 +316,7 @@ export async function importProducts(db: D1Database, arr: any[], categoryId: num
        VALUES('1688',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'),?,?,?,?)`,
     ).bind(offerId, it.url ?? `https://detail.1688.com/offer/${offerId}.html`, slug, titleAr, it.title ?? null, it.descriptionAr ?? null,
       targetCat, price, pr.total_lyd, Math.random() < 0.4 ? Math.ceil(pr.total_lyd * 1.25 / 5) * 5 : null, prSea.total_lyd, it.weightG ?? null, it.volumeCm3 ?? null,
-      Math.max(1, parseInt(it.minQty ?? 1) || 1), it.inStock === false ? 0 : 1, hasCJK(titleAr) ? 'draft' : 'active', supplierAr, parseInt(it.sales ?? 0) || 0, 4.5 + Math.random() * 0.5, homeOk, fp || null).run();
+      Math.max(1, parseInt(it.minQty ?? 1) || 1), it.inStock === false ? 0 : 1, hasCJK(titleAr) ? 'draft' : 'active', supplierAr, parseInt(it.sales ?? 0) || 0, 0, homeOk, fp || null).run();
     const pid = ins.meta.last_row_id as number;
     if (!pid || !ins.meta.changes) { skipped++; continue; }   // تجاهل صفّ لم يُدرج (تعارض مع استيراد متزامن)
     const stmts: D1PreparedStatement[] = [];
