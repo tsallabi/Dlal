@@ -8,7 +8,7 @@ import { fingerprint, sameProduct } from '../lib/dedupe';
 import { computePrice, loadSettings } from '../lib/pricing';
 import { getProvider } from '../lib/source-providers';
 import { runServerJobs } from '../lib/crawl';
-import { retranslatePending, diagnoseTitle, hasCJK } from '../lib/translate';
+import { retranslatePending, diagnoseTitle, hasCJK, dropCJKWords } from '../lib/translate';
 
 const api = new Hono<Env>();
 
@@ -129,8 +129,16 @@ api.get('/logic-check', async (c) => {
   const w1 = '跨境外贸商务石英表皮带腕表日内瓦三眼六针潮流watch男士手表';
   const w2 = '厂家现货跨境石英表男士手表批发watch皮带腕表日内瓦三眼六针';
   const bag = '新款女士单肩包时尚百搭大容量手提包';
+  // حذف الكلمة الصينية العالقة داخل ترجمة عربية سليمة — أمثلة حقيقية من ردود النموذج
+  const strays = [
+    'م耙 حديدي لحراثة التربة ومجالسة الحدائق',
+    'عباءة طويلة بتصميم豹 مع زينة بذرة اللؤلؤ',
+    'مجموعة مجوهرات蝴蝶吊坠耳环 و项链 و خاتم',
+    '调色盘 调色棒 化妆',
+  ];
   return c.json({
     modesty,
+    strays: Object.fromEntries(strays.map(t => [t, dropCJKWords(t)])),
     dedupe: { same: sameProduct(w1, w2), different: sameProduct(w1, bag), noiseOnly: sameProduct('跨境 批发 新款', '外贸 现货 爆款'), fp: fingerprint(w1) },
     pricing: {
       light: computePrice(s, 25, 800, null, 1500),                       // صغيرة وثقيلة
@@ -198,6 +206,33 @@ api.post('/source/translate/why', async (c) => {
   const out = [];
   for (const p of results) out.push({ id: p.id, tries: p.tr_tries, ...(await diagnoseTitle(c.env.AI, p.title_src && hasCJK(p.title_src) ? p.title_src : p.title_ar)) });
   return c.json({ checked: out.length, cases: out });
+});
+
+// أي نماذج Workers AI تعمل فعلًا اليوم؟ نجرّبها بنصّ قصير ونعرض من نجح ومن أُلغي
+api.post('/source/models', async (c) => {
+  if (!tokenOk(c)) return c.json({ error: 'رمز غير صحيح' }, 401);
+  if (!c.env.AI) return c.json({ error: 'لا يوجد Workers AI' }, 400);
+  const CHAT = [
+    '@cf/meta/llama-3.3-70b-instruct-fp8-fast', '@cf/meta/llama-4-scout-17b-16e-instruct',
+    '@cf/meta/llama-3.1-8b-instruct', '@cf/meta/llama-3.1-8b-instruct-fast', '@cf/meta/llama-3.1-8b-instruct-fp8',
+    '@cf/qwen/qwen2.5-14b-instruct', '@cf/qwen/qwen1.5-14b-chat-awq', '@cf/qwen/qwen3-30b-a3b-fp8',
+    '@cf/mistralai/mistral-small-3.1-24b-instruct', '@cf/google/gemma-3-12b-it', '@cf/openai/gpt-oss-120b',
+  ];
+  const zh = '爆款跨境中东长袍女长裙子穆斯林连衣裙豹纹印花钉珠阿巴亚连衣裙';
+  const out: any[] = [];
+  for (const model of CHAT) {
+    const t0 = Date.now();
+    try {
+      const r: any = await c.env.AI.run(model, { messages: [{ role: 'system', content: 'ترجم عنوان المنتج إلى عربي قصير. أجب بالترجمة فقط.' }, { role: 'user', content: zh }], max_tokens: 90, temperature: 0.2 });
+      const txt = String(r?.response ?? '').trim().split('\n')[0].slice(0, 120);
+      out.push({ model, ok: true, ms: Date.now() - t0, arabic: /[\u0600-\u06FF]/.test(txt), cjk: hasCJK(txt), out: txt });
+    } catch (e: any) { out.push({ model, ok: false, error: String(e?.message ?? e).slice(0, 160) }); }
+  }
+  for (const model of ['@cf/meta/m2m100-1.2b']) {
+    try { const r: any = await c.env.AI.run(model, { text: zh, source_lang: 'chinese', target_lang: 'arabic' }); out.push({ model, ok: true, out: String(r?.translated_text ?? '').slice(0, 120) }); }
+    catch (e: any) { out.push({ model, ok: false, error: String(e?.message ?? e).slice(0, 160) }); }
+  }
+  return c.json({ tried: out.length, models: out });
 });
 
 api.post('/source/translate', async (c) => {

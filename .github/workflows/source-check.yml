@@ -48,6 +48,10 @@ on:
         description: "recompute air+sea prices for N products (empty = skip, 'all' = every product)"
         default: ""
         required: false
+      models:
+        description: "yes = probe which Workers AI models still answer (the fallback chain silently died)"
+        default: ""
+        required: false
       why:
         description: "diagnose N stuck Chinese titles: what each model returned and which gate rejected it"
         default: ""
@@ -76,6 +80,7 @@ jobs:
           RP: ${{ github.event.inputs.reprice }}
           RE: ${{ github.event.inputs.repeat }}
           WH: ${{ github.event.inputs.why }}
+          MD: ${{ github.event.inputs.models }}
           JK: ${{ github.event.inputs.job_keyword }}
         run: |
           set -e
@@ -135,6 +140,11 @@ jobs:
               [ "$stall" -ge 3 ] && { echo "ثلاث دفعات بلا تقدّم — نتوقف"; break; }
               sleep 2
             done
+          fi
+          if [ "$MD" = "yes" ]; then
+            echo "=== which AI models answer"
+            code=$(post '{}' models); echo "HTTP $code"
+            python3 -c "import json;d=json.load(open('out.json'));[print(('OK  ' if m.get('ok') else 'DEAD'),f\"{m['model']:48}\",m.get('ms',''),'ar' if m.get('arabic') else '  ','cjk' if m.get('cjk') else '   ',(m.get('out') or m.get('error') or '')[:90]) for m in d.get('models') or []]" 2>/dev/null || cat out.json
           fi
           if [ -n "$WH" ]; then
             echo "=== why are these titles stuck"

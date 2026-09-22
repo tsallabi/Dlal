@@ -34,6 +34,19 @@ const JUNK = /عبر الحدود|تجارة (أجنبية|خارجية)|الأ�
 export const goodTitle = (t: string | null | undefined) => goodArabic(t) && !JUNK.test(t!);
 // عنوان عربي فيه حشو 1688: نُنظّفه بدل رفضه — رفضه كان يُبقي العنوان صينيًا وهو أسوأ بكثير
 const JUNK_G = /عبر الحدود|تجارة (أجنبية|خارجية)|الأسهم الحقيقية|أمازون|علي إكسبريس|بالجملة|بيع بالجملة|مصدر البضائع|موسم (الخريف|الربيع|الصيف|الشتاء) الجديد|20\d\d/g;
+// النموذج يترك أحيانًا كلمة صينية أو حرفًا واحدًا داخل عربية سليمة («م耙 حديدي…»، «بتصميم豹 مع…»).
+// نحذف الكلمة الحاملة للصيني كلها بدل رفض العنوان كله، ونقبل النتيجة إن بقي أغلب الكلام.
+export function dropCJKWords(t: string): string | null {
+  const words = t.split(/\s+/).filter(Boolean);
+  const kept = words.filter(w => !hasCJK(w));
+  if (kept.length < 3 || kept.length < words.length * 0.6) return null;
+  const out = kept.join(' ')
+    .replace(/\s+(و|مع|من|في|على)(\s+\1)+\s+/g, ' $1 ')     // «و و» بعد حذف كلمة بينهما
+    .replace(/^\s*(و|مع|من|في|على|,|،|-)\s+/, '')
+    .replace(/\s+([,،])/g, '$1').replace(/\s{2,}/g, ' ').trim();
+  return out.length >= 8 ? out : null;
+}
+
 export function cleanTitle(t: string): string {
   const out = t.replace(JUNK_G, ' ').replace(/[،,\-—_/|]{1,}\s*(?=[،,\-—_/|]|$)/g, ' ').replace(/\s{2,}/g, ' ').replace(/^[\s،,\-—_/|()]+|[\s،,\-—_/|()]+$/g, '').trim();
   return out;
@@ -49,7 +62,9 @@ async function llm(ai: any, sys: string, user: string, models: string[]): Promis
   for (const model of models) {
     try {
       const r: any = await ai.run(model, { messages: [{ role: 'system', content: sys }, { role: 'user', content: user }], max_tokens: 120, temperature: 0.2 });
-      const raw = String(r?.response ?? '').trim().split('\n')[0].replace(/^["'«»“”\s]+|["'«»“”\s.]+$/g, '').trim();
+      let raw = String(r?.response ?? '').trim().split('\n')[0].replace(/^["'«»“”\s]+|["'«»“”\s.]+$/g, '').trim();
+      // عربية سليمة بقيت فيها كلمة صينية: نحذف تلك الكلمة بدل رمي الترجمة كلها
+      if (hasCJK(raw) && /[\u0600-\u06FF]/.test(raw)) raw = dropCJKWords(raw) ?? raw;
       const t = sys === SYS_TITLE && goodArabic(raw) && !goodTitle(raw) ? cleanTitle(raw) : raw;
       if (goodArabic(t) && (sys !== SYS_TITLE || goodTitle(t))) return t.slice(0, 200);
     } catch {}
