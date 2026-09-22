@@ -135,7 +135,7 @@ jobs:
               code=$(post "{\"limit\":$TR}" translate) || { echo "انقطع الاتصال، نكمل"; sleep 5; continue; }
               echo "HTTP $code"; cat out.json; echo
               # نتوقف حين لا يبقى عنوان صيني، أو حين تمرّ ثلاث دفعات بلا تقدّم (العناوين تتناوب بعدّاد المحاولات)
-              python3 -c "import json,sys;d=json.load(open('out.json'));sys.exit(0 if d.get('remaining',0)>0 else 1)" || break
+              python3 -c "import json,sys;d=json.load(open('out.json'));sys.exit(0 if (d.get('remaining',0)>0 or d.get('variantsLeft',0)>0) else 1)" || break
               if python3 -c "import json,sys;d=json.load(open('out.json'));sys.exit(0 if (d.get('products',0) or d.get('variants',0)) else 1)"; then stall=0; else stall=$((stall+1)); fi
               [ "$stall" -ge 3 ] && { echo "ثلاث دفعات بلا تقدّم — نتوقف"; break; }
               sleep 2

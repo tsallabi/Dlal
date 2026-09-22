@@ -127,7 +127,7 @@ export class Translator {
 }
 
 // إعادة ترجمة ما بقي صينيًا أو ما تُرجم ترجمة رديئة (تكرار) — تُستخدم من الأدمن ومن /api/source/translate
-export async function retranslatePending(db: D1Database, ai: any, limit = 40): Promise<{ products: number; variants: number; tried: number; remaining: number; held: number }> {
+export async function retranslatePending(db: D1Database, ai: any, limit = 40): Promise<{ products: number; variants: number; tried: number; remaining: number; held: number; variantsLeft: number }> {
   const tr = new Translator(db, ai, limit + 60);
   // الأقل محاولةً أولًا: عنوان عصيّ على الترجمة لا يبتلع كل دفعة ويمنع بقية الكتالوج
   const { results } = await db.prepare("SELECT id,title_ar,title_src,supplier_name,tr_tries FROM products WHERE title_ar GLOB '*[一-龥]*' OR title_src GLOB '*[一-龥]*' OR supplier_name GLOB '*[一-龥]*' ORDER BY tr_tries ASC,(status='draft') DESC,sales DESC,id DESC LIMIT 400").all<any>();
@@ -148,9 +148,11 @@ export async function retranslatePending(db: D1Database, ai: any, limit = 40): P
     } else { await db.prepare('UPDATE products SET tr_tries=tr_tries+1 WHERE id=?').bind(p.id).run(); }
     tried++;
   }
-  const vs = await db.prepare("SELECT id,color,size FROM variants WHERE color GLOB '*[一-龥]*' OR size GLOB '*[一-龥]*' LIMIT 300").all<any>();
+  // ١٢٠ قيمة لكل دفعة: ٣٠٠ كانت تُطيل الاستدعاء إلى دقائق فتتأخر كل دفعة ويقترب الكرون من حدّه
+  const vs = await db.prepare("SELECT id,color,size FROM variants WHERE color GLOB '*[一-龥]*' OR size GLOB '*[一-龥]*' LIMIT 120").all<any>();
   for (const v of vs.results) { const cc = await tr.t(v.color, 'attr'); const sz = await tr.t(v.size, 'attr'); if (cc !== v.color || sz !== v.size) { await db.prepare('UPDATE variants SET color=?,size=? WHERE id=?').bind(cc, sz, v.id).run(); nv++; } }
   // كم بقي عليه نص صيني — ليعرف المُشغِّل متى يتوقف
   const left = await db.prepare("SELECT COUNT(*) n,SUM(status='draft') d FROM products WHERE title_ar GLOB '*[一-龥]*'").first<{ n: number; d: number }>();
-  return { products: n, variants: nv, tried, remaining: left?.n ?? 0, held: left?.d ?? 0 };
+  const vLeft = await db.prepare("SELECT COUNT(*) n FROM variants WHERE color GLOB '*[一-龥]*' OR size GLOB '*[一-龥]*'").first<{ n: number }>();
+  return { products: n, variants: nv, tried, remaining: left?.n ?? 0, held: left?.d ?? 0, variantsLeft: vLeft?.n ?? 0 };
 }

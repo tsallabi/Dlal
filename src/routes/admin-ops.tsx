@@ -596,7 +596,7 @@ ops.post('/source/translate', async (c) => {
   if (!c.env.AI) return c.redirect('/admin/source?test=err&detail=' + encodeURIComponent('الترجمة تعمل على Cloudflare فقط'));
   const r = await retranslatePending(c.env.DB, c.env.AI, 20);
   await logActivity(c.env.DB, c.get('user')!.id, 'source.translate', String(r.products));
-  return c.redirect(`/admin/source?test=ok&detail=${encodeURIComponent(`تُرجم ${r.products} عنوانًا و${r.variants} خاصية · بقي ${r.remaining} عنوانًا صينيًا (${r.held} محجوزة).`)}`);
+  return c.redirect(`/admin/source?test=ok&detail=${encodeURIComponent(`تُرجم ${r.products} عنوانًا و${r.variants} خاصية · بقي ${r.remaining} عنوانًا صينيًا (${r.held} محجوزة) و${r.variantsLeft} قيمة لون/مقاس.`)}`);
 });
 
 ops.post('/source/run', async (c) => {
