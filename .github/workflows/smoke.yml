@@ -45,6 +45,12 @@ jobs:
             echo "no proxied image on home page"; fail=1
           fi
           grep -q 'alicdn.com' /tmp/home.html && { echo "SOURCE CDN LEAKED ON HOME"; fail=1; } || echo "home hides source cdn"
+          # القاعدة الأولى: لا حرف صيني أمام الزبونة على أي صفحة تصفّح
+          for p in / /c/dresses /c/bags /new /sale; do
+            curl -s "$BASE$p" > /tmp/cn.html
+            cn=$(python3 -c "import re,sys;h=open('/tmp/cn.html',encoding='utf-8',errors='ignore').read();b=re.sub(r'(?s)<script.*?</script>|<style.*?</style>','',h);t=re.sub(r'(?s)<[^>]+>',' ',b);m=re.findall(r'[一-鿿]',t);print(''.join(m[:20]))")
+            if [ -n "$cn" ]; then echo "CHINESE TEXT ON $p: $cn"; fail=1; else echo "no chinese on $p"; fi
+          done
 
           echo "--- browser extension package:"
           zcode=$(curl -sL -o /tmp/ext.zip -w '%{http_code}' "$BASE/talin-extension.zip")
