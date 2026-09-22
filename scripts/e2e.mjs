@@ -504,15 +504,17 @@ expect((await page.inputValue('input[name=fx_cny_lyd]')) === '1.05', 'حفظ س�
 await page.goto(BASE + '/admin/import');
 await page.fill('textarea[name=json]', JSON.stringify([{ offerId: '999000111', url: 'https://detail.1688.com/offer/999000111.html', title: '测试连衣裙', titleAr: 'فستان تجريبي مستورد', priceCny: 39.9, images: [], variants: [{ color: 'أحمر', size: 'M' }], minQty: 1, inStock: true }]));
 await page.click('button:has-text("استيراد")'); await page.waitForLoadState('networkidle');
+// القائمة تعرض ٢٠٠ الأحدث فقط، وعيّنات التشغيلات المتراكمة تدفع هذه خارجها: نبحث بالرقم
+await page.goto(BASE + '/admin/products?q=999000111');
 expect(await has(page, 'فستان تجريبي مستورد'), 'استيراد JSON أضاف المنتج');
 const r = await ctx.request.post(BASE + '/api/import', { headers: { 'x-import-token': 'dev-import-token' }, data: { category_id: 1, page_url: 'test', items: [{ offerId: '999000111', priceCny: 45, inStock: true }] } });
 expect((await r.json()).updated === 1, 'API الاستيراد يحدّث منتجًا موجودًا بدل تكراره');
 // إعادة فحص منتج من مهمة بلا قسم يجب ألا تغيّر سعره (يُسعَّر بقسمه هو)
-await page.goto(BASE + '/admin/products');
+await page.goto(BASE + '/admin/products?q=999000111');
 const priceBefore = await page.locator('table.tbl tr:has-text("فستان تجريبي مستورد") td').nth(4).textContent();
 const again = await ctx.request.post(BASE + '/api/import', { headers: { 'x-import-token': 'dev-import-token' }, data: { category_id: null, page_url: 'ext:stock', items: [{ offerId: '999000111', url: 'https://detail.1688.com/offer/999000111.html', title: 'فستان تجريبي مستورد', priceCny: 45, images: [], variants: [], inStock: true }] } });
 expect(again.ok(), 'إعادة الفحص بلا قسم تنجح');
-await page.goto(BASE + '/admin/products');
+await page.goto(BASE + '/admin/products?q=999000111');
 const priceAfter = await page.locator('table.tbl tr:has-text("فستان تجريبي مستورد") td').nth(4).textContent();
 expect(priceBefore === priceAfter, `سعر المنتج لا يتغير عند إعادة الفحص بلا قسم (${priceBefore} → ${priceAfter})`);
 

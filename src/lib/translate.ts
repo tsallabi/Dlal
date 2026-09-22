@@ -133,6 +133,20 @@ const SHORT_MODELS = ['@cf/mistralai/mistral-small-3.1-24b-instruct', '@cf/meta/
 const SYS_TITLE = 'أنت مترجم لمتجر أزياء عربي. حوّل عنوان منتج من موقع 1688 (صيني محشو بكلمات مفتاحية) إلى عنوان منتج عربي قصير وطبيعي من 5 إلى 14 كلمة يصف المنتج للزبون. احذف عبارات مثل "تجارة خارجية"، "عبر الحدود"، "جديد 2025"، "بالجملة"، "موديل جديد". أجب بالعنوان العربي فقط، بلا شرح ولا علامات اقتباس.';
 const SYS_ATTR = 'ترجم قيمة خاصية منتج (لون أو مقاس أو نمط) من الصينية إلى العربية بكلمة أو كلمتين كما تُكتب في متجر ملابس. احتفظ برموز المقاسات اللاتينية (S, M, L, XL, 2XL) والأرقام كما هي بلا تعريب. 均码 تعني "مقاس واحد". أجب بالترجمة فقط.';
 const SYS_TEXT = 'ترجم النص التالي من الصينية إلى العربية بشكل طبيعي وقصير. أجب بالترجمة فقط.';
+// مسرد مصطلحات: كلمات صينية أخطأ فيها النموذج فعلًا على الرف الحي، تُمرَّر إليه في الطلب
+// بدل انتظار أن يصيبها من تلقائه. أضف هنا أي كلمة تتكرر خطأً — أرخص من إعادة الترجمة مرارًا.
+const GLOSS: Record<string, string> = {
+  '登山杖': 'عصا تسلّق الجبال',      // كان يترجمها «زلازل»
+  '风炮': 'مفتاح صدمي هوائي',        // كان يترجمها «قنبلة»
+  '嘉兰百合': 'زنبق الجلوريوزا',
+  '抗震': 'مقاوم للاهتزاز',
+  '筷子': 'عيدان طعام',
+  '哑铃': 'دمبل',
+};
+function glossFor(text: string): string {
+  const hits = Object.entries(GLOSS).filter(([zh]) => text.includes(zh));
+  return hits.length ? `\nمصطلحات ثابتة: ${hits.map(([zh, ar]) => `${zh} = ${ar}`).join('، ')}` : '';
+}
 async function llm(ai: any, sys: string, user: string, models: string[]): Promise<string | null> {
   for (const model of models) {
     try {
@@ -152,7 +166,8 @@ async function llm(ai: any, sys: string, user: string, models: string[]): Promis
 export async function translateZhAr(ai: any, text: string, kind: 'text' | 'attr' | 'title' = 'text', hintEn?: string | null): Promise<string | null> {
   if (!ai || !text) return null;
   const sys = kind === 'attr' ? SYS_ATTR : kind === 'title' ? SYS_TITLE : SYS_TEXT;
-  const user = hintEn && !hasCJK(hintEn) ? `الصينية: ${text.slice(0, 300)}\nالإنجليزية: ${hintEn.slice(0, 300)}` : text.slice(0, 300);
+  const base = hintEn && !hasCJK(hintEn) ? `الصينية: ${text.slice(0, 300)}\nالإنجليزية: ${hintEn.slice(0, 300)}` : text.slice(0, 300);
+  const user = base + glossFor(text);
   // العناوين: النموذج الكبير ثم الصغير؛ الخصائص القصيرة: النموذج الصغير (أسرع) يكفي
   const models = kind === 'title' ? TITLE_MODELS : SHORT_MODELS;
   return await llm(ai, sys, user, models);
@@ -187,7 +202,10 @@ export class Translator {
     const d = kind === 'attr' ? dictTranslate(k) : null;
     if (d !== null) { this.mem.set(k, d); return d; }
     const row = await this.db.prepare('SELECT dst FROM translations WHERE src=?').bind(k).first<{ dst: string }>().catch(() => null);
-    if (row && goodArabic(row.dst)) { this.mem.set(k, row.dst); return row.dst; }
+    // الذاكرة قد تكون مسمومة: ترجمة مكسورة محفوظة تُعاد إلى الأبد فلا يتغيّر العنوان مهما
+    // أُعيدت المحاولة (أربعة عناوين بلغت سبع محاولات بلا تغيير). نحذفها ونسأل النموذج من جديد.
+    if (row && goodArabic(row.dst) && !(kind === 'title' && brokenTitle(row.dst, k))) { this.mem.set(k, row.dst); return row.dst; }
+    if (row) await this.db.prepare('DELETE FROM translations WHERE src=?').bind(k).run().catch(() => {});
     const fallback = hintEn && !hasCJK(hintEn) ? hintEn.slice(0, 200) : text;
     if (this.aiCalls >= this.maxAi) return fallback;
     this.aiCalls++;
@@ -195,6 +213,7 @@ export class Translator {
     if (!out) return fallback;
     // مقاس لاتيني داخل القيمة (مثل "加大码XL") يبقى كما هو حتى لو عرّبه النموذج
     if (kind === 'attr') { const sz = k.match(/(XXS|XS|S|M|L|XL|XXL|XXXL|[2-6]XL)(?![A-Za-z])/i); if (sz && !new RegExp(`\\b${sz[1]}\\b`, 'i').test(out)) { const rest = dictTranslate(k.replace(sz[1], '').replace(/码/g, '').trim()); out = rest ? `${rest} ${sz[1].toUpperCase()}` : sz[1].toUpperCase(); } }
+    if (kind === 'title' && brokenTitle(out, k)) return fallback;   // مكسور أيضًا: لا يُحفظ ولا يُستبدل به القديم
     this.mem.set(k, out);
     await this.db.prepare('INSERT OR REPLACE INTO translations(src,dst,kind) VALUES(?,?,?)').bind(k, out, kind).run().catch(() => {});
     return out;
@@ -250,7 +269,12 @@ export async function retranslatePending(db: D1Database, ai: any, limit = 40): P
     // المنتج الذي عنوانه عربي سليم واسم مورّده عربي لا يحتاج شيئًا: نتخطاه بلا أن يُحسب من الدفعة.
     // (كان يُحسب فيبتلع الأربعين مكانًا ولا يصل الدور إلى العناوين الصينية الحقيقية.)
     if (!needTitle && !hasCJK(p.supplier_name)) continue;
-    const t = needTitle ? await tr.t(src, 'title') : p.title_ar;
+    // `tr.t` تُعيد النص الأصلي حين تعجز كل النماذج. قبوله يعني استبدال عنوان عربي مكسور
+    // بعنوان صيني — أسوأ. لا نقبل إلا ترجمة عربية سليمة غير مكسورة، وإلا تُترك كما هي.
+    const cand = needTitle ? await tr.t(src, 'title') : p.title_ar;
+    const t = !needTitle ? p.title_ar
+      : (cand && goodTitle(cand) && !brokenTitle(cand, src)) ? cand
+      : (hasCJK(p.title_ar) ? cand : p.title_ar);
     const sp = await tr.t(p.supplier_name);
     // عنوان صار عربيًا: المنتج المحجوز كمسودة يُنشر الآن (لا يُعرض عنوان صيني للزبونة أبدًا)
     if ((t && t !== p.title_ar) || (sp && sp !== p.supplier_name)) {
