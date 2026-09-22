@@ -9,7 +9,7 @@ import { Stars } from '../views/account';
 import { getCategories, PRODUCT_SELECT, fmt, imgUrl, orderCode, timeAgo, notify } from '../lib/db';
 import type { ProductRow } from '../lib/db';
 import { loadSettings, computePrice, shipRates, seaOn } from '../lib/pricing';
-import type { ShipMode } from '../lib/pricing';
+import type { ShipMode, Settings } from '../lib/pricing';
 import { checkCoupon } from '../lib/coupons';
 import { loadMyPay } from '../lib/mypay';
 
@@ -557,6 +557,22 @@ function shipMode(c: Context<Env>): ShipMode {
   return getCookie(c, 'ship') === 'sea' ? 'sea' : 'air';
 }
 
+// أجرة التوصيل داخل ليبيا حسب المدينة: سطر «المدينة = المبلغ» في الإعدادات، وما لم يُذكر يأخذ الأجرة العامة.
+// التوصيل إلى سبها أو الكفرة يكلّف أضعاف طرابلس، فأجرة واحدة للبلد كلها تعني خسارة في البعيد وغلاءً في القريب.
+export function cityRates(s: Settings): Record<string, number> {
+  const out: Record<string, number> = {};
+  (s.delivery_city_rates ?? '').split('\n').forEach(line => {
+    const [city, amount] = line.split('=').map(x => x.trim());
+    const v = parseFloat(amount ?? '');
+    if (city && !Number.isNaN(v) && v >= 0) out[city] = v;
+  });
+  return out;
+}
+export const deliveryFor = (s: Settings, city?: string | null) => {
+  const r = cityRates(s);
+  return city && r[city] !== undefined ? r[city] : parseFloat(s.delivery_lyd);
+};
+
 // حساب ملخص السلة: خصم كوبون + نقاط + توصيل
 async function cartTotals(c: Context<Env>, rows: any[], usePoints: boolean) {
   const db = c.env.DB; const u = c.get('user')!;
@@ -573,7 +589,10 @@ async function cartTotals(c: Context<Env>, rows: any[], usePoints: boolean) {
   const maxPts = Math.floor(afterCoupon * parseInt(s.points_max_percent || '50') / 100 / ptsValue);
   const pointsUsed = usePoints ? Math.min(u.points, maxPts) : 0;
   const pointsLyd = Math.round(pointsUsed * ptsValue * 100) / 100;
-  const delivery = freeShip || subtotal >= parseFloat(s.free_ship_over_lyd) ? 0 : parseFloat(s.delivery_lyd);
+  // المدينة تأتي من نموذج الدفع إن كانت الزبونة تملأه الآن، وإلا من ملفها
+  const city = (c.req.query('city') ?? u.city) || null;
+  const cityFee = deliveryFor(s, city);
+  const delivery = freeShip || subtotal >= parseFloat(s.free_ship_over_lyd) ? 0 : cityFee;
   const total = Math.round((afterCoupon - pointsLyd + delivery) * 100) / 100;
   // فرق السعر بين الطريقتين ليظهر للزبونة كم توفّر بالبحري
   const mode = shipMode(c);
@@ -581,7 +600,7 @@ async function cartTotals(c: Context<Env>, rows: any[], usePoints: boolean) {
   const seaSum = rows.reduce((a, r) => a + (r.sea_unit ?? r.unit) * r.qty, 0);
   const seaSaving = Math.round((airSum - seaSum) * 100) / 100;
   const shipDays = mode === 'sea' ? (s.sea_days || '٣٠ — ٤٥ يومًا') : (s.air_days || '١٢ — ١٨ يومًا');
-  return { s, subtotal, discount, freeShip, coupon, couponErr, pointsUsed, pointsLyd, maxPts, ptsValue, delivery, total, mode, airSum, seaSum, seaSaving, shipDays };
+  return { s, subtotal, discount, freeShip, coupon, couponErr, pointsUsed, pointsLyd, maxPts, ptsValue, delivery, cityFee, city, total, mode, airSum, seaSum, seaSaving, shipDays };
 }
 
 // وصف عربي حقيقي للمنتجات التي وصلت من صفحة بحث بلا وصف — أفضل من سطر «لا يوجد وصف»
@@ -637,7 +656,7 @@ const Summary = ({ t, u, rows, showItems, usePointsToggle }: any) => (
     {t.discount > 0 && <div class="row" style="color:#1a9c5b"><span>خصم الكوبون {t.coupon?.code}</span><span>−{fmt(t.discount)}</span></div>}
     {usePointsToggle && u.points > 0 && <label class="row" style="cursor:pointer"><span><input type="checkbox" name="use_points" value="1" checked={t.pointsUsed > 0} onchange="location.href='/checkout?use_points='+(this.checked?1:0)" /> استخدام نقاطي ({u.points} نقطة)</span><span style="color:#1a9c5b">{t.pointsUsed > 0 ? `−${fmt(t.pointsLyd)}` : `حتى ${fmt(t.maxPts * t.ptsValue)}`}</span></label>}
     {!usePointsToggle && t.pointsUsed > 0 && <div class="row" style="color:#1a9c5b"><span>نقاط ({t.pointsUsed})</span><span>−{fmt(t.pointsLyd)}</span></div>}
-    <div class="row"><span>التوصيل داخل ليبيا</span><span>{t.delivery ? fmt(t.delivery) : 'مجاني'}</span></div>
+    <div class="row"><span>التوصيل{t.city ? ` إلى ${t.city}` : ' داخل ليبيا'}</span><span>{t.delivery ? fmt(t.delivery) : 'مجاني'}</span></div>
     <div class="row tot"><span>الإجمالي</span><span>{fmt(t.total)}</span></div>
   </div>
 );
@@ -717,7 +736,12 @@ store.get('/checkout', async (c) => {
             <div id="newAddr" class={addrs.results.length ? 'collapsed' : ''}>
               <label>الاسم الكامل</label><input type="text" name="name" value={u.name} />
               <label>رقم الهاتف</label><input type="tel" name="phone" value={u.phone} />
-              <label>المدينة</label><select name="city">{CITIES.map(ct => <option selected={ct === u.city}>{ct}</option>)}</select>
+              <label>المدينة</label>
+              {/* بلا new URL: صفحة الدفع تُحمّل سكربتًا يظلّل الاسم في بعض المتصفحات فيفشل المُنشئ */}
+              <select name="city" onchange="location.href=location.pathname+'?city='+encodeURIComponent(this.value)+(/use_points=1/.test(location.search)?'&use_points=1':'')">
+                {CITIES.map(ct => <option selected={ct === (t.city ?? u.city)}>{ct}</option>)}
+              </select>
+              <p style="font-size:12px;color:#666;margin:4px 0 0">أجرة التوصيل إلى <b>{t.city ?? u.city ?? CITIES[0]}</b>: <b>{t.delivery === 0 ? 'مجانًا' : fmt(t.cityFee)}</b>{t.delivery === 0 && t.cityFee > 0 ? ` (مجانية لأن طلبك تجاوز ${fmt(parseFloat(t.s.free_ship_over_lyd))})` : ''}</p>
               <label>العنوان بالتفصيل</label><textarea name="address" rows={2}>{u.address ?? ''}</textarea>
               <label class="radio" style="border:0;padding:4px 0"><input type="checkbox" name="save_address" value="1" checked /> احفظي هذا العنوان في دفتر عناويني</label>
             </div>
@@ -771,6 +795,10 @@ store.post('/checkout', async (c) => {
       await db.prepare('INSERT INTO addresses(user_id,name,phone,city,address,is_default) VALUES(?,?,?,?,?,?)').bind(u.id, ship.name, ship.phone, ship.city, ship.address, n.n === 0 ? 1 : 0).run();
     }
   }
+  // أجرة التوصيل تُحسم بمدينة العنوان المختار فعلًا، لا بالمدينة التي كانت معروضة في النموذج
+  const delivery = t.freeShip || t.subtotal >= parseFloat(t.s.free_ship_over_lyd) ? 0 : deliveryFor(t.s, ship.city);
+  const total = Math.round((Math.max(0, t.subtotal - t.discount) - t.pointsLyd + delivery) * 100) / 100;
+
   // توزيع الطلب على شريك شحن نشط حسب نسبة التوزيع
   const partner = await db.prepare(
     `SELECT p.id FROM partners p WHERE p.active=1 ORDER BY p.share_percent DESC,
@@ -779,7 +807,7 @@ store.post('/checkout', async (c) => {
   const ins = await db.prepare(
     `INSERT INTO orders(code,user_id,partner_id,status,payment_method,subtotal_lyd,shipping_lyd,total_lyd,fx_rate_used,ship_name,ship_phone,ship_city,ship_address,note,coupon_code,discount_lyd,points_used,points_lyd,ship_method)
      VALUES('tmp',?,?,'pending_payment',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-  ).bind(u.id, partner?.id ?? null, method, t.subtotal, t.delivery, t.total, parseFloat(t.s.fx_cny_lyd),
+  ).bind(u.id, partner?.id ?? null, method, t.subtotal, delivery, total, parseFloat(t.s.fx_cny_lyd),
     ship.name, ship.phone, ship.city, ship.address, f.note ? String(f.note) : null, t.coupon?.code ?? null, t.discount, t.pointsUsed, t.pointsLyd, t.mode).run();
   const oid = ins.meta.last_row_id as number;
   const code = orderCode(oid);

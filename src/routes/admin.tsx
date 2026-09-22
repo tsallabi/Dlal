@@ -524,6 +524,9 @@ admin.get('/pricing', async (c) => {
         <label>مدة الوصول بحرًا</label><input type="text" name="sea_days" value={s.sea_days ?? '٣٠ — ٤٥ يومًا'} />
         <h3 style="margin-top:16px">التوصيل داخل ليبيا</h3>
         {F('delivery_lyd', 'رسوم التوصيل (د.ل)')}{F('free_ship_over_lyd', 'توصيل مجاني فوق (د.ل)')}
+        <label>أجرة التوصيل لكل مدينة (اختياري)</label>
+        <textarea name="delivery_city_rates" rows={5} dir="rtl" style="width:100%;font-family:inherit">{s.delivery_city_rates ?? ''}</textarea>
+        <p style="font-size:12px;color:#666;margin:4px 0 0">سطر لكل مدينة بالصيغة <span class="mono">المدينة = المبلغ</span>. المدينة غير المذكورة تأخذ الرسوم العامة أعلاه. التوصيل إلى سبها أو الكفرة يكلّف أضعاف طرابلس، فاضبطي الفرق هنا.<br />مثال:<br /><span class="mono" dir="rtl">طرابلس = 15</span><br /><span class="mono" dir="rtl">سبها = 45</span></p>
         <button class="btn" style="margin-top:12px">حفظ</button>
       </form>
       <div>
@@ -560,7 +563,7 @@ admin.get('/pricing', async (c) => {
 });
 admin.post('/pricing', async (c) => {
   const f = await c.req.parseBody();
-  const keys = ['fx_cny_lyd', 'fx_usd_lyd', 'markup_percent', 'safety_percent', 'ship_usd_per_kg', 'customs_percent', 'domestic_cn_ship_cny', 'delivery_lyd', 'free_ship_over_lyd', 'ship_mode', 'ship_usd_per_cbm', 'volumetric_divisor', 'default_volume_cm3', 'sea_enabled', 'ship_usd_per_kg_sea', 'ship_usd_per_cbm_sea', 'air_days', 'sea_days'];
+  const keys = ['fx_cny_lyd', 'fx_usd_lyd', 'markup_percent', 'safety_percent', 'ship_usd_per_kg', 'customs_percent', 'domestic_cn_ship_cny', 'delivery_lyd', 'free_ship_over_lyd', 'ship_mode', 'ship_usd_per_cbm', 'volumetric_divisor', 'default_volume_cm3', 'sea_enabled', 'ship_usd_per_kg_sea', 'ship_usd_per_cbm_sea', 'air_days', 'sea_days', 'delivery_city_rates'];
   await c.env.DB.batch(keys.filter(k => f[k] !== undefined).map(k => c.env.DB.prepare("INSERT INTO settings(key,value,updated_at) VALUES(?,?,datetime('now')) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at").bind(k, String(f[k]))));
   return c.redirect('/admin/pricing?ok=1');
 });

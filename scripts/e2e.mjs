@@ -644,6 +644,36 @@ const costTxt = await page.locator('.kpi', { hasText: 'تكلفتنا' }).textCo
 expect(parseFloat(costTxt.replace(/[^\d.]/g, '')) > 0, 'تكلفتنا محسوبة وليست صفرًا');
 await shot(page, 'admin-reports-profit');
 
+// ---------- أجرة التوصيل حسب المدينة: سبها تكلّف أكثر من طرابلس ----------
+await login(page, '0910000000', 'admin123');
+await page.goto(BASE + '/admin/pricing');
+expect(await has(page, 'أجرة التوصيل لكل مدينة'), 'حقل أجرة التوصيل لكل مدينة موجود');
+await page.fill('textarea[name=delivery_city_rates]', 'طرابلس = 10\nسبها = 45');
+await page.locator('form:has(textarea[name=delivery_city_rates]) button:has-text("حفظ")').click(); await page.waitForLoadState('networkidle');
+expect((await page.locator('textarea[name=delivery_city_rates]').inputValue()).includes('سبها'), 'الأجرة المحفوظة تبقى');
+// الزبونة: نضيف منتجًا رخيصًا (دون حد الشحن المجاني) ونقارن الأجرتين
+await login(page, PHONE, 'secret456');
+await page.goto(BASE + '/cart');
+if ((await page.locator('.cart-row').count()) === 0) {
+  await page.goto(BASE + '/p/' + productSlug);
+  if (await page.locator('.chips[data-opt=color] .chip:not(.off)').count()) await page.locator('.chips[data-opt=color] .chip:not(.off)').first().click();
+  if (await page.locator('.chips[data-opt=size] .chip:not(.off)').count()) await page.locator('.chips[data-opt=size] .chip:not(.off)').first().click();
+  await page.click('#addForm button[type=submit]'); await page.waitForLoadState('networkidle');
+}
+expect((await page.locator('.cart-row').count()) >= 1, 'السلة فيها منتج قبل فحص أجرة المدينة');
+await page.goto(BASE + '/checkout?city=' + encodeURIComponent('طرابلس'));
+const dTrip = num(await page.locator('.summary .row', { hasText: 'التوصيل' }).first().textContent());
+await page.goto(BASE + '/checkout?city=' + encodeURIComponent('سبها'));
+const dSabha = num(await page.locator('.summary .row', { hasText: 'التوصيل' }).first().textContent());
+expect(dSabha > dTrip, `التوصيل إلى سبها أغلى من طرابلس (${dSabha} > ${dTrip})`);
+expect(await has(page, 'أجرة التوصيل إلى'), 'صفحة الدفع تُظهر أجرة مدينة الزبونة صراحةً');
+await shot(page, 'checkout-city-fee');
+// نعيد الإعداد فارغًا حتى لا يؤثر على بقية الفحوصات
+await login(page, '0910000000', 'admin123');
+await page.goto(BASE + '/admin/pricing');
+await page.fill('textarea[name=delivery_city_rates]', '');
+await page.locator('form:has(textarea[name=delivery_city_rates]) button:has-text("حفظ")').click(); await page.waitForLoadState('networkidle');
+
 // ---------- لوحة صحة الكتالوج: الأرقام التي يقودها المالك بنفسه ----------
 await login(page, '0910000000', 'admin123');
 await page.goto(BASE + '/admin/source');
