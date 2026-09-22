@@ -338,6 +338,11 @@ store.get('/p/:slug', async (c) => {
   const fitTotal = fit.results.reduce((a, r) => a + r.n, 0);
   const fitPct = (k: string) => fitTotal ? Math.round((fit.results.find(r => r.size_fit === k)?.n ?? 0) / fitTotal * 100) : 0;
   const s = await loadSettings(db);
+  const mode = shipMode(c);
+  const rates = shipRates(s, mode);
+  // السعر المعروض يتبع طريقة الشحن المختارة، تمامًا كما في السلة والبطاقة
+  const shown = mode === 'sea' && p.price_sea_lyd ? p.price_sea_lyd : p.price_lyd;
+  const seaSave = p.price_sea_lyd && p.price_sea_lyd < p.price_lyd ? p.price_lyd - p.price_sea_lyd : 0;
   const b = await base(c);
   return c.html(
     <Layout {...b} title={p.title_ar} active={p.cat_slug}>
@@ -350,8 +355,22 @@ store.get('/p/:slug', async (c) => {
         <div>
           <h1>{p.title_ar}</h1>
           <div class="meta" style="font-size:13px;color:#666"><a href="#reviews"><Stars n={p.rating} /> {p.rating.toFixed(1)} ({p.review_count} تقييم)</a> · {p.sales}+ بيعت · {p.views} مشاهدة</div>
-          <div class="price" style="margin-top:8px">{fmt(p.price_lyd)}{off > 0 && <s>{fmt(p.compare_price_lyd!)}</s>}{off > 0 && <span class="tag" style="position:static;margin-inline-start:8px;font-size:13px;background:#b5124f;color:#fff;padding:2px 8px;border-radius:4px">-{off}%</span>}</div>
-          <div class="price-note">السعر شامل الشحن من الصين والجمارك. التوصيل داخل ليبيا {fmt(parseFloat(s.delivery_lyd))} (مجاني فوق {fmt(parseFloat(s.free_ship_over_lyd))}). تكسبين <b>{Math.floor(p.price_lyd * parseFloat(s.points_per_lyd || '1'))} نقطة</b> عند التسليم.</div>
+          <div class="price" style="margin-top:8px">{fmt(shown)}{off > 0 && <s>{fmt(p.compare_price_lyd!)}</s>}{off > 0 && <span class="tag" style="position:static;margin-inline-start:8px;font-size:13px;background:#b5124f;color:#fff;padding:2px 8px;border-radius:4px">-{off}%</span>}</div>
+          <div class="price-note">السعر شامل الشحن من الصين والجمارك. التوصيل داخل ليبيا {fmt(parseFloat(s.delivery_lyd))} (مجاني فوق {fmt(parseFloat(s.free_ship_over_lyd))}). تكسبين <b>{Math.floor(shown * parseFloat(s.points_per_lyd || '1'))} نقطة</b> عند التسليم.</div>
+          {seaOn(s) && p.price_sea_lyd ? (
+            <form method="post" action="/cart/ship" class="pship">
+              <input type="hidden" name="back" value={`/p/${p.slug}`} />
+              <label class={mode === 'air' ? 'on' : ''}>
+                <input type="radio" name="mode" value="air" checked={mode === 'air'} onchange="this.form.submit()" />
+                <span class="t">✈️ جوي {fmt(p.price_lyd)}</span><span class="d">{s.air_days || '١٢ — ١٨ يومًا'}</span>
+              </label>
+              <label class={mode === 'sea' ? 'on' : ''}>
+                <input type="radio" name="mode" value="sea" checked={mode === 'sea'} onchange="this.form.submit()" />
+                <span class="t">🚢 بحري {fmt(p.price_sea_lyd)}{seaSave > 0 && <b> وفّري {fmt(seaSave)}</b>}</span><span class="d">{s.sea_days || '٣٠ — ٤٥ يومًا'}</span>
+              </label>
+              <noscript><button class="btn sm" type="submit">تطبيق</button></noscript>
+            </form>
+          ) : null}
           {!p.in_stock && <Flash type="err" msg="هذا المنتج غير متوفر حاليًا عند المورد. أضيفيه للمفضلة وسنخبرك عند توفره." />}
           <form method="post" action="/cart/add" id="addForm">
             <input type="hidden" name="product_id" value={p.id} />
@@ -377,12 +396,12 @@ store.get('/p/:slug', async (c) => {
             </div>
           </form>
           <div class="trust">
-            <div>🚚 <b>الوصول خلال 15–25 يومًا</b><br />شحن جوي مجمّع من الصين</div>
+            <div>🚚 <b>الوصول خلال {rates.days}</b><br />شحن {rates.ar} مجمّع من الصين</div>
             <div>💳 <b>ادفعي بالدينار</b><br />بطاقة مصرفية · سداد · إدفعلي · موبي كاش</div>
             <div>🔍 <b>فحص قبل الشحن</b><br />صور للبضاعة من مخزننا في الصين</div>
             <div>↩️ <b>ضمان الوصول</b><br />تعويض كامل لأي تالف أو مختلف</div>
           </div>
-          <details open><summary>الوصف</summary><div style="font-size:14px;white-space:pre-line">{p.description_ar ?? 'لا يوجد وصف.'}</div></details>
+          <details open><summary>الوصف</summary><div style="font-size:14px;white-space:pre-line">{p.description_ar || autoDesc(p, s, rates, colors, sizes)}</div></details>
           {isClothing && (
             <details id="sizeGuide"><summary>دليل المقاسات (آسيوي ← ليبي)</summary>
               <div class="size-guide"><table>
@@ -532,6 +551,18 @@ async function cartTotals(c: Context<Env>, rows: any[], usePoints: boolean) {
   const seaSaving = Math.round((airSum - seaSum) * 100) / 100;
   const shipDays = mode === 'sea' ? (s.sea_days || '٣٠ — ٤٥ يومًا') : (s.air_days || '١٢ — ١٨ يومًا');
   return { s, subtotal, discount, freeShip, coupon, couponErr, pointsUsed, pointsLyd, maxPts, ptsValue, delivery, total, mode, airSum, seaSum, seaSaving, shipDays };
+}
+
+// وصف عربي حقيقي للمنتجات التي وصلت من صفحة بحث بلا وصف — أفضل من سطر «لا يوجد وصف»
+function autoDesc(p: any, s: any, rates: { days: string; ar: string }, colors: string[], sizes: string[]) {
+  const L: string[] = [`${p.title_ar} — من قسم ${p.cat_name ?? 'متجرنا'}.`];
+  if (colors.length) L.push(`الألوان المتاحة: ${colors.slice(0, 8).join('، ')}.`);
+  if (sizes.length) L.push(`المقاسات: ${sizes.slice(0, 10).join('، ')} (مقاسات آسيوية — راجعي دليل المقاسات أدناه).`);
+  if (p.min_qty > 1) L.push(`الحد الأدنى للطلب ${p.min_qty} قطع.`);
+  L.push(`السعر شامل الشحن ${rates.ar} من الصين والجمارك، ويصل خلال ${rates.days}.`);
+  L.push(`نفحص القطعة ونصوّرها في مخزننا بالصين قبل شحنها، ونعوّضك كاملًا عن أي تالف أو مختلف عن الصورة.`);
+  L.push(`التوصيل داخل ليبيا ${fmt(parseFloat(s.delivery_lyd))} ومجاني فوق ${fmt(parseFloat(s.free_ship_over_lyd))}.`);
+  return L.join('\n');
 }
 
 // اختيار طريقة الشحن من الصين: جوي سريع أو بحري أرخص

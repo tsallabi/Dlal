@@ -95,6 +95,20 @@ expect(await page.locator('.pd h1').isVisible(), 'صفحة المنتج تفتح
 expect(await has(page, 'التقييمات ('), 'صفحة المنتج تعرض قسم التقييمات');
 expect(!(await has(page, 'detail.1688.com')), 'رابط المصدر مخفي عن الزبونة');
 const productSlug = page.url().split('/p/')[1];
+// طريقة الشحن داخل صفحة المنتج: السعر والمدة يتغيران فعلًا بالنقر
+const airShown = num(await page.locator('.price').first().textContent());
+const airDays = (await page.locator('.trust > div').first().textContent()).trim();
+expect((await page.locator('.pship label').count()) === 2, 'صفحة المنتج تعرض خياري الشحن جوي وبحري');
+await page.locator('.pship label').nth(1).click(); await page.waitForLoadState('networkidle');
+const seaShown = num(await page.locator('.price').first().textContent());
+const seaDays = (await page.locator('.trust > div').first().textContent()).trim();
+expect(seaShown < airShown, `سعر المنتج البحري أقل من الجوي (${seaShown} < ${airShown})`);
+expect(seaDays !== airDays && seaDays.includes('بحري'), 'بطاقة الشحن تعرض مدة الشحن البحري بعد الاختيار');
+expect(await page.locator('.pship label').nth(1).getAttribute('class') === 'on', 'الخيار البحري يبقى محددًا بعد إعادة التحميل');
+await shot(page, 'product-sea');
+await page.locator('.pship label').nth(0).click(); await page.waitForLoadState('networkidle');
+expect(num(await page.locator('.price').first().textContent()) === airShown, 'العودة للجوي تعيد السعر الأصلي');
+expect(!(await has(page, 'لا يوجد وصف')), 'كل منتج له وصف عربي ولو لم يصل معه وصف من المصدر');
 await shot(page, 'product');
 await page.goto(BASE + '/'); expect(await has(page, 'شاهدتِ مؤخرًا'), 'الرئيسية تعرض "شاهدتِ مؤخرًا" بعد زيارة منتج');
 await page.goto(BASE + '/p/' + productSlug);
