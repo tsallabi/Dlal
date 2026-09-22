@@ -94,13 +94,18 @@ api.post('/crawl/report', async (c) => {
 // إعادة تسعير الكتالوج من الخادم (جوي + بحري) — دفعات حتى لا تتجاوز حدود الـ Worker
 api.post('/source/reprice', async (c) => {
   if (!tokenOk(c)) return c.json({ error: 'رمز غير صحيح' }, 401);
-  const b = await c.req.json<{ limit?: number; only_missing_sea?: boolean }>().catch(() => ({} as any));
+  const b = await c.req.json<{ limit?: number; only_missing_sea?: boolean; after_id?: number }>().catch(() => ({} as any));
   const db = c.env.DB;
   const s = await loadSettings(db);
   const cats = await getCategories(db);
   const limit = Math.max(1, Math.min(b.limit ?? 400, 800));
-  const where = b.only_missing_sea === false ? '1=1' : 'price_sea_lyd IS NULL';
-  const { results } = await db.prepare(`SELECT id,source_price_cny,weight_g,volume_cm3,category_id FROM products WHERE ${where} LIMIT ?`).bind(limit).all<any>();
+  // «الناقص فقط» يتقدّم وحده لأن الصفوف تخرج من الشرط بعد تسعيرها؛
+  // أما إعادة تسعير الكل فتحتاج مؤشّرًا على id وإلا أعادت نفس الدفعة كل مرة
+  const all = b.only_missing_sea === false;
+  const after = Number(b.after_id ?? 0) || 0;
+  const { results } = all
+    ? await db.prepare('SELECT id,source_price_cny,weight_g,volume_cm3,category_id FROM products WHERE id>? ORDER BY id LIMIT ?').bind(after, limit).all<any>()
+    : await db.prepare('SELECT id,source_price_cny,weight_g,volume_cm3,category_id FROM products WHERE price_sea_lyd IS NULL ORDER BY id LIMIT ?').bind(limit).all<any>();
   const stmts = results.map((p: any) => {
     const cat = cats.find(x => x.id === p.category_id);
     const w = p.weight_g ?? cat?.est_weight_g ?? 300;
@@ -110,7 +115,8 @@ api.post('/source/reprice', async (c) => {
   });
   for (let i = 0; i < stmts.length; i += 100) await db.batch(stmts.slice(i, i + 100));
   const left = await db.prepare('SELECT COUNT(*) n FROM products WHERE price_sea_lyd IS NULL').first<{ n: number }>();
-  return c.json({ ok: true, repriced: results.length, missing_sea_left: left?.n ?? 0 });
+  const lastId = results.length ? results[results.length - 1].id : after;
+  return c.json({ ok: true, repriced: results.length, last_id: lastId, missing_sea_left: left?.n ?? 0 });
 });
 
 // فحص منطق الحشمة والبصمة والشحن على الكود الحقيقي (scripts/logic-test)

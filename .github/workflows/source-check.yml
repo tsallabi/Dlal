@@ -99,14 +99,16 @@ jobs:
             done
           fi
           if [ -n "$RP" ]; then
-            n=$RP; only=true
-            [ "$RP" = "all" ] && { n=800; only=false; }
-            for i in $(seq 1 12); do
-              echo "=== reprice batch $i"
-              code=$(post "{\"limit\":$n,\"only_missing_sea\":$only}" reprice) || { echo "انقطع الاتصال، نكمل"; sleep 5; continue; }
+            n=$RP; only=true; after=0
+            [ "$RP" = "all" ] && { n=600; only=false; }
+            for i in $(seq 1 20); do
+              echo "=== reprice batch $i (after_id=$after)"
+              code=$(post "{\"limit\":$n,\"only_missing_sea\":$only,\"after_id\":$after}" reprice) || { echo "انقطع الاتصال، نكمل"; sleep 5; continue; }
               echo "HTTP $code"; cat out.json; echo
-              python3 -c "import json,sys;d=json.load(open('out.json'));sys.exit(0 if d.get('missing_sea_left',1)>0 and d.get('repriced',0)>0 else 1)" || break
-              sleep 3
+              after=$(python3 -c "import json;print(json.load(open('out.json')).get('last_id',0))")
+              # نكمل ما دامت الدفعة أعادت صفوفًا؛ كلا الوضعين يتوقف وحده عند النفاد
+              python3 -c "import json,sys;sys.exit(0 if json.load(open('out.json')).get('repriced',0)>0 else 1)" || break
+              sleep 2
             done
           fi
           if [ -n "$ST" ] && [ "$ST" != "no" ]; then
