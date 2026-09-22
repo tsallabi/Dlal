@@ -205,7 +205,10 @@ api.post('/source/translate/why', async (c) => {
   const { results } = await c.env.DB.prepare("SELECT id,title_ar,title_src,tr_tries FROM products WHERE title_ar GLOB '*[一-龥]*' ORDER BY tr_tries DESC, id LIMIT ?").bind(n).all<any>();
   const out = [];
   for (const p of results) out.push({ id: p.id, tries: p.tr_tries, ...(await diagnoseTitle(c.env.AI, p.title_src && hasCJK(p.title_src) ? p.title_src : p.title_ar)) });
-  return c.json({ checked: out.length, cases: out });
+  // قيم الألوان والمقاسات العالقة: نعرض نصها كما هو لنضيف ما يتكرر منها إلى القاموس بلا ذكاء اصطناعي
+  const { results: vs } = await c.env.DB.prepare(`SELECT color,size,COUNT(*) n FROM variants
+     WHERE color GLOB '*[一-龥]*' OR size GLOB '*[一-龥]*' GROUP BY color,size ORDER BY n DESC LIMIT 40`).all<any>();
+  return c.json({ checked: out.length, cases: out, stuckVariants: vs });
 });
 
 // أي نماذج Workers AI تعمل فعلًا اليوم؟ نجرّبها بنصّ قصير ونعرض من نجح ومن أُلغي

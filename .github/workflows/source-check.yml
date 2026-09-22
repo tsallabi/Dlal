@@ -149,7 +149,7 @@ jobs:
           if [ -n "$WH" ]; then
             echo "=== why are these titles stuck"
             code=$(post "{\"limit\":$WH}" translate/why); echo "HTTP $code"
-            python3 -c "import json;d=json.load(open('out.json'));[print('\n---',c['id'],'محاولات',c['tries'],'\nSRC:',c['src'][:120],'\nEN:',c['hintEn'],*[f\"\n  {m.get('model','')[-28:]}: err={m.get('error')} raw={m.get('raw','')[:120]!r} ar={m.get('arabic')} cjk={m.get('cjk')} good={m.get('goodArabic')} title={m.get('goodTitle')} cleanedOk={m.get('cleanedOk')}\" for m in c['models']],'\n  m2mEn:',c['m2mEn'],'\n  m2mZh:',c['m2mZh']) for c in d.get('cases') or []]" 2>/dev/null || cat out.json
+            python3 -c "import json;d=json.load(open('out.json'));[print('\n---',c['id'],'محاولات',c['tries'],'\nSRC:',c['src'][:120],'\nEN:',c['hintEn'],*[f\"\n  {m.get('model','')[-28:]}: err={m.get('error')} raw={m.get('raw','')[:120]!r} ar={m.get('arabic')} cjk={m.get('cjk')} good={m.get('goodArabic')} title={m.get('goodTitle')} cleanedOk={m.get('cleanedOk')}\" for m in c['models']],'\n  m2mEn:',c.get('m2mEn'),'\n  m2mZh:',c.get('m2mZh')) for c in d.get('cases') or []];print('--- قيم ألوان/مقاسات عالقة:');[print(f\" {v['n']:4}x color={v['color']!r} size={v['size']!r}\") for v in d.get('stuckVariants') or []]" 2>/dev/null || cat out.json
           fi
           if [ -n "$ST" ] && [ "$ST" != "no" ]; then
             echo "=== store stats"; code=$(post '{}' stats); echo "HTTP $code"
