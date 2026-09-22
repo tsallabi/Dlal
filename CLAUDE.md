@@ -18,6 +18,7 @@
 - محليًا: `npx wrangler d1 migrations apply dlal-db --local -c wrangler.local.toml` ثم `npx wrangler dev -c wrangler.local.toml` (النسخة المحلية بلا ربط Workers AI).
 - الاختبار الشامل: `npm run e2e` (يجب أن يبقى 100% ناجحًا قبل أي دفع)، و`npm run e2e:watch` يعرضه على الشاشة بمتصفح مرئي — استخدمه عند مراجعة ميزة أمام صاحب المشروع. اختبار الإضافة: `scripts/ext-test/README.md`.
 - النشر: أي دفع إلى `main` ينشر تلقائيًا عبر GitHub Actions إلى Cloudflare Workers، ثم يشغّل فحص الموقع الحي (`smoke.yml`). لا تنشر يدويًا.
+- جولة الموقع الحي بمتصفح فعلي: `npm run tour` (أو workflow `live-tour.yml` بعد كل نشر) تفتح الصفحات وتنقر الروابط والأقسام وصفحات المنتجات واختيار الشحن كما تفعل الزبونة، وتلتقط صورًا تُرفع كـ artifact. **قراءة فقط**: لا دخول ولا طلبات ولا استيراد. `smoke.yml` يفحص HTML بـ curl فلا يرى صورة مكسورة ولا تمريرًا أفقيًا في الجوال ولا خطأ جافاسكربت؛ الجولة تراها، وعلى البضاعة الحقيقية لا على البذرة.
 - الأسرار في GitHub Secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `IMPORT_TOKEN`، واختياريًا `MYPAY_*`.
 - كلمات مرور البذور التجريبية لا تُستخدم على الموقع الحي.
 

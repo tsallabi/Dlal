@@ -1,0 +1,42 @@
+# جولة حقيقية على الموقع الحي بمتصفح فعلي بعد كل نشر: تفتح الصفحات وتنقر الروابط كما تفعل الزبونة.
+# **قراءة فقط** — لا تسجيل دخول ولا طلبات ولا استيراد، فلا تمسّ بيانات زبونة حقيقية.
+# `smoke.yml` يفحص HTML بـ curl؛ هذه ترى ما لا يراه: صورة مكسورة، تمرير أفقي في الجوال،
+# زر لا يعمل، خطأ جافاسكربت — وعلى ١٤ ألف منتج حقيقي لا على بذرة محلية.
+name: Live site tour
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: Base URL
+        default: https://dlal.tsallabi.workers.dev
+        required: true
+      products:
+        description: كم منتجًا نفتح ونفحص
+        default: "8"
+        required: false
+  workflow_run:
+    workflows: ["Deploy to Cloudflare"]
+    types: [completed]
+jobs:
+  tour:
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Playwright chromium
+        run: npm i -D playwright@1 && npx playwright install --with-deps chromium
+      - name: Tour the live site
+        env:
+          BASE: ${{ github.event.inputs.url || 'https://dlal.tsallabi.workers.dev' }}
+          PRODUCTS: ${{ github.event.inputs.products || '8' }}
+        run: node scripts/live-tour.mjs
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-shots
+          path: live-shots/
+          retention-days: 14
