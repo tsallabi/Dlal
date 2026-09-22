@@ -1,4 +1,4 @@
-// ترجمة بيانات 1688 إلى العربية: قاموس فوري للألوان والمقاسات الشائعة + Workers AI (نموذج لغوي مع فحص جودة، ثم m2m100) للباقي + ذاكرة ترجمة في القاعدة
+// ترجمة بيانات 1688 إلى العربية: قاموس فوري للألوان والمقاسات الشائعة + نماذج Workers AI اللغوية مع فحص جودة + ذاكرة ترجمة في القاعدة
 export const hasCJK = (s: string | null | undefined) => /[一-鿿]/.test(s ?? '');
 
 // قاموس الألوان والمقاسات والكلمات المتكررة في متغيرات 1688
@@ -52,9 +52,12 @@ export function cleanTitle(t: string): string {
   return out;
 }
 
-async function m2m(ai: any, text: string, source: 'chinese' | 'english'): Promise<string | null> {
-  try { const r: any = await ai.run('@cf/meta/m2m100-1.2b', { text: text.slice(0, 300), source_lang: source, target_lang: 'arabic' }); const t = (r?.translated_text ?? '').trim(); return goodArabic(t) ? t.slice(0, 200) : null; } catch { return null; }
-}
+// m2m100 يُنتج تكرارًا فارغًا («سباحة سباحة سباحة…») على عناوين 1688 — مقيس على الموقع الحي، فلم يعد في السلسلة.
+// النماذج أدناه مرتبة بنتيجة قياس فعلي على عنوان عباية حقيقي (سبتمبر ٢٠٢٦):
+//   llama-4-scout 645ms أدقها · llama-3.3-70b 876ms · mistral-small 263ms أسرعها · llama-3.1-8b-fp8 738ms
+// المحذوفة: llama-3.1-8b (5028 مُلغى) · qwen1.5-14b (مُلغى) · qwen2.5-14b (غير موجود) · gemma-3 (ممنوع للحساب)
+const TITLE_MODELS = ['@cf/meta/llama-4-scout-17b-16e-instruct', '@cf/meta/llama-3.3-70b-instruct-fp8-fast', '@cf/mistralai/mistral-small-3.1-24b-instruct', '@cf/meta/llama-3.1-8b-instruct-fp8'];
+const SHORT_MODELS = ['@cf/mistralai/mistral-small-3.1-24b-instruct', '@cf/meta/llama-4-scout-17b-16e-instruct', '@cf/meta/llama-3.3-70b-instruct-fp8-fast'];
 const SYS_TITLE = 'أنت مترجم لمتجر أزياء عربي. حوّل عنوان منتج من موقع 1688 (صيني محشو بكلمات مفتاحية) إلى عنوان منتج عربي قصير وطبيعي من 5 إلى 14 كلمة يصف المنتج للزبون. احذف عبارات مثل "تجارة خارجية"، "عبر الحدود"، "جديد 2025"، "بالجملة"، "موديل جديد". أجب بالعنوان العربي فقط، بلا شرح ولا علامات اقتباس.';
 const SYS_ATTR = 'ترجم قيمة خاصية منتج (لون أو مقاس أو نمط) من الصينية إلى العربية بكلمة أو كلمتين كما تُكتب في متجر ملابس. احتفظ برموز المقاسات اللاتينية (S, M, L, XL, 2XL) والأرقام كما هي بلا تعريب. 均码 تعني "مقاس واحد". أجب بالترجمة فقط.';
 const SYS_TEXT = 'ترجم النص التالي من الصينية إلى العربية بشكل طبيعي وقصير. أجب بالترجمة فقط.';
@@ -72,21 +75,21 @@ async function llm(ai: any, sys: string, user: string, models: string[]): Promis
   return null;
 }
 
-// ترجمة بالذكاء الاصطناعي: نموذج لغوي (مع العنوان الإنجليزي كمساعد إن وُجد) → m2m100 من الإنجليزية → m2m100 من الصينية
+// ترجمة بالذكاء الاصطناعي: النماذج اللغوية بالترتيب المقيس (مع العنوان الإنجليزي كمساعد إن وُجد)
 export async function translateZhAr(ai: any, text: string, kind: 'text' | 'attr' | 'title' = 'text', hintEn?: string | null): Promise<string | null> {
   if (!ai || !text) return null;
   const sys = kind === 'attr' ? SYS_ATTR : kind === 'title' ? SYS_TITLE : SYS_TEXT;
   const user = hintEn && !hasCJK(hintEn) ? `الصينية: ${text.slice(0, 300)}\nالإنجليزية: ${hintEn.slice(0, 300)}` : text.slice(0, 300);
   // العناوين: النموذج الكبير ثم الصغير؛ الخصائص القصيرة: النموذج الصغير (أسرع) يكفي
-  const models = kind === 'title' ? ['@cf/meta/llama-3.3-70b-instruct-fp8-fast', '@cf/meta/llama-3.1-8b-instruct'] : ['@cf/meta/llama-3.1-8b-instruct', '@cf/meta/llama-3.3-70b-instruct-fp8-fast'];
-  return (await llm(ai, sys, user, models)) ?? (hintEn && !hasCJK(hintEn) ? await m2m(ai, hintEn, 'english') : null) ?? (await m2m(ai, text, 'chinese'));
+  const models = kind === 'title' ? TITLE_MODELS : SHORT_MODELS;
+  return await llm(ai, sys, user, models);
 }
 
 // تشخيص عنوان عصيّ: ماذا ردّ كل نموذج بالضبط وأي بوابة رفضته — بلا تخمين
 export async function diagnoseTitle(ai: any, text: string, hintEn?: string | null) {
   const out: any[] = [];
   const user = hintEn && !hasCJK(hintEn) ? `الصينية: ${text.slice(0, 300)}\nالإنجليزية: ${hintEn.slice(0, 300)}` : text.slice(0, 300);
-  for (const model of ['@cf/meta/llama-3.3-70b-instruct-fp8-fast', '@cf/meta/llama-3.1-8b-instruct']) {
+  for (const model of TITLE_MODELS) {
     try {
       const r: any = await ai.run(model, { messages: [{ role: 'system', content: SYS_TITLE }, { role: 'user', content: user }], max_tokens: 120, temperature: 0.2 });
       const raw = String(r?.response ?? '').trim().split('\n')[0].replace(/^["'«»“”\s]+|["'«»“”\s.]+$/g, '').trim();
@@ -94,9 +97,7 @@ export async function diagnoseTitle(ai: any, text: string, hintEn?: string | nul
       out.push({ model, raw: raw.slice(0, 200), cleaned: cleaned.slice(0, 200), arabic: /[\u0600-\u06FF]/.test(raw), cjk: hasCJK(raw), degenerate: !goodArabic(raw) && /[\u0600-\u06FF]/.test(raw) && !hasCJK(raw), goodArabic: goodArabic(raw), goodTitle: goodTitle(raw), cleanedOk: goodTitle(cleaned) });
     } catch (e: any) { out.push({ model, error: String(e?.message ?? e).slice(0, 200) }); }
   }
-  const m2mEn = hintEn && !hasCJK(hintEn) ? await m2m(ai, hintEn, 'english') : null;
-  const m2mZh = await m2m(ai, text, 'chinese');
-  return { src: text.slice(0, 200), hintEn: hintEn ?? null, models: out, m2mEn, m2mZh };
+  return { src: text.slice(0, 200), hintEn: hintEn ?? null, models: out };
 }
 
 // ترجمة مع ذاكرة: قاموس → ذاكرة القاعدة → الذكاء الاصطناعي → (العنوان الإنجليزي إن وُجد) → النص الأصلي
