@@ -208,7 +208,8 @@ ops.get('/payments', async (c) => {
             {canManage && <div class="inline" style="margin-top:8px"><button class="btn sm">حفظ</button><button class="btn sm ghost" formaction="/admin/payments/test">اختبار الاتصال</button></div>}
           </form>
           <form method="post" action="/admin/payments/settings" class="card-box"><h3>فروع الدفع نقدًا</h3>
-            <p style="font-size:12px;color:#666;margin:0 0 6px">سطر لكل فرع، تظهر للزبونة في صفحة الدفع تحت خيار «دفع كاش في أقرب فرع». أضيفي رقم الهاتف في نفس السطر متى توفّر.</p>
+            <p style="font-size:12px;color:#666;margin:0 0 6px">سطر لكل فرع بالصيغة: <span class="mono" dir="rtl">المدينة — العنوان | الهاتف</span> (الهاتف اختياري). تظهر للزبونة في صفحة الدفع تحت «دفع كاش في أقرب فرع» وفي صفحة <a href="/pages/branches" target="_blank">فروعنا</a>.</p>
+            <p style="font-size:12px;color:#666;margin:0 0 6px">مثال: <span class="mono" dir="rtl">طرابلس — شارع المخازن، الفرناج | 0910000000</span></p>
             <textarea name="branches" rows={5} dir="rtl" disabled={!canManage} style="width:100%;font-family:inherit">{s.branches ?? ''}</textarea>
             {canManage && <button class="btn sm" style="margin-top:8px">حفظ الفروع</button>}
           </form>
