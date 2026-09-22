@@ -127,7 +127,9 @@ export class Translator {
   public aiCalls = 0;
   constructor(private db: D1Database, private ai: any, private maxAi = 80) {}
   async t(text: string | null | undefined, kind: 'text' | 'attr' | 'title' = 'text', hintEn?: string | null): Promise<string | null> {
-    if (!text || !hasCJK(text)) return text ?? null;
+    // النص المكسور (عربي ملتصق بلاتيني) يمرّ إلى الترجمة كما يمرّ الصيني: كلاهما لا يُقرأ.
+    // بدون هذا كانت الدالة تُعيد «الرetro الأسود» كما هي لأنها بلا حرف صيني واحد.
+    if (!text || (!hasCJK(text) && !mixedScript(text))) return text ?? null;
     const k = norm(text);
     if (this.mem.has(k)) return this.mem.get(k)!;
     const d = kind === 'attr' ? dictTranslate(k) : null;
@@ -206,11 +208,19 @@ export async function retranslatePending(db: D1Database, ai: any, limit = 40): P
     tried++;
   }
   // ١٢٠ قيمة لكل دفعة: ٣٠٠ كانت تُطيل الاستدعاء إلى دقائق فتتأخر كل دفعة ويقترب الكرون من حدّه
-  const vs = await db.prepare("SELECT id,color,size FROM variants WHERE color GLOB '*[一-龥]*' OR size GLOB '*[一-龥]*' LIMIT 120").all<any>();
+  // قيم المتغيّرات المكسورة تُعرض للزبونة في منتقي اللون والمقاس مثل «الرetro الأسود» و«خaki»
+  const vs = await db.prepare(`SELECT id,color,size FROM variants
+     WHERE color GLOB '*[一-龥]*' OR size GLOB '*[一-龥]*'
+        OR color GLOB '*[\u0621-\u064A][a-zA-Z]*' OR color GLOB '*[a-zA-Z][\u0621-\u064A]*'
+        OR size  GLOB '*[\u0621-\u064A][a-zA-Z]*' OR size  GLOB '*[a-zA-Z][\u0621-\u064A]*' LIMIT 120`).all<any>();
   for (const v of vs.results) { const cc = await tr.t(v.color, 'attr'); const sz = await tr.t(v.size, 'attr'); if (cc !== v.color || sz !== v.size) { await db.prepare('UPDATE variants SET color=?,size=? WHERE id=?').bind(cc, sz, v.id).run(); nv++; } }
-  // كم بقي عليه نص صيني — ليعرف المُشغِّل متى يتوقف
-  const left = await db.prepare("SELECT COUNT(*) n,SUM(status='draft') d FROM products WHERE title_ar GLOB '*[一-龥]*'").first<{ n: number; d: number }>();
-  const vLeft = await db.prepare("SELECT COUNT(*) n FROM variants WHERE color GLOB '*[一-龥]*' OR size GLOB '*[一-龥]*'").first<{ n: number }>();
+  // كم بقي عليه نص لا يُقرأ (صيني أو مكسور) — ليعرف المُشغِّل متى يتوقف
+  const left = await db.prepare(`SELECT COUNT(*) n,SUM(status='draft') d FROM products
+     WHERE title_ar GLOB '*[一-龥]*' OR ${MASHED} OR ${NO_AR}`).first<{ n: number; d: number }>();
+  const vLeft = await db.prepare(`SELECT COUNT(*) n FROM variants
+     WHERE color GLOB '*[一-龥]*' OR size GLOB '*[一-龥]*'
+        OR color GLOB '*[\u0621-\u064A][a-zA-Z]*' OR color GLOB '*[a-zA-Z][\u0621-\u064A]*'
+        OR size  GLOB '*[\u0621-\u064A][a-zA-Z]*' OR size  GLOB '*[a-zA-Z][\u0621-\u064A]*'`).first<{ n: number }>();
   const released = await releaseHeldDrafts(db);
   const swept = await sweepMashedTitles(db);
   return { products: n, variants: nv, tried, remaining: left?.n ?? 0, held: left?.d ?? 0, variantsLeft: vLeft?.n ?? 0, released, swept };

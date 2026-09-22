@@ -841,6 +841,10 @@ const stillGone = await page.evaluate(async (b) => {
   return (await r.json()).totals;
 }, BASE);
 expect(stillGone.active > 0, `الفحص أعاد المنتجات التي قاعدها (${stillGone.active} نشط)`);
+// عدّادات النص المكسور: يجب أن تكون موجودة في الإحصاءات ليراها صاحب المشروع، وأن تؤول
+// إلى صفر كما يؤول chineseVisible. غيابها يعني أننا لا نرى العيب أصلًا.
+for (const k of ['mashedTitles', 'englishTitles', 'mashedVariants', 'chineseVisible'])
+  expect(typeof stillGone[k] === 'number', `الإحصاءات تعدّ «${k}» (${stillGone[k]})`);
 await page.goto(BASE + '/admin/source');
 await page.selectOption('select[name=src_provider]', realProv || 'none');
 await page.fill('input[name=src_base_url]', realBase);

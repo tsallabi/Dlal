@@ -216,13 +216,21 @@ api.post('/source/stats', async (c) => {
   const tot = await db.prepare("SELECT COUNT(*) n, SUM(CASE WHEN status='active' THEN 1 ELSE 0 END) a, SUM(CASE WHEN status='draft' THEN 1 ELSE 0 END) dr, SUM(CASE WHEN source='1688' THEN 1 ELSE 0 END) s, SUM(CASE WHEN in_stock=0 THEN 1 ELSE 0 END) oos FROM products").first<any>();
   const src = await db.prepare("SELECT COUNT(*) n FROM payment_log WHERE url LIKE 'SRC %'").first<any>();
   const cn = await db.prepare("SELECT COUNT(*) n, SUM(status='active') a FROM products WHERE title_ar GLOB '*[一-龥]*'").first<any>();
+  // نص مكسور يراه الزبون: عربي ملتصق بلاتيني، أو عنوان بلا حرف عربي، أو قيمة متغيّر مكسورة.
+  // يجب أن تؤول كلها إلى صفر كما تؤول chineseVisible.
+  const broken = await db.prepare(`SELECT
+     (SELECT COUNT(*) FROM products WHERE status IN ('active','draft')
+        AND (title_ar GLOB '*[\u0621-\u064A][a-zA-Z]*' OR title_ar GLOB '*[a-zA-Z][\u0621-\u064A]*')) t,
+     (SELECT COUNT(*) FROM products WHERE status IN ('active','draft') AND title_ar NOT GLOB '*[\u0621-\u064A]*') e,
+     (SELECT COUNT(*) FROM variants WHERE color GLOB '*[\u0621-\u064A][a-zA-Z]*' OR color GLOB '*[a-zA-Z][\u0621-\u064A]*'
+        OR size GLOB '*[\u0621-\u064A][a-zA-Z]*' OR size GLOB '*[a-zA-Z][\u0621-\u064A]*') v`).first<any>();
   // ما زال ينقصه فحص تفاصيل: صورة واحدة أو بلا مقاسات أو بلا وزن — هذه هي حصة الإثراء المتبقية
   const thin = await db.prepare(`SELECT COUNT(*) n FROM products p WHERE p.status IN ('active','draft') AND p.source='1688'
      AND ((SELECT COUNT(*) FROM product_images i WHERE i.product_id=p.id) <= 1
        OR (SELECT COUNT(*) FROM variants v WHERE v.product_id=p.id) = 0
        OR p.weight_g IS NULL)`).first<any>();
   const { results: jobs } = await db.prepare('SELECT id,name,type,query,runner,active,max_pages,max_new,interval_hours,last_run_at,last_summary FROM crawl_jobs ORDER BY id').all<any>();
-  return c.json({ totals: { products: tot?.n ?? 0, active: tot?.a ?? 0, from1688: tot?.s ?? 0, providerCalls: src?.n ?? 0, outOfStock: tot?.oos ?? 0, chineseTitles: cn?.n ?? 0, chineseVisible: cn?.a ?? 0, heldDraft: tot?.dr ?? 0, needEnrich: thin?.n ?? 0 }, categories: cats, jobs });
+  return c.json({ totals: { products: tot?.n ?? 0, active: tot?.a ?? 0, from1688: tot?.s ?? 0, providerCalls: src?.n ?? 0, outOfStock: tot?.oos ?? 0, chineseTitles: cn?.n ?? 0, chineseVisible: cn?.a ?? 0, heldDraft: tot?.dr ?? 0, needEnrich: thin?.n ?? 0, mashedTitles: broken?.t ?? 0, englishTitles: broken?.e ?? 0, mashedVariants: broken?.v ?? 0 }, categories: cats, jobs });
 });
 
 // لماذا يرفض النظام ترجمة عناوين بعينها؟ يعيد الردّ الخام وحكم كل بوابة على أول N عنوان عالق
