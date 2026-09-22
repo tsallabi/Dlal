@@ -7,18 +7,31 @@ import type { Settings } from './pricing';
 export type MyPayConfig = {
   mode: 'mock' | 'live';
   baseUrl: string;
-  apiKey: string;
+  apiKey: string;          // متروك للتوافق مع إعداد قديم؛ ماي باي تستعمل clientId + secretId
+  clientId: string;
+  secretId: string;
   webhookSecret: string;
   gateways: string[];
   createPath: string;
   statusPath: string;
 };
 
-export function loadMyPay(s: Settings, env: { MYPAY_API_KEY?: string; MYPAY_WEBHOOK_SECRET?: string }): MyPayConfig {
+// ساندبوكس: /pay/sandbox/api/v1 · إنتاج: /pay/api/v1 — نصًّا كما في إضافتهم الرسمية
+export function mypayBase(s: any): string {
+  const host = (s.mypay_base_url || 'https://mypay.ly').replace(/\/+$/, '').replace(/\/pay\/(sandbox\/)?api\/v1$/, '');
+  const suffix = s.mypay_sandbox === 'no' ? '/pay/api/v1' : '/pay/sandbox/api/v1';
+  return host + suffix;
+}
+
+export function loadMyPay(s: Settings, env: { MYPAY_API_KEY?: string; MYPAY_CLIENT_ID?: string; MYPAY_SECRET_ID?: string; MYPAY_WEBHOOK_SECRET?: string }): MyPayConfig {
   return {
     mode: s.mypay_mode === 'live' ? 'live' : 'mock',
-    baseUrl: (s.mypay_base_url || 'https://api.mypay.ly').replace(/\/+$/, ''),
+    // العنوان الحقيقي من مصدر إضافة ماي باي الرسمية: المضيف mypay.ly ولاحقة تحدد البيئة.
+    // (كان عندنا api.mypay.ly وهو نطاق لا وجود له عندهم، فكان كل اتصال سيفشل.)
+    baseUrl: mypayBase(s),
     apiKey: env.MYPAY_API_KEY || s.mypay_api_key || '',
+    clientId: env.MYPAY_CLIENT_ID || s.mypay_client_id || '',
+    secretId: env.MYPAY_SECRET_ID || s.mypay_secret_id || env.MYPAY_API_KEY || s.mypay_api_key || '',
     webhookSecret: env.MYPAY_WEBHOOK_SECRET || s.mypay_webhook_secret || '',
     gateways: (s.mypay_gateways || 'moamalat,sadad,edfali,mobicash').split(',').map(x => x.trim()).filter(Boolean),
     createPath: s.mypay_create_path || '/payment/create',
@@ -46,41 +59,61 @@ function pickStr(j: any, keys: string[]): string | undefined {
 }
 
 export async function createPayment(cfg: MyPayConfig, r: CreateReq, origin: string): Promise<CreateRes> {
-  const body = {
-    amount: r.amount, currency: r.currency, order_id: r.orderCode, reference: r.trxRef, trx_ref: r.trxRef,
-    billing_name: r.name, billing_phone: r.phone, billing_email: r.email ?? undefined,
-    return_url: r.returnUrl, cancel_url: r.cancelUrl, webhook_url: r.webhookUrl, gateway: r.gateway, description: `طلب تالين ${r.orderCode}`,
+  // أسماء الحقول منقولة حرفيًا من إضافة ماي باي الرسمية (mypay_initialize_payment).
+  // `custom` هو ما يعيدونه في الويبهوك، فنضع فيه مرجعنا لنجد الدفعة عند وصول الإشعار.
+  const body: any = {
+    amount: r.amount, currency: r.currency,
+    full_name: r.name, email: r.email ?? undefined, phone: r.phone,
+    return_url: r.returnUrl, cancel_url: r.cancelUrl, webhook_url: r.webhookUrl,
+    custom: r.trxRef,
   };
+  if (r.gateway) body.payment_gateway = r.gateway;
   if (cfg.mode === 'mock') {
     const token = 'mock_' + r.trxRef;
     return { ok: true, url: `${origin}/pay/mock/${token}`, token, status: 200, request: body, response: JSON.stringify({ mock: true, token }) };
   }
-  if (!cfg.apiKey) return { ok: false, status: 0, request: body, response: '', error: 'لم يُضبط مفتاح API لماي باي' };
+  if (!cfg.clientId || !cfg.secretId) return { ok: false, status: 0, request: body, response: '', error: 'لم يُضبط Client ID أو Secret ID لماي باي' };
+  // ماي باي تتطلب توكنًا أولًا ثم إنشاء الدفع به (client credentials)
+  const tok = await getAccessToken(cfg);
+  if (!tok.ok) return { ok: false, status: tok.status, request: body, response: tok.detail, error: `تعذّر الحصول على توكن: ${tok.detail.slice(0, 160)}` };
   const url = cfg.baseUrl + cfg.createPath;
   try {
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', accept: 'application/json', authorization: `Bearer ${cfg.apiKey}`, 'x-api-key': cfg.apiKey },
+      headers: { 'content-type': 'application/json', accept: 'application/json', authorization: `Bearer ${tok.token}` },
       body: JSON.stringify(body),
     });
     const text = await res.text();
     let j: any = null; try { j = JSON.parse(text); } catch {}
-    const link = pickUrl(j);
+    const link = (j?.data?.payment_url && /^https?:/.test(j.data.payment_url)) ? j.data.payment_url : pickUrl(j);
     if (!res.ok || !link) return { ok: false, status: res.status, request: body, response: text, error: !res.ok ? `البوابة ردت ${res.status}` : 'الرد لا يحتوي رابط دفع' };
-    return { ok: true, url: link, token: pickStr(j, ['token', 'payment_token', 'id', 'payment_id']), providerRef: pickStr(j, ['transaction_id', 'trx_id', 'id']), status: res.status, request: body, response: text };
+    return { ok: true, url: link, token: j?.data?.token ?? pickStr(j, ['token', 'payment_token', 'id', 'payment_id']), providerRef: j?.data?.token ?? pickStr(j, ['transaction_id', 'trx_id', 'id']), status: res.status, request: body, response: text };
   } catch (e: any) {
     return { ok: false, status: 0, request: body, response: '', error: 'تعذر الاتصال بالبوابة: ' + e.message };
   }
 }
 
+// POST {base}/authentication/token  ←  { client_id, secret_id }  ⟵  data.access_token
+export async function getAccessToken(cfg: MyPayConfig): Promise<{ ok: boolean; token?: string; status: number; detail: string }> {
+  try {
+    const res = await fetch(cfg.baseUrl + '/authentication/token', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'application/json' },
+      body: JSON.stringify({ client_id: cfg.clientId, secret_id: cfg.secretId }),
+    });
+    const text = await res.text();
+    let j: any = null; try { j = JSON.parse(text); } catch {}
+    const token = j?.data?.access_token;
+    if (!res.ok || !token) return { ok: false, status: res.status, detail: text.slice(0, 600) };
+    return { ok: true, token, status: res.status, detail: 'ok' };
+  } catch (e: any) { return { ok: false, status: 0, detail: e.message }; }
+}
+
 export async function checkConnection(cfg: MyPayConfig): Promise<{ ok: boolean; status: number; detail: string }> {
   if (cfg.mode === 'mock') return { ok: true, status: 200, detail: 'وضع المحاكاة — لا اتصال خارجي' };
-  if (!cfg.apiKey) return { ok: false, status: 0, detail: 'مفتاح API فارغ' };
-  try {
-    const res = await fetch(cfg.baseUrl + '/authentication/token', { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${cfg.apiKey}`, 'x-api-key': cfg.apiKey }, body: JSON.stringify({ api_key: cfg.apiKey }) });
-    const t = (await res.text()).slice(0, 600);
-    return { ok: res.ok, status: res.status, detail: t };
-  } catch (e: any) { return { ok: false, status: 0, detail: e.message }; }
+  if (!cfg.clientId || !cfg.secretId) return { ok: false, status: 0, detail: 'Client ID أو Secret ID فارغ' };
+  const t = await getAccessToken(cfg);
+  return { ok: t.ok, status: t.status, detail: t.ok ? `التوكن وصل من ${cfg.baseUrl}` : t.detail };
 }
 
 const enc = new TextEncoder();
@@ -106,7 +139,8 @@ export function parseWebhook(j: any) {
   const g = (keys: string[]) => pickStr(j, keys);
   const status = (g(['status', 'event', 'type']) ?? '').toLowerCase();
   return {
-    trxRef: g(['trx_ref', 'reference', 'order_id', 'merchant_reference', 'ref']),
+    // ماي باي تعيد مرجعنا في `custom` و مرجعها هي في `trx_ref`/`token` — فنقرأ `custom` أولًا
+    trxRef: g(['custom', 'trx_ref', 'reference', 'order_id', 'merchant_reference', 'ref']),
     providerRef: g(['transaction_id', 'trx_id', 'id', 'payment_id']),
     gateway: g(['gateway', 'method', 'channel']),
     amount: parseFloat(g(['amount', 'total']) ?? '0'),

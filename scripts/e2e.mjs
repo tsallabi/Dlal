@@ -778,6 +778,100 @@ await page.fill('input[name=src_month_limit]', '0');
 await page.locator('form[action="/admin/source"] button:has-text("حفظ")').click(); await page.waitForLoadState('networkidle');
 goneSrv.close();
 
+// ---------- ماي باي الحقيقية: خادم يحاكي ردودهم بالضبط ويوقّع الويبهوك بـHMAC حقيقي ----------
+// كل الأشكال منقولة حرفيًا من إضافة ماي باي الرسمية (libyan-payments-for-mypay 1.0.7):
+// /authentication/token ⟵ {client_id,secret_id} ⟶ data.access_token
+// /payment/create + Bearer ⟵ {amount,currency,full_name,email,phone,return_url,cancel_url,webhook_url,custom}
+//                                              ⟶ data.payment_url + data.token
+// الويبهوك: X-MyPay-Signature = hash_hmac('sha256', raw_body, secret) بصيغة hex
+const MP_SECRET = 'e2e-mypay-webhook-secret';
+const mpSeen = { token: 0, create: null, auth: null };
+const mpSrv = createServer((q, res) => {
+  let body = '';
+  q.on('data', d => { body += d; });
+  q.on('end', () => {
+    res.setHeader('content-type', 'application/json');
+    if (q.url.includes('/authentication/token')) {
+      mpSeen.token++; mpSeen.auth = JSON.parse(body || '{}');
+      return res.end(JSON.stringify({ data: { access_token: 'e2e-access-token' } }));
+    }
+    if (q.url.includes('/payment/create')) {
+      mpSeen.create = { body: JSON.parse(body || '{}'), auth: q.headers.authorization };
+      return res.end(JSON.stringify({ data: { payment_url: BASE + '/pay/mock/e2e-real', token: 'mp-trx-9911' } }));
+    }
+    res.statusCode = 404; res.end('{}');
+  });
+});
+await new Promise(r => mpSrv.listen(8803, r));
+// الكتلة تُعيد الوضع إلى المحاكاة مهما حدث: انهيارها وهي في وضع live يترك القاعدة مشيرة
+// إلى خادم وهمي مغلق، فتسقط فحوص الدفع في التشغيلة التالية لسبب لا علاقة له بها.
+const mpRestore = async () => {
+  try {
+    await login(page, '0910000000', 'admin123');
+    await page.goto(BASE + '/admin/payments');
+    await page.selectOption('select[name=mypay_mode]', 'mock');
+    await page.fill('input[name=mypay_base_url]', 'https://mypay.ly');
+    await page.locator('form:has(select[name=mypay_mode]) button:has-text("حفظ")').first().click();
+    await page.waitForLoadState('networkidle');
+  } catch {}
+  try { mpSrv.close(); } catch {}
+};
+process.once('uncaughtException', async (e) => { await mpRestore(); console.error(e); process.exit(1); });
+await login(page, '0910000000', 'admin123');
+await page.goto(BASE + '/admin/payments');
+await page.selectOption('select[name=mypay_mode]', 'live');
+await page.fill('input[name=mypay_base_url]', 'http://127.0.0.1:8803');
+await page.fill('input[name=mypay_client_id]', 'e2e-client-id');
+await page.fill('input[name=mypay_secret_id]', 'e2e-secret-id');
+await page.fill('input[name=mypay_webhook_secret]', MP_SECRET);
+await page.locator('form:has(select[name=mypay_mode]) button:has-text("حفظ")').first().click();
+await page.waitForLoadState('networkidle');
+expect(await has(page, '/pay/sandbox/api/v1'), 'اللوحة تعرض عنوان الساندبوكس الحقيقي المركَّب');
+
+// زبونة تشتري فعلًا وتُحوَّل إلى «بوابة ماي باي» — نفس مسار الزبونة الحقيقي
+// كلمة مرورها صارت secret456 بعد فحص تغيير كلمة المرور أعلاه — لا secret123
+await login(page, PHONE, 'secret456');
+expect(!page.url().includes('/login'), 'الزبونة دخلت قبل شراء تجربة ماي باي');
+// نفس الخطوات التي تنجح في كتلة الشراء الأولى بالضبط، لا صياغة جديدة
+await page.goto(BASE + '/c/bags');
+await page.click('.card >> nth=1'); await page.waitForLoadState('networkidle');
+await page.click('#addForm button[type=submit]'); await page.waitForLoadState('networkidle');
+expect((await page.locator('.cart-row').count()) >= 1, `الزبونة أضافت قطعة للسلة قبل الدفع (${await page.locator('.cart-row').count()})`);
+await page.goto(BASE + '/checkout'); await page.waitForLoadState('networkidle');
+await page.selectOption('select[name=city]', 'طرابلس').catch(() => {});
+await page.fill('textarea[name=address]', 'شارع الجمهورية، عمارة 2').catch(() => {});
+await page.locator('.pm-list input[value^=mypay_]').first().check();
+await page.click('button:has-text("تأكيد الطلب")'); await page.waitForLoadState('networkidle');
+expect(mpSeen.token === 1, `الموقع طلب توكنًا من ماي باي أولًا (${mpSeen.token})`);
+expect(mpSeen.auth?.client_id === 'e2e-client-id' && mpSeen.auth?.secret_id === 'e2e-secret-id',
+  `التوكن يُطلب بـ client_id و secret_id كما تتطلب ماي باي (${JSON.stringify(mpSeen.auth)})`);
+expect(mpSeen.create?.auth === 'Bearer e2e-access-token', `إنشاء الدفع يحمل التوكن (${mpSeen.create?.auth})`);
+const cb = mpSeen.create?.body ?? {};
+expect(cb.full_name && cb.phone && cb.amount > 0 && cb.currency === 'LYD',
+  `جسم الطلب بأسماء حقول ماي باي (full_name=${cb.full_name} amount=${cb.amount} ${cb.currency})`);
+expect(!!cb.custom, `مرجعنا يُرسل في custom ليعود في الويبهوك (${cb.custom})`);
+expect(/\/api\/mypay\/webhook$/.test(cb.webhook_url ?? ''), `عنوان الويبهوك يُرسل معه (${cb.webhook_url})`);
+
+// إشعار موقَّع توقيعًا صحيحًا ⟵ الطلب يصير مدفوعًا
+const mpPay = JSON.stringify({ custom: cb.custom, status: 'success', trx_ref: 'mp-trx-9911', gateway: 'sadad', amount: cb.amount });
+const mpSig = createHmac('sha256', MP_SECRET).update(mpPay).digest('hex');
+const mpRes = await page.evaluate(async ([b, body, sig]) => {
+  const r = await fetch(b + '/api/mypay/webhook', { method: 'POST', headers: { 'content-type': 'application/json', 'x-mypay-signature': sig }, body });
+  return { code: r.status, text: (await r.text()).slice(0, 120) };
+}, [BASE, mpPay, mpSig]);
+expect(mpRes.code === 200, `الإشعار الموقَّع يُقبل (HTTP ${mpRes.code} — ${mpRes.text})`);
+const mpOrder = String(cb.custom).match(/DL-\d{4}-\d{6}/)?.[0];
+await page.goto(BASE + '/orders/' + mpOrder);
+expect(await has(page, 'مدفوع'), `الطلب ${mpOrder} صار مدفوعًا بعد إشعار ماي باي الموقَّع`);
+await shot(page, 'mypay-live-paid');
+// توقيع مزوّر ⟵ رفض
+const mpBadSig = await page.evaluate(async ([b, body]) => {
+  const r = await fetch(b + '/api/mypay/webhook', { method: 'POST', headers: { 'content-type': 'application/json', 'x-mypay-signature': 'deadbeef' }, body });
+  return r.status;
+}, [BASE, mpPay]);
+expect(mpBadSig === 401, `الإشعار بتوقيع مزوّر يُرفض (${mpBadSig})`);
+await mpRestore();   // نعيد وضع المحاكاة والعنوان الحقيقي حتى لا تتأثر بقية الفحوص
+
 // ---------- لوحة صحة الكتالوج: الأرقام التي يقودها المالك بنفسه ----------
 await login(page, '0910000000', 'admin123');
 await page.goto(BASE + '/admin/source');

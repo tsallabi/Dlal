@@ -3,7 +3,7 @@
 #   CLOUDFLARE_API_TOKEN   (صلاحيات: Workers Scripts:Edit, D1:Edit, Account Settings:Read)
 #   CLOUDFLARE_ACCOUNT_ID
 #   ADMIN_PASSWORD, SESSION_SECRET, IMPORT_TOKEN (اختيارية — تُضبط كأسرار للـ Worker)
-#   MYPAY_API_KEY, MYPAY_WEBHOOK_SECRET (اختيارية)
+#   MYPAY_CLIENT_ID, MYPAY_SECRET_ID, MYPAY_WEBHOOK_SECRET (اختيارية — ماي باي)
 name: Deploy to Cloudflare
 on:
   push:
@@ -32,7 +32,7 @@ jobs:
           echo "url=$(grep -oE 'https://[a-z0-9.-]+\.workers\.dev' deploy.log | head -1)" >> "$GITHUB_OUTPUT"
       - name: Set Worker secrets (only those provided)
         run: |
-          for s in ADMIN_PASSWORD SESSION_SECRET IMPORT_TOKEN MYPAY_API_KEY MYPAY_WEBHOOK_SECRET; do
+          for s in ADMIN_PASSWORD SESSION_SECRET IMPORT_TOKEN MYPAY_API_KEY MYPAY_CLIENT_ID MYPAY_SECRET_ID MYPAY_WEBHOOK_SECRET; do
             v="${!s}"; if [ -n "$v" ]; then printf '%s' "$v" | npx wrangler secret put "$s"; fi
           done
         env:
@@ -40,6 +40,8 @@ jobs:
           SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
           IMPORT_TOKEN: ${{ secrets.IMPORT_TOKEN }}
           MYPAY_API_KEY: ${{ secrets.MYPAY_API_KEY }}
+          MYPAY_CLIENT_ID: ${{ secrets.MYPAY_CLIENT_ID }}
+          MYPAY_SECRET_ID: ${{ secrets.MYPAY_SECRET_ID }}
           MYPAY_WEBHOOK_SECRET: ${{ secrets.MYPAY_WEBHOOK_SECRET }}
       - name: Summary
         run: echo "### 🚀 نُشر تالين على ${{ steps.deploy.outputs.url }}" >> "$GITHUB_STEP_SUMMARY"

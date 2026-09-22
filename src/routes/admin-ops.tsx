@@ -10,7 +10,7 @@ import { getCategories, fmt, timeAgo, notify } from '../lib/db';
 import { hashPassword, requireRole } from '../lib/auth';
 import { requirePerm, STAFF_ROLES, ROLE_PERMS, PERM_LABELS, logActivity, permsOf } from '../lib/perm';
 import { loadSettings } from '../lib/pricing';
-import { loadMyPay, checkConnection } from '../lib/mypay';
+import { mypayBase, loadMyPay, checkConnection } from '../lib/mypay';
 import { setOrderStatus, addPoints } from '../lib/orders';
 import { getProvider, PROVIDERS } from '../lib/source-providers';
 import { runServerJobs } from '../lib/crawl';
@@ -201,7 +201,10 @@ ops.get('/payments', async (c) => {
             <label>الوضع</label><select name="mypay_mode" disabled={!canManage}><option value="mock" selected={cfg.mode === 'mock'}>محاكاة (اختبار بدون خصم)</option><option value="live" selected={cfg.mode === 'live'}>حقيقي (بوابة ماي باي)</option></select>
             <label>عنوان API الأساسي</label><input type="url" name="mypay_base_url" value={s.mypay_base_url ?? ''} dir="ltr" disabled={!canManage} />
             <div class="inline"><div><label>مسار إنشاء الدفعة</label><input type="text" name="mypay_create_path" value={s.mypay_create_path ?? '/payment/create'} dir="ltr" disabled={!canManage} /></div></div>
-            <label>مفتاح API (من لوحة التاجر) {c.env.MYPAY_API_KEY && <small style="color:#1a9c5b">— مضبوط كسرّ في Cloudflare</small>}</label><input type="password" name="mypay_api_key" value={s.mypay_api_key ?? ''} dir="ltr" placeholder="••••••" disabled={!canManage} />
+            <label>البيئة</label><select name="mypay_sandbox" disabled={!canManage}><option value="yes" selected={s.mypay_sandbox !== 'no'}>ساندبوكس — تجريبي بلا خصم (/pay/sandbox/api/v1)</option><option value="no" selected={s.mypay_sandbox === 'no'}>إنتاج — خصم حقيقي (/pay/api/v1)</option></select>
+            <p style="font-size:12px;color:#666;margin:4px 0 0">العنوان الفعلي المستعمل الآن: <b class="mono" style="direction:ltr;display:inline-block">{mypayBase(s)}</b></p>
+            <label>Client ID {c.env.MYPAY_CLIENT_ID && <small style="color:#1a9c5b">— مضبوط كسرّ في Cloudflare</small>}</label><input type="password" name="mypay_client_id" value={s.mypay_client_id ?? ''} dir="ltr" placeholder="••••••" disabled={!canManage} />
+            <label>Secret ID (يسمّى Client Secret في لوحتهم) {c.env.MYPAY_SECRET_ID && <small style="color:#1a9c5b">— مضبوط كسرّ في Cloudflare</small>}</label><input type="password" name="mypay_secret_id" value={s.mypay_secret_id ?? ''} dir="ltr" placeholder="••••••" disabled={!canManage} />
             <label>سر الويبهوك (Webhook Secret)</label><input type="password" name="mypay_webhook_secret" value={s.mypay_webhook_secret ?? ''} dir="ltr" disabled={!canManage} />
             <label>الوسائل المفعّلة (aliases مفصولة بفاصلة)</label><input type="text" name="mypay_gateways" value={s.mypay_gateways ?? ''} dir="ltr" disabled={!canManage} />
             <p style="font-size:12px;color:#666">عنوان الويبهوك الذي تسجّله في لوحة ماي باي: <b class="mono" style="display:inline">{origin}/api/mypay/webhook</b></p>
@@ -221,14 +224,14 @@ ops.get('/payments', async (c) => {
 });
 ops.post('/payments/settings', requirePerm('payments.manage'), async (c) => {
   const f = await c.req.parseBody(); const db = c.env.DB;
-  const keys = ['mypay_mode', 'mypay_base_url', 'mypay_create_path', 'mypay_api_key', 'mypay_webhook_secret', 'mypay_gateways', 'branches'];
+  const keys = ['mypay_mode', 'mypay_base_url', 'mypay_sandbox', 'mypay_create_path', 'mypay_api_key', 'mypay_client_id', 'mypay_secret_id', 'mypay_webhook_secret', 'mypay_gateways', 'branches'];
   await db.batch(keys.filter(k => f[k] !== undefined).map(k => db.prepare("INSERT INTO settings(key,value,updated_at) VALUES(?,?,datetime('now')) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at").bind(k, String(f[k]).trim())));
   await logActivity(db, c.get('user')!.id, 'payments.settings', 'mypay', `mode=${f.mypay_mode}`);
   return c.redirect('/admin/payments?ok=1');
 });
 ops.post('/payments/test', requirePerm('payments.manage'), async (c) => {
   const f = await c.req.parseBody(); const s = await loadSettings(c.env.DB);
-  const cfg = loadMyPay({ ...s, mypay_mode: String(f.mypay_mode), mypay_base_url: String(f.mypay_base_url), mypay_api_key: String(f.mypay_api_key) }, c.env);
+  const cfg = loadMyPay({ ...s, mypay_mode: String(f.mypay_mode), mypay_base_url: String(f.mypay_base_url), mypay_sandbox: String(f.mypay_sandbox ?? s.mypay_sandbox ?? 'yes'), mypay_client_id: String(f.mypay_client_id ?? s.mypay_client_id ?? ''), mypay_secret_id: String(f.mypay_secret_id ?? s.mypay_secret_id ?? '') }, c.env);
   const r = await checkConnection(cfg);
   return c.redirect(`/admin/payments?test=${r.ok ? 'ok' : 'fail'}&detail=${encodeURIComponent(`${r.status} — ${r.detail}`.slice(0, 300))}`);
 });

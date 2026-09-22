@@ -9,6 +9,8 @@ export type Bindings = {
   SESSION_SECRET: string;
   IMPORT_TOKEN: string;
   MYPAY_API_KEY?: string;          // اختياري: يتقدم على قيمة الإعدادات في القاعدة
+  MYPAY_CLIENT_ID?: string;        // ماي باي تعطي قيمتين: Client ID و Secret ID
+  MYPAY_SECRET_ID?: string;
   MYPAY_WEBHOOK_SECRET?: string;
   AI?: any;                        // Workers AI للترجمة (اختياري)
 };
