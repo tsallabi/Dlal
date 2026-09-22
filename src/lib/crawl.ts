@@ -3,6 +3,9 @@ import { loadSettings } from './pricing';
 import { getProvider } from './source-providers';
 import { importProducts } from '../routes/admin';
 
+// أخطاء تعني «لا تُكمل»: رصيد المزوّد نفد، أو تجاوزنا حدّ سرعته، أو المفتاح مرفوض
+const FATAL = /insufficient|balance|quota|limit exceeded|too fast|rate limit|unauthor|forbidden|invalid (api)?\s?key/i;
+
 async function logRaw(db: D1Database, direction: 'out' | 'in', url: string, status: number, body: string, ok: boolean) {
   await db.prepare('INSERT INTO payment_log(payment_id,direction,url,status_code,request,response,ok) VALUES(NULL,?,?,?,?,?,?)').bind(direction, 'SRC ' + url.replace(/(instanceKey|apiToken)=[^&]+/g, '$1=***'), status, '', body.slice(0, 60000), ok ? 1 : 0).run();
 }
@@ -41,6 +44,8 @@ export async function runServerJobs(env: { DB: D1Database; AI?: any }, opts: { l
         if (!results.length) { rep.note += opts.enrichOnly ? ' كل المنتجات مُثراة بالفعل.' : ' لا منتجات مستحقة للفحص الآن.'; }
         for (const p of results) {
           const r = await prov.item(p.source_offer_id); await logRaw(db, 'in', r.url, r.status, r.raw, r.ok);
+          // رصيد المزوّد نفد أو تجاوزنا حدّ سرعته: إكمال الدفعة يحرق استدعاءات في أخطاء، فنتوقف برسالة واضحة
+          if (!r.ok && FATAL.test(r.error ?? '')) { rep.status = 'error'; rep.note += ` توقفنا: ${r.error}`; break; }
           if (!r.ok) { rep.note += ` ${p.source_offer_id}: ${r.error}`; if (/NotFound/i.test(r.error ?? '')) await db.prepare("UPDATE products SET in_stock=0,last_checked_at=datetime('now') WHERE source='1688' AND source_offer_id=?").bind(p.source_offer_id).run(); continue; }
           const it = r.data!; const big = it.priceCny && Math.abs(it.priceCny - p.source_price_cny) / p.source_price_cny > 0.15;
           // السعر يُعاد حسابه في importProducts أدناه، فلا داعي لإخفاء المنتج؛ نسجّل القفزة فقط
@@ -59,7 +64,7 @@ export async function runServerJobs(env: { DB: D1Database; AI?: any }, opts: { l
           // كلمة بديلة لهذا التشغيل فقط: حين تنفد نتائج كلمة القسم الأصلية
           const kw = opts.keyword || (job.type === 'url' ? (job.query.match(/keywords=([^&]+)/) ? decodeURIComponent(job.query.match(/keywords=([^&]+)/)![1]) : job.query) : job.query);
           const r = await prov.search(kw, p); await logRaw(db, 'in', r.url, r.status, r.raw, r.ok);
-          if (!r.ok) { rep.status = 'error'; rep.note += ` صفحة ${p}: ${r.error}`; break; }
+          if (!r.ok) { rep.status = 'error'; rep.note += FATAL.test(r.error ?? '') ? ` توقفنا: ${r.error}` : ` صفحة ${p}: ${r.error}`; break; }
           rep.pages++; rep.found += r.data.length;
           if (!r.data.length) { rep.note += ` صفحة ${p} فارغة.`; break; }
           const res = await importProducts(db, r.data.map(x => ({ ...x, titleAr: x.titleEn && !/[一-鿿]/.test(x.titleEn) ? undefined : undefined })), job.category_id, opts.byUserId ?? null, `api:${prov.name}:${kw}#${p}`, env.AI);

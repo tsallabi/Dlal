@@ -482,9 +482,12 @@ async function health(db: D1Database) {
         OR (SELECT COUNT(*) FROM variants v WHERE v.product_id=p.id) = 0 OR p.weight_g IS NULL)`).first<any>();
   const calls = await db.prepare("SELECT COUNT(*) n FROM payment_log WHERE url LIKE 'SRC %'").first<any>();
   const month = await db.prepare("SELECT COUNT(*) n FROM payment_log WHERE url LIKE 'SRC %' AND created_at >= datetime('now','start of month')").first<any>();
+  // آخر ما ردّه المزوّد: «insufficient wallet balance» يعني أن رصيد الاشتراك نفد ولا فائدة من أي تشغيل
+  const lastErr = await db.prepare("SELECT response,created_at FROM payment_log WHERE url LIKE 'SRC %' AND ok=0 ORDER BY id DESC LIMIT 1").first<any>();
+  const wallet = /insufficient|balance/i.test(String(lastErr?.response ?? '')) ? String(lastErr.response).slice(0, 200) : null;
   const stockJob = await db.prepare("SELECT id FROM crawl_jobs WHERE type='stock' ORDER BY id LIMIT 1").first<{ id: number }>();
   const s = await loadSettings(db);
-  return { ...t, thin: thin?.n ?? 0, calls: calls?.n ?? 0, month: month?.n ?? 0, cap: parseInt(s.src_month_limit ?? '0') || 0, stockJob: stockJob?.id ?? null };
+  return { ...t, thin: thin?.n ?? 0, calls: calls?.n ?? 0, month: month?.n ?? 0, cap: parseInt(s.src_month_limit ?? '0') || 0, wallet, walletAt: lastErr?.created_at ?? null, stockJob: stockJob?.id ?? null };
 }
 
 ops.get('/source', async (c) => {
@@ -512,6 +515,7 @@ ops.get('/source', async (c) => {
               <input type="text" name="test_kw" placeholder="كلمة بحث صينية" style="width:160px" /><button class="btn sm ghost" formaction="/admin/source/test">اختبار: بحث</button></div>
           </form>
           <div class="card-box"><h3>صحة الكتالوج</h3>
+            {h.wallet && <Flash type="err" msg={`المزوّد يرفض الطلبات: «${h.wallet}» (آخر محاولة ${timeAgo(h.walletAt)}). اشحني رصيد حساب TMAPI ثم أعيدي التشغيل — الاستيراد والإثراء متوقفان حتى ذلك، والترجمة تعمل لأنها لا تحتاج المزوّد.`} />}
             <div class="kpis">
               <div class="kpi"><b>{h.active}</b><span>منتج معروض للزبونة</span></div>
               <div class="kpi"><b style={h.cn_live ? 'color:#d3262b' : 'color:#1a9c5b'}>{h.cn_live}</b><span>عنوان صيني ظاهر (يجب أن يكون صفرًا)</span></div>
