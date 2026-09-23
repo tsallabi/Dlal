@@ -1,0 +1,12 @@
+import { chromium } from 'playwright';
+const BASE = 'http://localhost:8787';
+const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
+const p = await b.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+await p.goto(BASE + '/'); await p.waitForLoadState('networkidle');
+await p.screenshot({ path: 'design/hudhud/m-header.png', clip: { x: 0, y: 0, width: 390, height: 260 } });
+await p.click('.burger'); await p.waitForSelector('.dr-row'); await p.waitForTimeout(500);
+await p.screenshot({ path: 'design/hudhud/m-drawer.png' });
+console.log('rows', await p.locator('.dr-row').count(), 'overflow', await p.evaluate(() => document.documentElement.scrollWidth - innerWidth));
+await p.locator('.dr-row', { hasText: 'فساتين' }).click(); await p.waitForLoadState('networkidle');
+console.log('went to', p.url());
+await b.close();

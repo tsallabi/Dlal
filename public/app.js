@@ -241,3 +241,64 @@ const proxyImg = (u) => (!u ? u : /(^|\.)(alicdn\.com|1688\.com|taobao\.com|tbcd
     row.scrollBy({ left: dir * 320, behavior: 'smooth' });
   }));
 })();
+
+// ===== لوحة التصفية في الجوال (صفحات الأقسام والبحث) =====
+(function () {
+  const sheet = document.getElementById('fsheet');
+  if (!sheet) return;
+  const form = sheet.querySelector('form');
+  const panes = sheet.querySelector('.fs-panes');
+  const tabs = [...sheet.querySelectorAll('[data-tab]')];
+  const pick = (name) => {
+    tabs.forEach(t => t.classList.toggle('on', t.dataset.tab === name));
+    const pane = sheet.querySelector(`[data-pane="${name}"]`);
+    if (pane) panes.scrollTop = pane.offsetTop - panes.offsetTop - 4;
+  };
+  const open = (name) => {
+    sheet.hidden = false; document.body.classList.add('sheet-open');
+    requestAnimationFrame(() => pick(name || tabs[0]?.dataset.tab));
+  };
+  const close = () => { sheet.hidden = true; document.body.classList.remove('sheet-open'); };
+  document.querySelectorAll('[data-sheet]').forEach(b => b.addEventListener('click', () => open(b.dataset.sheet)));
+  sheet.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', close));
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !sheet.hidden) close(); });
+  tabs.forEach(t => t.addEventListener('click', () => pick(t.dataset.tab)));
+  // تمرير الخيارات يحدّد المجموعة الظاهرة في العمود، كما في شي إن
+  panes.addEventListener('scroll', () => {
+    let cur = tabs[0]?.dataset.tab;
+    sheet.querySelectorAll('[data-pane]').forEach(p => { if (p.offsetTop - panes.offsetTop - 30 <= panes.scrollTop) cur = p.dataset.pane; });
+    tabs.forEach(t => t.classList.toggle('on', t.dataset.tab === cur));
+  }, { passive: true });
+  // نطاقات السعر الجاهزة تملأ الحقلين
+  sheet.querySelectorAll('[data-min]').forEach(b => b.addEventListener('click', () => {
+    form.min.value = b.dataset.min; form.max.value = b.dataset.max;
+    sheet.querySelectorAll('[data-min]').forEach(x => x.classList.toggle('on', x === b));
+  }));
+  // لا نرسل الحقول الفارغة: رابط نظيف بلا «color=&size=»
+  form.addEventListener('submit', () => { [...form.elements].forEach(el => { if (el.name && !el.value) el.disabled = true; }); });
+})();
+// قائمة «موصى به» تُغلق بالنقر خارجها
+document.addEventListener('click', e => {
+  document.querySelectorAll('details.ms-rec[open]').forEach(d => { if (!d.contains(e.target)) d.open = false; });
+});
+
+// ===== درج الأقسام ☰ (الجوال): يُفتح من زر الترويسة ومن «الأقسام» في الشريط السفلي =====
+(function () {
+  const dr = document.getElementById('drawer');
+  if (!dr) return;
+  const body = document.getElementById('drawerBody');
+  let loaded = false;
+  const open = async (e) => {
+    if (innerWidth > 900) return;          // الحاسوب: الرابط يعمل كما هو
+    e.preventDefault();
+    dr.hidden = false; document.body.classList.add('sheet-open');
+    if (!loaded) {
+      try { const r = await fetch('/m/menu'); if (r.ok) { body.innerHTML = await r.text(); loaded = true; } }
+      catch (err) { body.innerHTML = '<p class="dr-wait">تعذّر التحميل — <a href="/c/all">كل المنتجات</a></p>'; }
+    }
+  };
+  const close = () => { dr.hidden = true; document.body.classList.remove('sheet-open'); };
+  document.querySelectorAll('[data-drawer]').forEach(b => b.addEventListener('click', open));
+  dr.querySelectorAll('[data-drawer-close]').forEach(b => b.addEventListener('click', close));
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !dr.hidden) close(); });
+})();

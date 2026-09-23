@@ -40,13 +40,14 @@ export const Layout: FC<Props> = ({ title, user, cartCount = 0, wishCount = 0, c
         </div>
         {/* الشريط الرئيسي: الشعار + بحث + أيقونات */}
         <div class="hdr-main wrap">
+          <button type="button" class="burger" data-drawer aria-label="الأقسام"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16" /></svg></button>
           <a href="/" class="logo" aria-label="هدهد الصين HUDHUD"><img src="/hudhud-logo.svg" alt="" width="77" height="64" /><span class="t"><b>هدهد <em>الصين</em></b><i>HUDHUD</i></span></a>
           <form class="search" action="/search" method="get" role="search">
             <input name="q" placeholder="ابحثي عن فستان، عباية، حقيبة…" value={q ?? ''} aria-label="ابحثي عن منتج" />
             <button type="submit" aria-label="بحث"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.2-3.2" stroke-linecap="round" /></svg></button>
           </form>
           <nav class="hdr-icons">
-            <a href={user ? '/account' : '/login'} aria-label="حسابي" title={user ? user.name : 'دخول'}><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 3.6-6 8-6s8 2 8 6" stroke-linecap="round" /></svg></a>
+            <a href={user ? '/account' : '/login'} aria-label="حسابي" title={user ? user.name : 'دخول'} class="hide-phone"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 3.6-6 8-6s8 2 8 6" stroke-linecap="round" /></svg></a>
             <a href="/cart" aria-label="السلة"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 5h2.2l2.3 10.2a2 2 0 0 0 2 1.6h7.2a2 2 0 0 0 2-1.5L20 8H6.4" stroke-linecap="round" stroke-linejoin="round" /><circle cx="10" cy="20" r="1.4" fill="currentColor" stroke="none" /><circle cx="17" cy="20" r="1.4" fill="currentColor" stroke="none" /></svg>{cartCount > 0 && <b>{cartCount}</b>}</a>
             <a href="/wishlist" aria-label="المفضلة"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 20s-7.5-4.6-7.5-9.4A4.1 4.1 0 0 1 12 8a4.1 4.1 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20Z" stroke-linejoin="round" /></svg>{wishCount > 0 && <b>{wishCount}</b>}</a>
             <a href="/account/tickets" aria-label="خدمة الزبائن" class="only-wide"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 12a8 8 0 1 1 3 6.2V21l-3-1.2A8 8 0 0 1 4 12Z" stroke-linejoin="round" /></svg></a>
@@ -155,9 +156,17 @@ export const Layout: FC<Props> = ({ title, user, cartCount = 0, wishCount = 0, c
           </div>
         </div>
       </footer>
+      {/* درج الأقسام (الجوال) — محتواه يُجلب من /m/menu عند أول فتح */}
+      <div class="drawer" id="drawer" hidden>
+        <div class="dr-back" data-drawer-close></div>
+        <aside class="dr" role="dialog" aria-label="الأقسام">
+          <header><b>الأقسام</b><button type="button" data-drawer-close aria-label="إغلاق">✕</button></header>
+          <div class="dr-body" id="drawerBody"><p class="dr-wait">…</p></div>
+        </aside>
+      </div>
       <nav class="bottom-nav">
         <a href="/" class={!active ? 'on' : ''}><span>🏠</span>الرئيسية</a>
-        <a href="/c/all"><span>▦</span>الأقسام</a>
+        <a href="/c/all" data-drawer><span>▦</span>الأقسام</a>
         <a href="/wishlist"><span>♡</span>المفضلة</a>
         <a href="/cart"><span>🛒</span>السلة{cartCount > 0 && <i class="dot">{cartCount}</i>}</a>
         <a href={user ? '/account' : '/login'}><span>👤</span>حسابي</a>

@@ -799,3 +799,131 @@ body{background:#fff}
 .meter-top{display:flex;justify-content:space-between;gap:8px;font-size:13px;margin-bottom:4px;flex-wrap:wrap}
 .meter .live-bar{height:9px}.meter .live-bar i{background:#1a9c5b}
 .gains24{margin:0 0 6px;font-size:13px;color:#1f5c1f;background:#eef7ee;border-radius:6px;padding:6px 10px}.gains24 b{margin-inline-start:3px}
+
+/* ===== صفحة القسم على الجوال — كما في شي إن: البضاعة أولًا، والفلاتر في لوحة تُفتح بالنقر ===== */
+.m-cats,.m-bar,.m-count,.fsheet{display:none}
+@media(max-width:900px){
+  .shop>.filters,.desk-title,.sortbar.desk{display:none}
+  body:has(.m-bar) .crumbs{display:none}
+  body:has(.m-bar) .hdr{position:static}
+  .m-cats{display:flex;gap:12px;overflow-x:auto;scrollbar-width:none;padding:10px 2px 6px;margin:0 -16px;padding-inline:16px}
+  .m-cats::-webkit-scrollbar{display:none}
+  .m-cats a{flex:none;width:66px;display:flex;flex-direction:column;align-items:center;gap:5px;text-align:center}
+  .m-cats .tp{width:60px;height:60px;border-radius:50%;overflow:hidden;background:var(--soft);display:grid;place-items:center;border:2px solid transparent}
+  .m-cats .tp img{width:100%;height:100%;object-fit:cover}
+  .m-cats .tp i{font-style:normal;font-size:24px}
+  .m-cats .tl{font-size:11.5px;line-height:1.25;color:var(--ink-2);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .m-cats a.on .tp{border-color:var(--ink)}
+  .m-cats a.on .tl{color:var(--ink);font-weight:800}
+  .m-bar{display:block;position:sticky;top:0;z-index:25;background:#fff;margin:0 -16px;padding:0 16px;border-bottom:1px solid var(--line-2)}
+  .m-sort{display:grid;grid-template-columns:1.25fr 1.2fr .9fr 1fr;align-items:center;height:46px;font-size:14px}
+  .m-sort>a,.m-sort>button,.ms-rec>summary{display:flex;align-items:center;justify-content:center;gap:4px;height:46px;color:var(--ink-2);background:none;border:0;font:inherit;cursor:pointer;white-space:nowrap;padding:0 2px}
+  .m-sort .on,.ms-rec.on>summary{color:var(--ink);font-weight:800}
+  .m-sort i{font-style:normal;font-size:12px;opacity:.8}
+  .ms-filter{border-inline-start:1px solid var(--line)!important;height:22px!important}
+  .ms-filter b{background:var(--brand);color:#fff;font-size:10.5px;min-width:17px;height:17px;border-radius:9px;display:inline-grid;place-items:center;padding:0 4px}
+  .ms-rec{position:relative}
+  .ms-rec>summary{list-style:none}
+  .ms-rec>summary::-webkit-details-marker{display:none}
+  .ms-rec[open]>summary i{transform:rotate(180deg)}
+  .ms-menu{position:absolute;top:46px;inset-inline-start:-16px;width:100vw;background:#fff;border-top:1px solid var(--line-2);box-shadow:0 10px 18px rgba(0,0,0,.12);z-index:30}
+  .ms-menu a{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;font-size:14.5px;color:var(--ink-2);border-bottom:1px solid var(--line-2)}
+  .ms-menu a.on{color:var(--ink);font-weight:800}
+  .m-chips{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding:0 0 10px}
+  .m-chips::-webkit-scrollbar{display:none}
+  .m-chips>a,.m-chips>button{flex:none;display:flex;align-items:center;gap:4px;background:var(--soft);border:1px solid transparent;border-radius:4px;padding:7px 12px;font:inherit;font-size:13px;color:var(--ink-2);cursor:pointer;white-space:nowrap}
+  .m-chips i{font-style:normal;font-size:11px;opacity:.7}
+  .m-chips .on{background:#fff;border-color:var(--ink);color:var(--ink);font-weight:800}
+  .m-count{display:block;font-size:12px;color:var(--mut);padding:8px 0}
+  /* لوحة التصفية */
+  .fsheet:not([hidden]){display:block;position:fixed;inset:0;z-index:1000}
+  .fs-back{position:absolute;inset:0;background:rgba(0,0,0,.45)}
+  .fs{position:absolute;inset-inline:0;bottom:0;height:88vh;height:88dvh;background:#fff;border-radius:14px 14px 0 0;display:flex;flex-direction:column;overflow:hidden;animation:fsUp .22s ease-out}
+  @keyframes fsUp{from{transform:translateY(40px);opacity:.4}to{transform:none;opacity:1}}
+  .fs>header{display:flex;align-items:center;justify-content:center;position:relative;height:52px;border-bottom:1px solid var(--line-2);font-size:16px}
+  .fs>header button{position:absolute;inset-inline-end:8px;top:6px;width:40px;height:40px;border:0;background:none;font-size:18px;cursor:pointer}
+  .fs-body{flex:1;display:flex;min-height:0}
+  .fs-tabs{width:104px;flex:none;background:#f6f6f6;overflow-y:auto;display:flex;flex-direction:column}
+  .fs-tabs button{position:relative;text-align:start;padding:16px 14px;border:0;background:none;font:inherit;font-size:14px;color:var(--ink-2);cursor:pointer}
+  .fs-tabs button.on{background:#fff;color:var(--ink);font-weight:800;box-shadow:inset -3px 0 0 var(--ink)}
+  [dir=rtl] .fs-tabs button.on{box-shadow:inset 3px 0 0 var(--ink)}
+  .fs-tabs button i{position:absolute;top:14px;inset-inline-end:10px;width:7px;height:7px;border-radius:50%;background:var(--brand)}
+  .fs-panes{flex:1;overflow-y:auto;padding:4px 14px 24px}
+  .fs-panes h4{margin:18px 0 10px;font-size:15px}
+  .fs-pills{display:flex;flex-wrap:wrap;gap:8px}
+  .fs-pills label,.fs-colors label{cursor:pointer;font-weight:400}
+  .fs-panes::after{content:"";display:block;height:55vh}   /* كل مجموعة تستطيع الصعود لأعلى اللوحة عند اختيارها */
+  .fs-pills input,.fs-colors input{position:absolute;opacity:0;pointer-events:none}
+  .fs-pills span,.fs-pills button{display:inline-block;background:#f5f5f5;border:1px solid transparent;border-radius:4px;padding:8px 14px;font:inherit;font-size:13.5px;color:var(--ink-2);cursor:pointer}
+  .fs-pills input:checked+span,.fs-pills button.on{background:#fff;border-color:var(--ink);color:var(--ink);font-weight:800}
+  .fs-colors{display:grid;grid-template-columns:repeat(3,1fr);gap:14px 8px}
+  .fs-colors span{display:flex;flex-direction:column;align-items:center;gap:6px;font-size:12.5px;text-align:center;color:var(--ink-2)}
+  .fs-colors .sw{width:36px;height:36px;border-radius:50%;border:1px solid var(--line);box-shadow:inset 0 0 0 3px #fff}
+  .fs-colors .sw.all{background:conic-gradient(#e53935,#fdd835,#43a047,#1e88e5,#8e24aa,#e53935)}
+  .fs-colors input:checked+span{color:var(--ink);font-weight:800}
+  .fs-colors input:checked+span .sw{border:2px solid var(--ink)}
+  .fs-range{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+  .fs-range input{flex:1;min-width:0;border:1px solid var(--line);border-radius:4px;padding:10px;font:inherit;font-size:14px}
+  .fs>footer{display:grid;grid-template-columns:1fr 1.4fr;gap:10px;padding:10px 14px calc(10px + env(safe-area-inset-bottom));border-top:1px solid var(--line-2)}
+  .fs-clear,.fs-done{height:46px;display:grid;place-items:center;font:inherit;font-size:15px;font-weight:800;cursor:pointer}
+  .fs-clear{border:1px solid var(--ink);color:var(--ink);background:#fff}
+  .fs-done{border:0;background:var(--ink);color:#fff}
+  body.sheet-open{overflow:hidden}
+}
+
+/* بطاقة المنتج على نمط شي إن: سطر عنوان واحد، «الأكثر مبيعًا» نصًّا برتقاليًا، السعر وزرّ سلة
+   مربّع فاتح بأيقونة عربة+، ثم مدة الوصول بلون أخضر مزرقّ بلا إطار */
+.card .buy{margin-top:auto}
+.card .add{background:#f4f4f4;color:var(--ink);border-radius:6px;width:36px;height:30px}
+.card .add:hover{background:var(--ink);color:#fff}
+.card .best-pill{background:none;border:0;padding:0;color:#c25e00;font-weight:700;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card .ship{border:0;background:none;padding:0;display:inline-flex;align-items:center;gap:4px;font-weight:600}
+.card .ship.sea{background:none;border:0}
+/* بطاقة لا توسّع عمودها أبدًا: سطر لا يلتف (مدة الوصول) كان يمدّ عمود الشبكة في الجوال إلى ٢٣٧ بكسل
+   فصارت الصفحة ٤٣٦ بدل ٣٩٠ ودُفع زرّ ☰ خارج الشاشة */
+.grid>.card{min-width:0}
+.card .ship{max-width:100%;overflow:hidden;text-overflow:ellipsis}
+@media(max-width:560px){
+  .card .t{white-space:nowrap;display:block;min-height:0;line-height:1.5}
+  .card .ship.sea{display:none}
+  .card .kind-tag{font-size:10px;padding:0 6px}
+  .card .add{width:34px;height:28px}
+}
+/* ===== زر ☰ ودرج الأقسام (الجوال) ===== */
+.burger,.drawer{display:none}
+@media(max-width:900px){
+  .burger{display:grid;place-items:center;width:38px;height:38px;border:0;background:none;color:var(--ink);cursor:pointer;flex:none;padding:0}
+  .drawer:not([hidden]){display:block;position:fixed;inset:0;z-index:1000}
+  .dr-back{position:absolute;inset:0;background:rgba(0,0,0,.45)}
+  .dr{position:absolute;top:0;bottom:0;inset-inline-start:0;width:min(84vw,360px);background:#fff;display:flex;flex-direction:column;animation:drIn .2s ease-out}
+  @keyframes drIn{from{transform:translateX(40px);opacity:.3}to{transform:none;opacity:1}}
+  .dr>header{display:flex;align-items:center;justify-content:space-between;height:54px;padding:0 16px;border-bottom:1px solid var(--line-2);font-size:16px}
+  .dr>header button{border:0;background:none;font-size:18px;width:40px;height:40px;cursor:pointer}
+  .dr-body{flex:1;overflow-y:auto}
+  .dr-wait{padding:24px;text-align:center;color:var(--mut)}
+  .dr-row{display:flex;align-items:center;gap:14px;padding:10px 16px;border-bottom:1px solid var(--line-2)}
+  .dr-row .tp{width:52px;height:52px;border-radius:50%;overflow:hidden;background:var(--soft);display:grid;place-items:center;flex:none}
+  .dr-row .tp img{width:100%;height:100%;object-fit:cover}
+  .dr-row .tp i{font-style:normal;font-size:22px;font-weight:800;color:var(--brand)}
+  .dr-row b{flex:1;font-size:15px;font-weight:600;color:var(--ink)}
+  .dr-row em{font-style:normal;color:var(--mut);font-size:20px}
+}
+@media(max-width:560px){
+  /* صف الترويسة في ٣٩٠ بكسل: ☰ + الشعار + السلة + المفضلة. الحساب في الشريط السفلي، والدردشة زرّ عائم —
+     بقاؤهما هنا جعل الصف أعرض من الشاشة فوسّع المتصفح الصفحة كلها إلى ٤٣٥ ودفع ☰ خارجها */
+  .hdr-icons>a.hide-phone,.hdr-icons>a.only-wide{display:none}
+  .hdr-main{gap:6px}
+}
+/* السلة في الجوال: عمود التفاصيل كان يتمدّد بمحتواه (العنوان وأداة الكمية) فتصير الصفحة ٤٦١ بدل ٣٩٠
+   ويجب سحبها أفقيًا — عطل قديم أخفاه فحص كان يقارن بعرض النافذة المتّسعة نفسها */
+.two>*,.cart-row>*{min-width:0}
+.cart-row .t{overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+@media(max-width:560px){
+  .cart-row{grid-template-columns:72px 1fr;gap:10px}
+  .cart-row img{width:72px;height:92px}
+  .cart-row>div:last-child{grid-column:2;justify-self:end}
+  .cart-row form.inline{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+}
+.cart-row .qty{flex:none;width:auto}
+.cart-row .qty input{width:48px!important;min-width:0;flex:none;padding:6px 0}
+.cart-row .qty button{height:34px}

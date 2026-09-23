@@ -163,14 +163,49 @@ async function recentlyViewed(c: Context<Env>, exclude?: number): Promise<Produc
 }
 
 // ---------- قسم / بحث / قوائم ----------
+// صور الأقسام الدائرية (صف الأقسام في صفحة القسم على الجوال، ودرج ☰). صورة كل قسم من أكثر
+// منتجاته مبيعًا — استعلام ثقيل نسبيًا فيُحفظ في ذاكرة العامل عشر دقائق.
+let tilesCache: { at: number; rows: any[] } | null = null;
+export async function catTiles(db: D1Database): Promise<{ id: number; slug: string; name_ar: string; icon: string; img: string | null }[]> {
+  if (tilesCache && Date.now() - tilesCache.at < 600000) return tilesCache.rows;
+  const { results } = await db.prepare(`SELECT c.id,c.slug,c.name_ar,c.icon,
+      (SELECT i.url FROM products p2 JOIN product_images i ON i.product_id=p2.id
+       WHERE p2.category_id=c.id AND p2.status='active' AND p2.home_ok=1 ORDER BY p2.sales DESC, i.sort LIMIT 1) AS img
+    FROM categories c WHERE c.show_home=1 ORDER BY c.sort,c.id`).all<any>();
+  tilesCache = { at: Date.now(), rows: results };
+  return results;
+}
+
+// ترتيب المقاسات كما تتوقّعه الزبونة: XS قبل S قبل M… ثم الأرقام تصاعديًا، ثم الباقي بشيوعه
+const SIZE_ORDER = ['XXXS', 'XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '2XL', 'XXXL', '3XL', '4XL', '5XL', '6XL', '7XL'];
+function sizeKey(v: string): [number, number] {
+  const u = v.trim().toUpperCase();
+  const i = SIZE_ORDER.indexOf(u === 'XXL' ? '2XL' : u === 'XXXL' ? '3XL' : u);
+  if (i >= 0) return [0, i];
+  const n = parseFloat(u);
+  if (/^\d+(\.\d+)?$/.test(u)) return [1, n];
+  return [2, 0];
+}
+
 async function listPage(c: Context<Env>, opts: { title: string; where: string; binds: any[]; active?: string; q?: string; catId?: number }) {
   const db = c.env.DB;
   const url = new URL(c.req.url);
+  // اختيار القسم من لوحة التصفية في الجوال يصل معامل cat: القسم مسار لا معامل، فنحوّل إليه
+  // مع إبقاء باقي الفلاتر (بلا جافاسكربت يعمل كذلك)
+  const catParam = url.searchParams.get('cat');
+  if (catParam !== null) {
+    const u = new URL(c.req.url); u.searchParams.delete('cat'); u.searchParams.delete('page');
+    [...u.searchParams.keys()].forEach(k => { if (u.searchParams.get(k) === '') u.searchParams.delete(k); });
+    if (catParam && /^[a-z0-9-]+$/i.test(catParam)) u.pathname = catParam === 'all' ? '/c/all' : `/c/${catParam}`;
+    if (u.pathname.startsWith('/c/')) u.searchParams.delete('q');
+    return c.redirect(u.pathname + u.search);
+  }
   const sort = url.searchParams.get('sort') ?? 'popular';
   const min = parseFloat(url.searchParams.get('min') ?? '') || null;
   const max = parseFloat(url.searchParams.get('max') ?? '') || null;
   const size = url.searchParams.get('size');
   const color = url.searchParams.get('color');
+  const deal = url.searchParams.get('deal') === '1';
   const page = Math.max(1, parseInt(url.searchParams.get('page') ?? '1'));
   const per = 30;
   // السعر المعروض يتبع طريقة الشحن، فالفرز والفلترة يتبعانه أيضًا — وإلا رتّبنا بسعر لا تراه الزبونة
@@ -181,15 +216,25 @@ async function listPage(c: Context<Env>, opts: { title: string; where: string; b
   if (max) { where += ` AND ${PRICE}<=?`; binds.push(max); }
   if (size) { where += ' AND EXISTS(SELECT 1 FROM variants v WHERE v.product_id=p.id AND v.size=?)'; binds.push(size); }
   if (color) { where += ' AND EXISTS(SELECT 1 FROM variants v WHERE v.product_id=p.id AND v.color=?)'; binds.push(color); }
-  const order = { popular: 'p.sales DESC,p.views DESC', new: 'p.id DESC', price_asc: `${PRICE} ASC`, price_desc: `${PRICE} DESC`, rating: 'p.review_count DESC,p.rating DESC,p.sales DESC' }[sort] ?? 'p.sales DESC';
+  if (deal) where += ` AND p.compare_price_lyd > ${PRICE}`;
+  const order = { popular: 'p.sales DESC,p.views DESC', sold: 'p.sales DESC,p.id DESC', new: 'p.id DESC', price_asc: `${PRICE} ASC`, price_desc: `${PRICE} DESC`, rating: 'p.review_count DESC,p.rating DESC,p.sales DESC' }[sort] ?? 'p.sales DESC';
   const [rows, cnt, sizes, colors, f] = await Promise.all([
     db.prepare(`SELECT ${PRODUCT_SELECT} FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE ${where} ORDER BY ${order} LIMIT ? OFFSET ?`).bind(...binds, per, (page - 1) * per).all<ProductRow>(),
     db.prepare(`SELECT COUNT(*) n FROM products p WHERE ${where}`).bind(...binds).first<{ n: number }>(),
-    // قيمة مقاس أو لون لم تُترجم بعد لا تُعرض للزبونة (القاعدة الأولى) — المترجَمة تكفي للتصفية
-    db.prepare(`SELECT DISTINCT v.size FROM variants v JOIN products p ON p.id=v.product_id WHERE ${opts.where} AND v.size IS NOT NULL AND v.size NOT GLOB '*[一-龥]*' ORDER BY v.size`).bind(...opts.binds).all<{ size: string }>(),
-    db.prepare(`SELECT DISTINCT v.color FROM variants v JOIN products p ON p.id=v.product_id WHERE ${opts.where} AND v.color IS NOT NULL AND v.color NOT GLOB '*[一-龥]*' ORDER BY v.color LIMIT 20`).bind(...opts.binds).all<{ color: string }>(),
+    // قيمة مقاس أو لون لم تُترجم بعد لا تُعرض للزبونة (القاعدة الأولى) — المترجَمة تكفي للتصفية.
+    // مرتّبة بعدد المنتجات التي تحملها: كانت أبجدية بلا حدّ فظهر في «حجاب وشالات» ٣٠٠ مقاس
+    // أغلبها لمنتج واحد («35cm*2*10»، «180*90») والزبونة تبحث عن M وL.
+    db.prepare(`SELECT v.size, COUNT(DISTINCT v.product_id) n FROM variants v JOIN products p ON p.id=v.product_id WHERE ${opts.where} AND v.size IS NOT NULL AND v.size<>'' AND v.size NOT GLOB '*[一-龥]*' AND length(v.size)<=12 GROUP BY v.size ORDER BY n DESC LIMIT 80`).bind(...opts.binds).all<{ size: string; n: number }>(),
+    db.prepare(`SELECT v.color, COUNT(DISTINCT v.product_id) n FROM variants v JOIN products p ON p.id=v.product_id WHERE ${opts.where} AND v.color IS NOT NULL AND v.color<>'' AND v.color NOT GLOB '*[一-龥]*' AND length(v.color)<=24 GROUP BY v.color ORDER BY n DESC LIMIT 30`).bind(...opts.binds).all<{ color: string; n: number }>(),
     favs(c),
   ]);
+  // مقاس يحمله منتج واحد ضجيج حين تكثر المقاسات؛ في قسم صغير نُبقي الكل
+  const sizeList = (sizes.results.length > 30 ? sizes.results.filter(x => x.n >= 2) : sizes.results).slice(0, 48)
+    .sort((a, b) => { const ka = sizeKey(a.size), kb = sizeKey(b.size); return ka[0] - kb[0] || (ka[0] === 2 ? b.n - a.n : ka[1] - kb[1]); });
+  if (size && !sizeList.some(x => x.size === size)) sizeList.unshift({ size, n: 0 });
+  const colorList = (colors.results.length > 16 ? colors.results.filter(x => x.n >= 2) : colors.results).slice(0, 24);
+  if (color && !colorList.some(x => x.color === color)) colorList.unshift({ color, n: 0 });
+  const tiles = await catTiles(db);
   const total = cnt?.n ?? 0;
   const pages = Math.ceil(total / per);
   // رابط فلتر: تغيير الفلتر يُعيد إلى الصفحة الأولى عمدًا — وإلا وقعت الزبونة في صفحة ٩ فارغة
@@ -197,10 +242,17 @@ async function listPage(c: Context<Env>, opts: { title: string; where: string; b
   // رابط ترقيم: يجب ألا يحذف `page`. كانت أرقام الصفحات تستعمل `link` نفسها فتضع الرقم
   // ثم تحذفه في السطر التالي، فكل نقرة على ٣ أو ٦ أو ٩ تعيد إلى الأولى في كل الأقسام.
   const pageLink = (n: number) => { const u = new URL(c.req.url); u.searchParams.set('page', String(n)); return u.pathname + u.search; };
-  const clearAll = () => { const u = new URL(c.req.url); ['min', 'max', 'size', 'color', 'page'].forEach(k => u.searchParams.delete(k)); return u.pathname + u.search; };
+  const clearAll = () => { const u = new URL(c.req.url); ['min', 'max', 'size', 'color', 'deal', 'page'].forEach(k => u.searchParams.delete(k)); return u.pathname + u.search; };
   const bb = await base(c);
   const active = bb.categories.find(x => x.slug === opts.active);
-  const hasFilter = !!(min || max || size || color);
+  const hasFilter = !!(min || max || size || color || deal);
+  const nActive = [size, color, deal, min || max].filter(Boolean).length;
+  // ما يُحمل كما هو في نموذج لوحة الجوال (الفرز والبحث) — الفلاتر نفسها تأتي من حقول اللوحة
+  const keep = [...url.searchParams].filter(([k]) => !['min', 'max', 'size', 'color', 'deal', 'cat', 'page'].includes(k));
+  const REC: [string, string][] = [['popular', 'موصى به'], ['new', 'الأحدث'], ['rating', 'الأعلى تقييمًا']];
+  const recOn = REC.find(([k]) => k === sort);
+  const priceLink = link('sort', sort === 'price_asc' ? 'price_desc' : 'price_asc');
+  const PRESETS: [number, number][] = [[0, 50], [50, 150], [150, 300], [300, 0]];
   const SORTS: [string, string][] = [['popular', 'الأكثر رواجًا'], ['new', 'الأحدث'], ['rating', 'الأعلى تقييمًا'], ['price_asc', 'السعر: من الأقل'], ['price_desc', 'السعر: من الأعلى']];
   return c.html(
     <Layout {...bb} title={opts.title} active={opts.active} q={opts.q}>
@@ -217,19 +269,19 @@ async function listPage(c: Context<Env>, opts: { title: string; where: string; b
               {bb.categories.map(cat => <a href={`/c/${cat.slug}`} class={opts.active === cat.slug ? 'on' : ''}>{cat.icon} {cat.name_ar}</a>)}
             </div>
           </details>
-          {sizes.results.length > 0 && (
+          {sizeList.length > 0 && (
             <details class="fgroup" open>
               <summary>المقاس</summary>
               <div class="fbody"><div class="fsizes">
-                {sizes.results.map(x => <a href={link('size', size === x.size ? null : x.size)} class={size === x.size ? 'on' : ''}>{x.size}</a>)}
+                {sizeList.map(x => <a href={link('size', size === x.size ? null : x.size)} class={size === x.size ? 'on' : ''}>{x.size}</a>)}
               </div></div>
             </details>
           )}
-          {colors.results.length > 0 && (
+          {colorList.length > 0 && (
             <details class="fgroup" open>
               <summary>اللون</summary>
               <div class="fbody"><div class="fcolors">
-                {colors.results.map(x => (
+                {colorList.map(x => (
                   <a href={link('color', color === x.color ? null : x.color)} class={color === x.color ? 'on' : ''}>
                     <span class="sw" style={`background:${cssColor(x.color)}`}></span>{x.color}
                   </a>
@@ -271,14 +323,46 @@ async function listPage(c: Context<Env>, opts: { title: string; where: string; b
 
         {/* النتائج */}
         <section>
-          <h2 style="margin:0 0 12px;font-size:21px">{opts.title} <small style="color:var(--mut);font-weight:400;font-size:14px">({total} منتج)</small></h2>
-          <div class="sortbar">
+          {/* ===== الجوال كما في شي إن: صف أقسام دائري، ثم شريط فرز ثابت وشرائح تصفية سريعة، ثم البضاعة فورًا.
+              الفلاتر كاملةً في لوحة تُفتح بالنقر — كانت تُعرض كلها فوق البضاعة فتدفعها شاشات إلى الأسفل ===== */}
+          <nav class="m-cats" aria-label="الأقسام">
+            {tiles.map(t => (
+              <a href={`/c/${t.slug}`} class={opts.active === t.slug ? 'on' : ''}>
+                <span class="tp">{t.img ? <img src={imgUrl(t.img)} alt="" loading="lazy" referrerpolicy="no-referrer" /> : <i>{t.icon}</i>}</span>
+                <span class="tl">{t.name_ar}</span>
+              </a>
+            ))}
+          </nav>
+          <div class="m-bar" id="mBar">
+            <div class="m-sort">
+              <details class={`ms-rec ${recOn ? 'on' : ''}`}>
+                <summary>{recOn ? recOn[1] : 'موصى به'} <i>▾</i></summary>
+                <div class="ms-menu">{REC.map(([k, l]) => <a href={link('sort', k)} class={sort === k ? 'on' : ''}>{l}{sort === k && <b>✓</b>}</a>)}</div>
+              </details>
+              <a href={link('sort', 'sold')} class={sort === 'sold' ? 'on' : ''}>الأكثر مبيعًا</a>
+              <a href={priceLink} class={`ms-price ${sort.startsWith('price') ? 'on' : ''}`}>السعر <i>{sort === 'price_asc' ? '↑' : sort === 'price_desc' ? '↓' : '⇅'}</i></a>
+              <button type="button" class={`ms-filter ${nActive ? 'on' : ''}`} data-sheet="">تصفية{nActive > 0 && <b>{nActive}</b>} <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16l-6 7.5V19l-4-2v-4.5z" stroke-linejoin="round" /></svg></button>
+            </div>
+            <div class="m-chips">
+              {size && <a href={link('size', null)} class="on">المقاس: {size} ✕</a>}
+              {color && <a href={link('color', null)} class="on">اللون: {color} ✕</a>}
+              {(min || max) && <a href={link('min', null).replace(/([?&])max=[^&]*/, '$1')} class="on">السعر: {min ?? 0}—{max ?? '∞'} ✕</a>}
+              <a href={link('deal', deal ? null : '1')} class={deal ? 'on' : ''}>عليها خصم{deal ? ' ✕' : ''}</a>
+              <button type="button" data-sheet="cat">القسم <i>▾</i></button>
+              {colorList.length > 0 && <button type="button" data-sheet="color">اللون <i>▾</i></button>}
+              {sizeList.length > 0 && <button type="button" data-sheet="size">المقاس <i>▾</i></button>}
+              <button type="button" data-sheet="price">السعر <i>▾</i></button>
+            </div>
+          </div>
+          <div class="m-count">{total.toLocaleString('ar-LY')} منتج{pages > 1 ? ` · الصفحة ${page} من ${pages}` : ''}</div>
+          <h2 class="desk-title" style="margin:0 0 12px;font-size:21px">{opts.title} <small style="color:var(--mut);font-weight:400;font-size:14px">({total} منتج)</small></h2>
+          <div class="sortbar desk">
             <span class="lbl">ترتيب حسب</span>
             {SORTS.map(([k, l]) => <a href={link('sort', k)} class={`chip ${sort === k ? 'on' : ''}`}>{l}</a>)}
             <span class="count">الصفحة {page} من {Math.max(1, pages)}</span>
           </div>
           {hasFilter && (
-            <div class="sortbar" style="padding-top:0">
+            <div class="sortbar desk" style="padding-top:0">
               {size && <a href={link('size', null)} class="chip on">المقاس: {size} ✕</a>}
               {color && <a href={link('color', null)} class="chip on">اللون: {color} ✕</a>}
               {(min || max) && <a href={link('min', null).replace(/([?&])max=[^&]*/, '$1')} class="chip on">السعر: {min ?? 0}—{max ?? '∞'} ✕</a>}
@@ -292,6 +376,65 @@ async function listPage(c: Context<Env>, opts: { title: string; where: string; b
             </div>
           )}
         </section>
+      </div>
+      {/* ===== لوحة التصفية (الجوال): المجموعات في عمود، وخياراتها بجانبها، و«مسح» و«عرض النتائج» أسفلها.
+          نموذج GET عادي: يعمل بلا جافاسكربت، والقسم يصل معامل cat فيحوّله الخادم إلى مساره ===== */}
+      <div class="fsheet" id="fsheet" hidden>
+        <div class="fs-back" data-close></div>
+        <form class="fs" method="get" action={url.pathname} role="dialog" aria-label="تصفية">
+          {keep.map(([k, v]) => <input type="hidden" name={k} value={v} />)}
+          <header><b>تصفية</b><button type="button" data-close aria-label="إغلاق">✕</button></header>
+          <div class="fs-body">
+            <nav class="fs-tabs">
+              <button type="button" data-tab="cat" class="on">القسم</button>
+              {colorList.length > 0 && <button type="button" data-tab="color">اللون{color && <i></i>}</button>}
+              {sizeList.length > 0 && <button type="button" data-tab="size">المقاس{size && <i></i>}</button>}
+              <button type="button" data-tab="price">السعر{(min || max) && <i></i>}</button>
+              <button type="button" data-tab="deal">العروض{deal && <i></i>}</button>
+            </nav>
+            <div class="fs-panes">
+              <section data-pane="cat"><h4>القسم</h4>
+                <div class="fs-pills">
+                  {/* القيمة الفارغة = «ابقَ هنا» (صفحة البحث أو القسم الحالي) */}
+                  <label><input type="radio" name="cat" value={opts.active ? 'all' : ''} checked={!opts.active} /><span>{opts.active || !opts.q ? 'كل الأقسام' : 'كل النتائج'}</span></label>
+                  {bb.categories.map(cat => <label><input type="radio" name="cat" value={opts.active === cat.slug ? '' : cat.slug} checked={opts.active === cat.slug} /><span>{cat.name_ar}</span></label>)}
+                </div>
+              </section>
+              {colorList.length > 0 && (
+                <section data-pane="color"><h4>اللون</h4>
+                  <div class="fs-colors">
+                    <label><input type="radio" name="color" value="" checked={!color} /><span><i class="sw all"></i>الكل</span></label>
+                    {colorList.map(x => <label><input type="radio" name="color" value={x.color} checked={color === x.color} /><span><i class="sw" style={`background:${cssColor(x.color)}`}></i>{x.color}</span></label>)}
+                  </div>
+                </section>
+              )}
+              {sizeList.length > 0 && (
+                <section data-pane="size"><h4>المقاس</h4>
+                  <div class="fs-pills">
+                    <label><input type="radio" name="size" value="" checked={!size} /><span>الكل</span></label>
+                    {sizeList.map(x => <label><input type="radio" name="size" value={x.size} checked={size === x.size} /><span>{x.size}</span></label>)}
+                  </div>
+                </section>
+              )}
+              <section data-pane="price"><h4>السعر (د.ل)</h4>
+                <div class="fs-range">
+                  <input type="number" name="min" placeholder="من" value={min ?? ''} inputmode="numeric" min="0" />
+                  <span>—</span>
+                  <input type="number" name="max" placeholder="إلى" value={max ?? ''} inputmode="numeric" min="0" />
+                </div>
+                <div class="fs-pills">
+                  {PRESETS.map(([lo, hi]) => (
+                    <button type="button" data-min={lo || ''} data-max={hi || ''} class={(min ?? 0) === lo && (max ?? 0) === hi ? 'on' : ''}>{hi ? (lo ? `${lo} — ${hi}` : `أقل من ${hi}`) : `أكثر من ${lo}`}</button>
+                  ))}
+                </div>
+              </section>
+              <section data-pane="deal"><h4>العروض</h4>
+                <div class="fs-pills"><label><input type="checkbox" name="deal" value="1" checked={deal} /><span>عليها خصم</span></label></div>
+              </section>
+            </div>
+          </div>
+          <footer><a class="fs-clear" href={clearAll()}>مسح</a><button type="submit" class="fs-done">عرض النتائج</button></footer>
+        </form>
       </div>
     </Layout>,
   );
@@ -345,6 +488,24 @@ store.get('/search', async (c) => {
 });
 store.get('/sale', (c) => listPage(c, { title: 'عروض وتخفيضات', where: "p.status='active' AND p.home_ok=1 AND p.compare_price_lyd > p.price_lyd", binds: [] }));
 store.get('/trending', (c) => listPage(c, { title: 'الأكثر رواجًا', where: "p.status='active' AND p.sales>0", binds: [] }));
+// درج الأقسام ☰ على الجوال (كقائمة شي إن الجانبية): يُجلب عند أول فتح فقط
+store.get('/m/menu', async (c) => {
+  const tiles = await catTiles(c.env.DB);
+  const Row = ({ href, img, icon, name }: any) => (
+    <a href={href} class="dr-row"><span class="tp">{img ? <img src={imgUrl(img)} alt="" loading="lazy" referrerpolicy="no-referrer" /> : <i>{icon}</i>}</span><b>{name}</b><em>›</em></a>
+  );
+  c.header('Cache-Control', 'public, max-age=600');
+  return c.html(
+    <div class="dr-list">
+      <Row href="/new" icon="🆕" name="وصل حديثًا" />
+      <Row href="/trending" icon="🔥" name="الأكثر رواجًا" />
+      <Row href="/sale" icon="%" name="عروض وتخفيضات" />
+      {tiles.map(t => <Row href={`/c/${t.slug}`} img={t.img} icon={t.icon} name={t.name_ar} />)}
+      <Row href="/c/all" icon="▦" name="كل المنتجات" />
+    </div>,
+  );
+});
+
 store.get('/new', (c) => listPage(c, { title: 'وصل حديثًا', where: "p.status='active'", binds: [] }));
 
 // ---------- صفحة المنتج ----------

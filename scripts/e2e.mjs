@@ -976,6 +976,16 @@ await page.fill('input[name=src_key]', 'e2e-fake-key');
 await page.fill('input[name=src_month_limit]', '0');
 await page.locator('form[action="/admin/source"] button:has-text("حفظ")').click(); await page.waitForLoadState('networkidle');
 expect(!(await page.locator('button:has-text("أثرِ ١٠ منتجات الآن")').isDisabled()), 'زر الإثراء يعمل حين يكون المزوّد مضبوطًا');
+// قبل الضغط: نحفظ ما كان مسودةً. الإثراء يبدأ بالمسودات، والإعادة أدناه كانت تجعل كل ما لمسه «نشطًا» —
+// فنشرت مسودتين بعنوان صيني (عدّاد «عنوان صيني ظاهر» = ٢) وصار كل منتج مشابه بعدهما «توأمًا» يُتجاهل.
+const draftsBefore = new Set();
+for (let pg = 1; pg <= 10; pg++) {
+  await page.goto(BASE + `/admin/products?status=draft&page=${pg}`);
+  const ids = (await page.locator('a.src-link').allTextContents()).map(x => x.trim());
+  ids.forEach(x => draftsBefore.add(x));
+  if (ids.length < 100) break;
+}
+await page.goto(BASE + '/admin/source');
 await page.click('button:has-text("أثرِ ١٠ منتجات الآن")'); await page.waitForLoadState('networkidle');
 const firstRound = [...asked];
 expect(firstRound.length > 0, `الإثراء سأل المزوّد عن ${firstRound.length} منتجًا`);
@@ -998,7 +1008,7 @@ for (const id of retired) {
   const href = await page.locator(`tr:has-text("${id}") a[href^="/admin/products/"]`).first().getAttribute('href').catch(() => null);
   if (!href) continue;
   await page.goto(BASE + href);
-  await page.selectOption('select[name=status]', 'active');
+  await page.selectOption('select[name=status]', draftsBefore.has(String(id)) ? 'draft' : 'active');   // كما كان، لا «نشط» دائمًا
   await page.selectOption('select[name=in_stock]', '1');
   await page.locator('form:has(input[name=title_ar]) button:has-text("حفظ")').click();
   await page.waitForLoadState('networkidle');
@@ -1648,6 +1658,69 @@ await page.goto(BASE + '/logout');
 // ---------- جوال ----------
 const m = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, locale: 'ar' });
 const mp = await m.newPage();
+// ---------- صفحة القسم في الجوال كما في شي إن: البضاعة أولًا، والفلاتر في لوحة تُفتح بالنقر ----------
+// صاحب المشروع: «يعرض كل الفلاتر فوق ثم بعدها تأتي البضاعة وهذا خطأ». نلمس الشاشة كما تلمسها الزبونة.
+// عرض التخطيط الحقيقي يُقارن بـ٣٩٠: في وضع الجوال يتّسع innerWidth مع المحتوى فلا يكشف فيضًا
+// (هكذا مرّ صف ترويسة أعرض من الشاشة وسّع الصفحة إلى ٤٣٦ ودفع ☰ خارجها).
+for (const pth of ['/', '/c/dresses', '/search?q=' + encodeURIComponent('فستان'), '/p/' + productSlug]) {
+  await mp.goto(BASE + pth); await mp.waitForLoadState('networkidle');
+  const lw = await mp.evaluate(() => document.documentElement.scrollWidth);
+  expect(lw <= 391, `الجوال: ${pth} بعرض الشاشة تمامًا (${lw}px من 390)`);
+}
+await mp.goto(BASE + '/c/dresses'); await mp.waitForLoadState('networkidle');
+expect(!(await mp.locator('.shop > .filters').isVisible()), 'الجوال: قائمة الفلاتر الطويلة لا تظهر فوق البضاعة');
+expect(await mp.locator('.m-bar .m-sort').isVisible(), 'الجوال: شريط الفرز ظاهر (موصى به · الأكثر مبيعًا · السعر · تصفية)');
+const firstCardTop = await mp.locator('.grid .card').first().evaluate(e => e.getBoundingClientRect().top);
+expect(firstCardTop < 600, `الجوال: أول منتج يظهر في الشاشة الأولى (على بعد ${Math.round(firstCardTop)}px من 844)`);
+expect((await mp.locator('.m-cats a').count()) >= 4 && await mp.locator('.m-cats a.on').count() === 1, 'الجوال: صف الأقسام الدائرية والقسم الحالي مميّز');
+// الفرز: القائمة المنسدلة ثم السعر صعودًا ونزولًا
+await mp.click('.ms-rec summary');
+expect(await mp.locator('.ms-menu a', { hasText: 'الأحدث' }).isVisible(), 'الجوال: «موصى به» تفتح قائمة الفرز');
+await mp.locator('.ms-menu a', { hasText: 'الأحدث' }).click(); await mp.waitForLoadState('networkidle');
+expect(/[?&]sort=new/.test(mp.url()) && (await mp.locator('.ms-rec summary').textContent()).includes('الأحدث'), `الجوال: الفرز بالأحدث طُبّق (${mp.url().split('?')[1]})`);
+// السعر الحالي وحده: بلا السعر المشطوب ولا الكسر الصغير، و«1.234» بفاصل آلاف ar-LY
+const mPrices = async () => mp.$$eval('.grid .card .p', els => els.slice(0, 6).map(e => { const c = e.cloneNode(true); c.querySelectorAll('s,em').forEach(x => x.remove()); return parseInt(c.textContent.replace(/[^\d]/g, ''), 10) || 0; }));
+await mp.click('.m-sort .ms-price'); await mp.waitForLoadState('networkidle');
+const up = await mPrices();
+expect(/sort=price_asc/.test(mp.url()) && up.every((v, i) => i === 0 || v >= up[i - 1]), `الجوال: «السعر» يرتّب صعودًا (${up.join('، ')})`);
+await mp.click('.m-sort .ms-price'); await mp.waitForLoadState('networkidle');
+const down = await mPrices();
+expect(/sort=price_desc/.test(mp.url()) && down.every((v, i) => i === 0 || v <= down[i - 1]), `الجوال: ونقرة ثانية تعكسه نزولًا (${down.join('، ')})`);
+// لوحة التصفية: تُفتح بالنقر، نختار مقاسًا، ونعرض النتائج
+await mp.click('.ms-filter');
+expect(await mp.locator('#fsheet').isVisible(), 'الجوال: «تصفية» تفتح لوحة الفلاتر');
+expect((await mp.locator('.fs-tabs button').count()) >= 3, 'الجوال: اللوحة فيها عمود المجموعات (القسم، اللون، المقاس، السعر، العروض)');
+await mp.click('.fs-tabs [data-tab=size]');
+const mSize = (await mp.locator('[data-pane=size] label span').nth(1).textContent()).trim();
+await mp.locator('[data-pane=size] label').nth(1).click();
+await mp.click('.fs-done'); await mp.waitForLoadState('networkidle');
+const fu = new URL(mp.url());
+expect(fu.searchParams.get('size') === mSize && !/[?&](color|min|max|cat)=(&|$)/.test(mp.url()), `الجوال: «عرض النتائج» طبّق المقاس ${mSize} برابط نظيف (${fu.search})`);
+expect(await mp.locator('#fsheet').isHidden(), 'الجوال: اللوحة أُغلقت بعد التطبيق');
+expect((await mp.locator('.m-chips a.on').first().textContent()).includes(mSize) && (await mp.locator('.ms-filter b').textContent()) === '1', 'الجوال: شريحة «المقاس» ظاهرة وعدّاد «تصفية» = ١');
+// القسم من داخل اللوحة: يحوّل الخادم إلى مسار القسم ويُبقي باقي الفلاتر
+await mp.click('.ms-filter');
+await mp.locator('[data-pane=cat] label', { hasText: 'أحذية' }).click();
+await mp.click('.fs-done'); await mp.waitForLoadState('networkidle');
+expect(new URL(mp.url()).pathname === '/c/shoes' && !mp.url().includes('cat='), `الجوال: اختيار القسم من اللوحة نقل إلى /c/shoes (${mp.url().replace(BASE, '')})`);
+// «عليها خصم»: كل ما يُعرض عليه سعر مشطوب
+await mp.goto(BASE + '/c/dresses'); await mp.waitForLoadState('networkidle');
+await mp.locator('.m-chips a', { hasText: 'عليها خصم' }).click(); await mp.waitForLoadState('networkidle');
+const dealCards = await mp.locator('.grid .card').count(), struck = await mp.locator('.grid .card .p s').count();
+expect(/deal=1/.test(mp.url()) && dealCards > 0 && struck === dealCards, `الجوال: «عليها خصم» يعرض المخفّض وحده (${struck} من ${dealCards})`);
+await mp.click('.ms-filter'); await mp.locator('.fs-clear').click(); await mp.waitForLoadState('networkidle');
+expect(!/deal=|size=|color=/.test(mp.url()), 'الجوال: «مسح» يزيل كل الفلاتر');
+// درج الأقسام ☰ ومثله «الأقسام» في الشريط السفلي
+await mp.click('.burger');
+await mp.waitForSelector('.dr-row');
+expect((await mp.locator('.dr-row').count()) >= 6, `الجوال: ☰ يفتح درج الأقسام (${await mp.locator('.dr-row').count()} صفًّا)`);
+await mp.locator('.dr-row', { hasText: 'حقائب' }).click(); await mp.waitForLoadState('networkidle');
+expect(mp.url().endsWith('/c/bags'), `الجوال: صفّ في الدرج يفتح قسمه (${mp.url().replace(BASE, '')})`);
+await mp.locator('.bottom-nav a', { hasText: 'الأقسام' }).click();
+expect(await mp.locator('#drawer').isVisible() && mp.url().endsWith('/c/bags'), 'الجوال: «الأقسام» في الشريط السفلي تفتح الدرج بدل مغادرة الصفحة');
+await mp.locator('.dr [data-drawer-close]').click();
+await mp.screenshot({ path: `${OUT}/${String(++n).padStart(2, '0')}-mobile-list-shein.png` });
+
 await mp.goto(BASE + '/'); await mp.waitForLoadState('networkidle');
 expect(await mp.locator('.bottom-nav').isVisible(), 'شريط التنقل السفلي يظهر في الجوال');
 // بطاقتان في الصف كما في متاجر الموضة، لا بطاقة عملاقة واحدة
@@ -1670,10 +1743,10 @@ expect(gap >= 0, `شريط التنقل السفلي لا يغطي آخر الت
 await mp.screenshot({ path: `${OUT}/${String(++n).padStart(2, '0')}-mobile-home.png` });
 await mp.goto(BASE + '/p/' + productSlug); await mp.waitForLoadState('networkidle');
 await mp.screenshot({ path: `${OUT}/${String(++n).padStart(2, '0')}-mobile-product.png` });
-expect(await mp.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'لا تمرير أفقي في الجوال');
+expect(await mp.evaluate(() => document.documentElement.scrollWidth <= 391), 'لا تمرير أفقي في الجوال');
 await mp.goto(BASE + '/login'); await mp.fill('input[name=phone]', PHONE); await mp.fill('input[name=password]', 'secret456'); await mp.click('button:has-text("دخول")'); await mp.waitForLoadState('networkidle');
 await mp.goto(BASE + '/account'); await mp.waitForLoadState('networkidle');
-expect(await mp.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'حسابي بلا تمرير أفقي في الجوال');
+expect(await mp.evaluate(() => document.documentElement.scrollWidth <= 391), 'حسابي بلا تمرير أفقي في الجوال');
 await mp.screenshot({ path: `${OUT}/${String(++n).padStart(2, '0')}-mobile-account.png` });
 
 // ---------- شراء كامل من الجوال (الجهاز الذي تشتري منه أغلب الزبائن) ----------
@@ -1686,10 +1759,10 @@ const mHasSize = await mp.locator('.chips[data-opt=size] .chip:not(.off)').count
 if (mHasSize) await mp.locator('.chips[data-opt=size] .chip:not(.off)').first().click();
 await mp.click('#addForm button[type=submit]'); await mp.waitForLoadState('networkidle');
 expect((await mp.locator('.cart-row').count()) >= 1, 'الإضافة للسلة تعمل من الجوال');
-expect(await mp.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'السلة بلا تمرير أفقي في الجوال');
+expect(await mp.evaluate(() => document.documentElement.scrollWidth <= 391), 'السلة بلا تمرير أفقي في الجوال');
 await mp.screenshot({ path: `${OUT}/${String(++n).padStart(2, '0')}-mobile-cart.png` });
 await mp.goto(BASE + '/checkout'); await mp.waitForLoadState('networkidle');
-expect(await mp.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'صفحة الدفع بلا تمرير أفقي في الجوال');
+expect(await mp.evaluate(() => document.documentElement.scrollWidth <= 391), 'صفحة الدفع بلا تمرير أفقي في الجوال');
 const payBtn = mp.locator('button:has-text("تأكيد الطلب")');
 expect(await payBtn.isVisible(), 'زر تأكيد الطلب ظاهر في الجوال');
 const btnBox = await payBtn.boundingBox();
