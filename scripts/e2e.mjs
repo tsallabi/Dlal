@@ -760,6 +760,13 @@ expect(fav === '/favicon.svg' && (await (await ctx.request.get(BASE + fav)).text
 expect((await ctx.request.get(BASE + '/apple-touch-icon.png')).status() === 200, 'أيقونة شاشة الجوال موجودة');
 const brandCol = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--brand').trim().toLowerCase());
 expect(brandCol === '#b05a20', `لون الموقع صار القرفة (${brandCol})`);
+// www.hudhude.com يحوّل إلى hudhude.com بنفس المسار (Host مزوّر: الخادم المحلي لا يعرف النطاق)
+const nodeHttp = await import('node:http');
+const wwwLoc = await new Promise((res) => {
+  const u = new URL(BASE + '/c/dresses?sort=new');
+  nodeHttp.request({ host: u.hostname, port: u.port, path: u.pathname + u.search, headers: { host: 'www.hudhude.com' } }, r => res(`${r.statusCode} ${r.headers.location}`)).on('error', e => res(e.message)).end();
+});
+expect(wwwLoc === '301 https://hudhude.com/c/dresses?sort=new', `www.hudhude.com يحوّل إلى hudhude.com بنفس المسار (${wwwLoc})`);
 const oldZip = await ctx.request.get(BASE + '/talin-extension.zip', { maxRedirects: 0 });
 expect(oldZip.status() === 301 && (oldZip.headers().location || '').endsWith('/hudhud-extension.zip'), `رابط الإضافة القديم يحوّل للجديد (${oldZip.status()})`);
 expect((await page.locator('.hdr-icons > a').count()) >= 3, 'أيقونات الحساب والسلة والمفضلة في الرأس');

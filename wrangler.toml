@@ -35,3 +35,14 @@ DEFAULT_CURRENCY = "LYD"
 
 [triggers]
 crons = ["0 * * * *"]   # مزامنة المخزون كل ساعة (تعمل فقط بعد ضبط مزوّد API)
+
+# النطاق الخاص (اشتراه صاحب المشروع من Cloudflare في ٢٤/٠٩/٢٦). Custom Domain ينشئ سجل DNS
+# والشهادة تلقائيًا. www يحوّل إلى الجذر في src/index.tsx. dlal.tsallabi.workers.dev يبقى يعمل
+# (الإضافة وفحوص ما بعد النشر تستخدمه).
+[[routes]]
+pattern = "hudhude.com"
+custom_domain = true
+
+[[routes]]
+pattern = "www.hudhude.com"
+custom_domain = true

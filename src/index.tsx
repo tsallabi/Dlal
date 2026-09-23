@@ -20,6 +20,14 @@ import { runServerJobs } from './lib/crawl';
 
 const app = new Hono<Env>();
 
+// عنوان واحد للموقع: www.hudhude.com يحوّل إلى hudhude.com (نفس المسار والمعاملات)،
+// فلا تنقسم الجلسات والكوكيز والروابط المحفوظة بين عنوانين
+app.use('*', async (c, next) => {
+  const u = new URL(c.req.url);
+  if (u.hostname === 'www.hudhude.com') { u.hostname = 'hudhude.com'; u.protocol = 'https:'; return c.redirect(u.toString(), 301); }
+  await next();
+});
+
 app.use('*', async (c, next) => {
   const user = await loadUser(c);
   c.set('user', user);
