@@ -19,7 +19,7 @@ auth.get('/login', async (c) => {
         <label>رقم الهاتف</label><input type="tel" name="phone" placeholder="09xxxxxxxx" required autofocus />
         <label>كلمة المرور</label><input type="password" name="password" required />
         <button class="btn" type="submit" style="width:100%;margin-top:16px">دخول</button>
-        <p style="text-align:center;margin-top:14px;font-size:14px">جديدة هنا؟ <a href={`/register?next=${encodeURIComponent(c.req.query('next') ?? '/')}`} style="color:#b5124f;font-weight:700">أنشئي حسابًا</a></p>
+        <p style="text-align:center;margin-top:14px;font-size:14px">جديدة هنا؟ <a href={`/register?next=${encodeURIComponent(c.req.query('next') ?? '/')}`} style="color:var(--brand);font-weight:700">أنشئي حسابًا</a></p>
       </form>
     </Layout>,
   );
@@ -48,7 +48,7 @@ auth.get('/register', async (c) => {
         <label>رقم الهاتف</label><input type="tel" name="phone" placeholder="09xxxxxxxx" required />
         <label>كلمة المرور</label><input type="password" name="password" minlength={6} required />
         <button class="btn" type="submit" style="width:100%;margin-top:16px">إنشاء الحساب</button>
-        <p style="text-align:center;margin-top:14px;font-size:14px">عندك حساب؟ <a href="/login" style="color:#b5124f;font-weight:700">سجّلي الدخول</a></p>
+        <p style="text-align:center;margin-top:14px;font-size:14px">عندك حساب؟ <a href="/login" style="color:var(--brand);font-weight:700">سجّلي الدخول</a></p>
       </form>
     </Layout>,
   );

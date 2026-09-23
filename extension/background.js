@@ -1,4 +1,4 @@
-// تالين — عامل الخلفية: يجلب المهام من الخادم كل 15 دقيقة وينفذها في تبويب خلفي بإيقاع بشري
+// هدهد — عامل الخلفية: يجلب المهام من الخادم كل 15 دقيقة وينفذها في تبويب خلفي بإيقاع بشري
 const VERSION = chrome.runtime.getManifest().version;
 const DEF = { api: '', token: '', paused: false, log: [], fast: false };
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -125,8 +125,8 @@ async function runJob(job) {
   if (rep.skipped) rep.note += ` تخطّيت ${rep.skipped} صفحة لم تُجب خلال دقيقة.`;
   await api('/api/crawl/report', { method: 'POST', body: JSON.stringify(rep) }).catch(e => log('تعذر إرسال التقرير: ' + e.message));
   await log(`${job.name}: ${rep.status} — جديد ${rep.imported} · محدّث ${rep.updated} · مُثرى ${rep.enriched} · مفحوص ${rep.checked}`);
-  if (rep.status === 'blocked') notify('تالين — توقف الزاحف', /تسجيل دخول/.test(rep.note)
-    ? `1688 لم يعد يعرض صفحات المنتجات لزائر غير مسجّل. لا تُعِد المحاولة — راجع تالين. (${job.name})`
+  if (rep.status === 'blocked') notify('هدهد — توقف الزاحف', /تسجيل دخول/.test(rep.note)
+    ? `1688 لم يعد يعرض صفحات المنتجات لزائر غير مسجّل. لا تُعِد المحاولة — راجع لوحة الزاحف في هدهد. (${job.name})`
     : `1688 طلب تحققًا. افتح 1688 وحلّ الكابتشا ثم اضغط "شغّل الآن". (${job.name})`);
   return rep;
 }
@@ -152,7 +152,7 @@ chrome.alarms.onAlarm.addListener(a => { if (a.name === 'tick') tick(); });
 async function testConn() {
   try {
     const c = await cfg();
-    if (!c.api || !c.token) return { ok: false, error: 'العنوان أو الرمز غير مضبوط. افتح لوحة الزاحف في موقع تالين ليُضبط تلقائيًا.' };
+    if (!c.api || !c.token) return { ok: false, error: 'العنوان أو الرمز غير مضبوط. افتح لوحة الزاحف في موقع هدهد ليُضبط تلقائيًا.' };
     const j = await api('/api/crawl/jobs?v=' + VERSION);
     const due = (j.jobs || []).length, all = (j.all || []).length;
     await log(`اختبار الاتصال: نجح — ${all} مهمة، ${due} مستحقة الآن`);

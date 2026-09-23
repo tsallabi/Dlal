@@ -1,4 +1,4 @@
-/* تالين — سكربت الاستيراد. يُحقن في صفحة 1688 عبر bookmarklet.
+/* هدهد — سكربت الاستيراد. يُحقن في صفحة 1688 عبر bookmarklet.
    وضعان: import (استيراد منتجات الصفحة) و check (فحص توفر/سعر قائمة من الخادم).
    يعتمد على DOM الحالي لـ 1688؛ المحددات قابلة للتعديل في SELECTORS عند تغيّر الموقع. */
 (function () {
@@ -70,8 +70,8 @@
     const old = $('#dlal-panel'); if (old) old.remove();
     const p = document.createElement('div'); p.id = 'dlal-panel';
     p.style.cssText = 'position:fixed;top:0;right:0;width:420px;height:100vh;background:#fff;z-index:2147483647;box-shadow:-4px 0 20px rgba(0,0,0,.25);font:14px Tahoma,Arial;direction:rtl;display:flex;flex-direction:column';
-    p.innerHTML = `<div style="background:#b5124f;color:#fff;padding:12px 16px;font-weight:bold;display:flex;justify-content:space-between"><span>تالين — استيراد ${items.length} منتج</span><span id="dlal-x" style="cursor:pointer">✕</span></div>
-      <div style="padding:10px 16px;border-bottom:1px solid #eee"><label>القسم في تالين: <select id="dlal-cat" style="width:100%;padding:6px"></select></label>
+    p.innerHTML = `<div style="background:#B05A20;color:#fff;padding:12px 16px;font-weight:bold;display:flex;justify-content:space-between"><span>هدهد — استيراد ${items.length} منتج</span><span id="dlal-x" style="cursor:pointer">✕</span></div>
+      <div style="padding:10px 16px;border-bottom:1px solid #eee"><label>القسم في هدهد: <select id="dlal-cat" style="width:100%;padding:6px"></select></label>
       <div style="margin-top:8px;font-size:12px;color:#666">${isDetail ? 'صفحة منتج: ستُستورد الصور والمقاسات والألوان.' : 'صفحة قائمة: تُستورد صورة واحدة وسعر البداية؛ افتح المنتج لاستيراد التفاصيل.'}</div></div>
       <div id="dlal-list" style="flex:1;overflow:auto;padding:10px 16px;display:grid;grid-template-columns:1fr 1fr;gap:8px"></div>
       <div style="padding:12px 16px;border-top:1px solid #eee"><button id="dlal-go" style="width:100%;background:#1a1a1a;color:#fff;border:0;padding:12px;border-radius:999px;font-weight:bold;cursor:pointer">استيراد المحدد</button><div id="dlal-msg" style="margin-top:6px;font-size:12px;color:#666"></div></div>`;

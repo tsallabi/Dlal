@@ -27,6 +27,8 @@ app.use('*', async (c, next) => {
   await next();
 });
 
+// الاسم القديم لملف الإضافة (قبل هدهد): رابط محفوظ عند صاحب المشروع يبقى يعمل
+app.get('/talin-extension.zip', (c) => c.redirect('/hudhud-extension.zip', 301));
 app.route('/', img);
 app.route('/api', api);
 app.route('/admin/api1688', api1688Admin);

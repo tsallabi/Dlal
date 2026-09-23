@@ -50,7 +50,7 @@ acct.get('/', async (c) => {
         <a href="/wishlist" class="acct-card"><b>♡</b><span>المفضلة</span></a>
       </div>
       <div class="card-box"><div class="sec-h" style="margin:0 0 8px"><h3 style="margin:0">آخر الطلبات</h3><a href="/account/orders">الكل ›</a></div>
-        {orders.results.length === 0 ? <p style="color:#888">لا طلبات بعد. <a href="/" style="color:#b5124f">ابدئي التسوق</a></p> : orders.results.map(o => <OrderRow o={o} />)}
+        {orders.results.length === 0 ? <p style="color:#888">لا طلبات بعد. <a href="/" style="color:var(--brand)">ابدئي التسوق</a></p> : orders.results.map(o => <OrderRow o={o} />)}
       </div>
       <div class="card-box"><div class="sec-h" style="margin:0 0 8px"><h3 style="margin:0">الإشعارات</h3><a href="/account/notifications">الكل ›</a></div>
         {notifs.results.length === 0 ? <p style="color:#888">لا إشعارات.</p> : notifs.results.map(n => <div class={`notif ${n.read ? '' : 'unread'}`}><a href={n.link ?? '#'}><b>{n.title}</b></a><span>{n.body}</span><small>{timeAgo(n.created_at)}</small></div>)}
@@ -101,7 +101,7 @@ acct.get('/tickets', async (c) => {
   return shell(c, 'tickets', 'الإرجاع والتذاكر', (
     <>
       <Flash msg={c.req.query('ok') ? 'أُنشئت التذكرة وسيرد عليك فريق الدعم ✓' : undefined} />
-      <div class="inline" style="margin-bottom:12px"><a class="btn sm brand" href="/account/tickets/new">+ تذكرة جديدة</a><span style="font-size:13px;color:#666">سياسة الإرجاع: <a href="/pages/returns" style="color:#b5124f">اقرئيها هنا</a></span></div>
+      <div class="inline" style="margin-bottom:12px"><a class="btn sm brand" href="/account/tickets/new">+ تذكرة جديدة</a><span style="font-size:13px;color:#666">سياسة الإرجاع: <a href="/pages/returns" style="color:var(--brand)">اقرئيها هنا</a></span></div>
       {results.length === 0 ? <div class="empty"><div class="big">↩️</div>لا تذاكر</div> : results.map(t => (
         <a href={`/account/tickets/${t.code}`} class="order-row"><div><b>{t.code}</b> · {TICKET_TYPES[t.type]}<br /><small>{t.subject} {t.order_code && `· الطلب ${t.order_code}`}</small></div><span class={`status ${TICKET_STATUS[t.status].color}`}>{TICKET_STATUS[t.status].ar}</span><small>{t.n} رسالة</small><span class="chev">›</span></a>
       ))}
@@ -148,7 +148,7 @@ acct.get('/tickets/:code', async (c) => {
     <>
       <div class="inline" style="margin-bottom:10px"><span class={`status ${TICKET_STATUS[t.status].color}`}>{TICKET_STATUS[t.status].ar}</span><span class="status">{TICKET_TYPES[t.type]}</span>{t.order_code && <a href={`/orders/${t.order_code}`} class="status blue">الطلب {t.order_code}</a>}
         {t.resolution && <span class="status green">القرار: {{ refund: `استرجاع ${fmt(t.refund_lyd ?? 0)}`, replacement: 'إرسال بديل', points: `تعويض ${t.points_awarded} نقطة`, none: 'بدون تعويض' }[t.resolution as string]}</span>}</div>
-      <div class="chat">{msgs.results.map(m => <div class={`msg ${m.is_staff ? 'staff' : 'me'}`}><div class="who">{m.is_staff ? `فريق تالين — ${m.name ?? ''}` : 'أنتِ'} · {timeAgo(m.created_at)}</div><div>{m.body}</div>{m.image_url && <a href={m.image_url} target="_blank">📷 صورة</a>}</div>)}</div>
+      <div class="chat">{msgs.results.map(m => <div class={`msg ${m.is_staff ? 'staff' : 'me'}`}><div class="who">{m.is_staff ? `فريق هدهد — ${m.name ?? ''}` : 'أنتِ'} · {timeAgo(m.created_at)}</div><div>{m.body}</div>{m.image_url && <a href={m.image_url} target="_blank">📷 صورة</a>}</div>)}</div>
       {t.status !== 'closed' && <form method="post" action={`/account/tickets/${t.code}/reply`} class="card-box"><label>رد</label><textarea name="body" rows={3} required></textarea><button class="btn sm" style="margin-top:8px">إرسال</button></form>}
     </>
   ));

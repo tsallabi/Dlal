@@ -73,7 +73,7 @@ admin.get('/', async (c) => {
       </div>
       <div class="quick"><a href="/admin/orders?status=pending_payment">💳 تأكيد مدفوعات يدوية</a><a href="/admin/tickets">↩️ الرد على التذاكر</a><a href="/admin/reviews">⭐ مراجعة التقييمات</a><a href="/admin/import">⬇️ استيراد منتجات</a><a href="/admin/pricing">💰 تحديث سعر الصرف</a><a href="/admin/reports">📈 التقارير</a></div>
       <div class="card-box"><h3>آخر الطلبات</h3><div class="tbl-wrap"><table class="tbl"><tr><th>الطلب</th><th>الزبونة</th><th>الحالة</th><th>الإجمالي</th><th>التاريخ</th></tr>
-        {recent.results.map(o => <tr><td><a href={`/admin/orders/${o.code}`} style="color:#b5124f;font-weight:700">{o.code}</a></td><td>{o.name}</td><td><span class={`status ${ORDER_STATUS[o.status]?.color}`}>{ORDER_STATUS[o.status]?.ar}</span></td><td>{fmt(o.total_lyd)}</td><td>{timeAgo(o.created_at)}</td></tr>)}
+        {recent.results.map(o => <tr><td><a href={`/admin/orders/${o.code}`} style="color:var(--brand);font-weight:700">{o.code}</a></td><td>{o.name}</td><td><span class={`status ${ORDER_STATUS[o.status]?.color}`}>{ORDER_STATUS[o.status]?.ar}</span></td><td>{fmt(o.total_lyd)}</td><td>{timeAgo(o.created_at)}</td></tr>)}
       </table></div></div>
     </>
   ));
@@ -95,7 +95,7 @@ admin.get('/orders', async (c) => {
       <div class="tabs"><a href="/admin/orders" class={!st ? 'on' : ''}>الكل</a>{Object.entries(ORDER_STATUS).map(([k, v]) => <a href={`/admin/orders?status=${k}`} class={st === k ? 'on' : ''}>{v.ar}{cm[k] ? <i>{cm[k]}</i> : null}</a>)}</div>
       <form class="inline" style="margin:8px 0"><input type="text" name="q" placeholder="رقم الطلب / اسم / هاتف" value={q} /><input type="hidden" name="status" value={st} /><button class="btn sm">بحث</button></form>
       <div class="tbl-wrap"><table class="tbl"><tr><th>الطلب</th><th>الزبونة</th><th>الحالة</th><th>الدفع</th><th>الشريك</th><th>الإجمالي</th><th>التاريخ</th></tr>
-        {rows.results.map(o => <tr><td><a href={`/admin/orders/${o.code}`} style="color:#b5124f;font-weight:700">{o.code}</a></td><td>{o.name}<br /><small>{o.phone} · {o.ship_city}</small></td><td><span class={`status ${ORDER_STATUS[o.status]?.color}`}>{ORDER_STATUS[o.status]?.ar}</span></td><td>{PAYMENT_METHODS[o.payment_method]?.ar ?? o.payment_method}{o.payment_ref && <><br /><small>{o.payment_ref}</small></>}</td><td>{o.partner ?? '—'}</td><td>{fmt(o.total_lyd)}</td><td>{timeAgo(o.created_at)}</td></tr>)}
+        {rows.results.map(o => <tr><td><a href={`/admin/orders/${o.code}`} style="color:var(--brand);font-weight:700">{o.code}</a></td><td>{o.name}<br /><small>{o.phone} · {o.ship_city}</small></td><td><span class={`status ${ORDER_STATUS[o.status]?.color}`}>{ORDER_STATUS[o.status]?.ar}</span></td><td>{PAYMENT_METHODS[o.payment_method]?.ar ?? o.payment_method}{o.payment_ref && <><br /><small>{o.payment_ref}</small></>}</td><td>{o.partner ?? '—'}</td><td>{fmt(o.total_lyd)}</td><td>{timeAgo(o.created_at)}</td></tr>)}
       </table></div><Pager c={c} total={total} />
     </>
   ));
@@ -146,7 +146,7 @@ admin.get('/orders/:code', async (c) => {
           <div class="card-box"><h3>سجل الأحداث</h3>{events.results.map(e => <div style="font-size:13px;border-bottom:1px solid #eee;padding:6px 0"><span class={`status ${ORDER_STATUS[e.status]?.color}`}>{ORDER_STATUS[e.status]?.ar ?? e.status}</span> {e.note} <small style="color:#888">— {e.name ?? 'النظام'} · {timeAgo(e.created_at)}</small></div>)}</div>
         </div>
         <div>
-          <div class="card-box"><h3>الزبونة</h3><a href={`/admin/customers/${o.user_id}`} style="color:#b5124f;font-weight:700">{o.name}</a><br />{o.phone}<br />{o.ship_city} — {o.ship_address}{o.note && <><br /><i>{o.note}</i></>}</div>
+          <div class="card-box"><h3>الزبونة</h3><a href={`/admin/customers/${o.user_id}`} style="color:var(--brand);font-weight:700">{o.name}</a><br />{o.phone}<br />{o.ship_city} — {o.ship_address}{o.note && <><br /><i>{o.note}</i></>}</div>
           <div class="card-box"><h3>الدفع</h3>{PAYMENT_METHODS[o.payment_method]?.ar ?? o.payment_method}<br />المرجع: {o.payment_ref ?? '—'}<br />الإجمالي: <b>{fmt(o.total_lyd)}</b>{o.discount_lyd > 0 && <><br /><small>خصم {o.coupon_code}: −{fmt(o.discount_lyd)}</small></>}{o.points_used > 0 && <><br /><small>نقاط: {o.points_used} (−{fmt(o.points_lyd)})</small></>}<br /><small>سعر الصرف وقت الطلب: {o.fx_rate_used}</small>
             {pays.results.length > 0 && <div style="margin-top:8px;font-size:12px">{pays.results.map(p => <div>{p.trx_ref} · {p.gateway} · <span class={`status ${p.status === 'paid' ? 'green' : 'gray'}`}>{p.status}</span></div>)}</div>}</div>
           <div class="card-box"><h3>شريك الشحن</h3>{o.partner ?? 'لم يُعيَّن'}</div>
@@ -183,7 +183,7 @@ admin.get('/customers', async (c) => {
     <>
     <form class="inline" style="margin-bottom:10px"><input type="text" name="q" placeholder="اسم / هاتف" value={c.req.query('q') ?? ''} /><button class="btn sm">بحث</button></form>
     <div class="tbl-wrap"><table class="tbl"><tr><th>الاسم</th><th>الهاتف</th><th>المدينة</th><th>الطلبات</th><th>المشتريات</th><th>نقاط</th><th>التسجيل</th></tr>
-      {rows.results.map(u => <tr><td><a href={`/admin/customers/${u.id}`} style="color:#b5124f;font-weight:700">{u.name}</a>{!u.active && <span class="status red" style="margin-inline-start:6px">معطّل</span>}</td><td>{u.phone}</td><td>{u.city ?? '—'}</td><td>{u.n}</td><td>{fmt(u.spent)}</td><td>{u.points}</td><td>{timeAgo(u.created_at)}</td></tr>)}
+      {rows.results.map(u => <tr><td><a href={`/admin/customers/${u.id}`} style="color:var(--brand);font-weight:700">{u.name}</a>{!u.active && <span class="status red" style="margin-inline-start:6px">معطّل</span>}</td><td>{u.phone}</td><td>{u.city ?? '—'}</td><td>{u.n}</td><td>{fmt(u.spent)}</td><td>{u.points}</td><td>{timeAgo(u.created_at)}</td></tr>)}
     </table></div>
     </>
   ));
@@ -201,9 +201,9 @@ admin.get('/import', async (c) => {
         <div>
           <div class="card-box"><h3>الطريقة 1 — زر الاستيراد في متصفحك (موصى بها)</h3>
             <ol style="font-size:14px;line-height:1.9">
-              <li>اسحب هذا الزر إلى شريط المفضلة في Chrome: <a href={bookmarklet} class="btn sm brand" onclick="return false" draggable="true">⬇️ استورد إلى تالين</a></li>
+              <li>اسحب هذا الزر إلى شريط المفضلة في Chrome: <a href={bookmarklet} class="btn sm brand" onclick="return false" draggable="true">⬇️ استورد إلى هدهد</a></li>
               <li>افتح <a href="https://www.1688.com" target="_blank" class="src-link">1688.com</a> وسجّل الدخول بحسابك، وابحث عن أي منتج أو افتح صفحة قسم.</li>
-              <li>اضغط الزر من شريط المفضلة: تظهر نافذة تعرض منتجات الصفحة، تختار القسم في تالين وتضغط "استيراد".</li>
+              <li>اضغط الزر من شريط المفضلة: تظهر نافذة تعرض منتجات الصفحة، تختار القسم في هدهد وتضغط "استيراد".</li>
               <li>في صفحة منتج واحد يستورد الزر المنتج بكل صوره ومقاساته وألوانه.</li>
             </ol>
             <p style="font-size:13px;color:#666">الزبون لا يرى أبدًا رابط المصدر أو السعر الأصلي. السعر يُحسب تلقائيًا بقواعد التسعير.</p>

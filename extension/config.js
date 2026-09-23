@@ -1,4 +1,4 @@
-// تالين — ضبط تلقائي: عند فتح لوحة الزاحف في موقع تالين تأخذ الإضافة العنوان والرمز بنفسها
+// هدهد — ضبط تلقائي: عند فتح لوحة الزاحف في موقع هدهد تأخذ الإضافة العنوان والرمز بنفسها
 (async function () {
   const el = document.getElementById('dlal-ext-config');
   if (!el) return;
@@ -11,7 +11,7 @@
     document.documentElement.appendChild(d);
     setTimeout(() => d.remove(), 6000);
   };
-  if (!token) { banner('إضافة تالين مثبّتة، لكن IMPORT_TOKEN غير مضبوط على الخادم', '#d3262b'); return; }
+  if (!token) { banner('إضافة هدهد مثبّتة، لكن IMPORT_TOKEN غير مضبوط على الخادم', '#d3262b'); return; }
   const cur = await chrome.storage.local.get(['api', 'token']);
   if (cur.api === api && cur.token === token) { banner('إضافة الزاحف مربوطة بهذا الموقع ✓', '#1a9c5b'); return; }
   await chrome.storage.local.set({ api, token });

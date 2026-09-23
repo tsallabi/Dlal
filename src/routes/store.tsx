@@ -396,7 +396,7 @@ store.get('/p/:slug', async (c) => {
           <div class="meta" style="font-size:13px;color:#666">{p.review_count > 0
             ? <><a href="#reviews"><Stars n={p.rating} /> {p.rating.toFixed(1)} ({p.review_count} تقييم)</a> · </>
             : <>لا تقييمات بعد — كوني أول من يقيّمه · </>}{p.sales}+ بيعت · {p.views} مشاهدة</div>
-          <div class="price" style="margin-top:8px">{fmt(shown)}{off > 0 && <s>{fmt(p.compare_price_lyd!)}</s>}{off > 0 && <span class="tag" style="position:static;margin-inline-start:8px;font-size:13px;background:#b5124f;color:#fff;padding:2px 8px;border-radius:4px">-{off}%</span>}</div>
+          <div class="price" style="margin-top:8px">{fmt(shown)}{off > 0 && <s>{fmt(p.compare_price_lyd!)}</s>}{off > 0 && <span class="tag" style="position:static;margin-inline-start:8px;font-size:13px;background:var(--brand);color:#fff;padding:2px 8px;border-radius:4px">-{off}%</span>}</div>
           <div class="price-note">السعر شامل الشحن من الصين والجمارك. التوصيل داخل ليبيا {fmt(parseFloat(s.delivery_lyd))} (مجاني فوق {fmt(parseFloat(s.free_ship_over_lyd))}). تكسبين <b>{Math.floor(shown * parseFloat(s.points_per_lyd || '1'))} نقطة</b> عند التسليم.</div>
           {seaOn(s) && p.price_sea_lyd ? (
             <form method="post" action="/cart/ship" class="pship">
@@ -421,7 +421,7 @@ store.get('/p/:slug', async (c) => {
                 <div class="chips" data-opt="color">{colors.map(cl => <span class="chip" data-val={cl}>{cl}</span>)}</div></div>
             )}
             {sizes.length > 0 && (
-              <div class="opts"><h4>المقاس: <span id="sizeLbl"></span> <a href="#sizeGuide" style="font-weight:400;font-size:12px;color:#b5124f;margin-inline-start:8px">دليل المقاسات</a></h4>
+              <div class="opts"><h4>المقاس: <span id="sizeLbl"></span> <a href="#sizeGuide" style="font-weight:400;font-size:12px;color:var(--brand);margin-inline-start:8px">دليل المقاسات</a></h4>
                 <div class="chips" data-opt="size">{sizes.map(sz => <span class="chip" data-val={sz}>{sz}</span>)}</div>
                 {fitTotal > 0 && <div class="fit"><span>رأي الزبونات في المقاس:</span> <b>{fitPct('true')}%</b> مطابق · <b>{fitPct('small')}%</b> أصغر · <b>{fitPct('large')}%</b> أكبر</div>}
               </div>
@@ -458,11 +458,11 @@ store.get('/p/:slug', async (c) => {
                 <tr><td>L</td><td>92–96</td><td>74–78</td><td>40–42</td></tr>
                 <tr><td>XL</td><td>96–102</td><td>78–84</td><td>42–44</td></tr>
                 <tr><td>2XL</td><td>102–108</td><td>84–90</td><td>44–46</td></tr>
-              </table><p style="color:#b5124f">⚠️ المقاسات الصينية أصغر بمقاس واحد عادةً. ننصح بطلب مقاس أكبر.</p></div>
+              </table><p style="color:var(--brand)">⚠️ المقاسات الصينية أصغر بمقاس واحد عادةً. ننصح بطلب مقاس أكبر.</p></div>
             </details>
           )}
           <details><summary>الشحن والإرجاع</summary>
-            <div style="font-size:14px">نشتري المنتج من المورد بعد تأكيد طلبك، ثم يُجمع مع طلبات أخرى في مخزننا بالصين ويُشحن جوًّا إلى ليبيا. لا يمكن إرجاع البضاعة إلى الصين، لكن نعوّض أي منتج تالف أو مختلف عن الوصف بصور الفحص. <a href="/pages/returns" style="color:#b5124f">سياسة الإرجاع الكاملة</a></div>
+            <div style="font-size:14px">نشتري المنتج من المورد بعد تأكيد طلبك، ثم يُجمع مع طلبات أخرى في مخزننا بالصين ويُشحن جوًّا إلى ليبيا. لا يمكن إرجاع البضاعة إلى الصين، لكن نعوّض أي منتج تالف أو مختلف عن الوصف بصور الفحص. <a href="/pages/returns" style="color:var(--brand)">سياسة الإرجاع الكاملة</a></div>
           </details>
         </div>
       </div>
@@ -688,7 +688,7 @@ const CouponBox = ({ c, t, back }: { c: Context<Env>; t: any; back: string }) =>
   <form method="post" action="/cart/coupon" class="coupon-box">
     <input type="hidden" name="back" value={back} />
     {t.coupon ? <><span>🎟️ الكوبون <b>{t.coupon.code}</b> مُطبَّق</span><button class="btn sm ghost" name="action" value="remove">إزالة</button></>
-      : <><input type="text" name="code" placeholder="كود الكوبون" value={c.req.query('cerr') ? '' : ''} /><button class="btn sm">تطبيق</button><a href="/account/coupons" style="font-size:12px;color:#b5124f">كوبوناتي</a></>}
+      : <><input type="text" name="code" placeholder="كود الكوبون" value={c.req.query('cerr') ? '' : ''} /><button class="btn sm">تطبيق</button><a href="/account/coupons" style="font-size:12px;color:var(--brand)">كوبوناتي</a></>}
     {c.req.query('cerr') && <div class="flash err" style="margin:6px 0 0;padding:6px 10px">{c.req.query('cerr')}</div>}
     {t.couponErr && <div class="flash err" style="margin:6px 0 0;padding:6px 10px">{t.couponErr}</div>}
   </form>
@@ -788,7 +788,7 @@ store.get('/checkout', async (c) => {
           <CouponBox c={c} t={t} back="/checkout" />
           <div><ShipPicker t={t} back="/checkout" /><Summary t={t} u={u} rows={rows} showItems usePointsToggle /></div>
           <button class="btn brand" type="submit" style="width:100%;margin-top:12px;font-size:16px">تأكيد الطلب {t.total > 0 ? `· ${fmt(t.total)}` : ''}</button>
-          <p style="font-size:12px;color:#888;margin:10px 0 0">بتأكيد الطلب توافقين على <a href="/pages/terms" style="color:#b5124f">الشروط</a> و<a href="/pages/returns" style="color:#b5124f">سياسة الإرجاع</a>.</p>
+          <p style="font-size:12px;color:#888;margin:10px 0 0">بتأكيد الطلب توافقين على <a href="/pages/terms" style="color:var(--brand)">الشروط</a> و<a href="/pages/returns" style="color:var(--brand)">سياسة الإرجاع</a>.</p>
         </div>
       </form>
     </Layout>,
@@ -905,7 +905,7 @@ store.get('/orders/:code', async (c) => {
               ) : (
                 <>
                   <p style="font-size:13px;color:#666">{pm?.desc}</p>
-                  <p style="font-size:13px">واتساب التأكيد: <a href={`https://wa.me/${s.whatsapp_number}?text=${encodeURIComponent(`طلب ${o.code} — المبلغ ${o.total_lyd} د.ل`)}`} style="color:#b5124f;direction:ltr">+{s.whatsapp_number}</a></p>
+                  <p style="font-size:13px">واتساب التأكيد: <a href={`https://wa.me/${s.whatsapp_number}?text=${encodeURIComponent(`طلب ${o.code} — المبلغ ${o.total_lyd} د.ل`)}`} style="color:var(--brand);direction:ltr">+{s.whatsapp_number}</a></p>
                 </>
               )}
               <form method="post" action={`/account/orders/${o.code}/cancel`} style="margin-top:10px" onsubmit="return confirm('إلغاء الطلب؟')"><button class="btn sm ghost" style="color:#d3262b">إلغاء الطلب</button></form>
@@ -929,7 +929,7 @@ store.get('/orders/:code', async (c) => {
           </div>
         </div>
         <div>
-          <div class="summary"><div class="row"><span>المنتجات</span><span>{fmt(o.subtotal_lyd)}</span></div>{o.discount_lyd > 0 && <div class="row" style="color:#1a9c5b"><span>خصم {o.coupon_code}</span><span>−{fmt(o.discount_lyd)}</span></div>}{o.points_used > 0 && <div class="row" style="color:#1a9c5b"><span>نقاط ({o.points_used})</span><span>−{fmt(o.points_lyd)}</span></div>}<div class="row"><span>التوصيل</span><span>{o.shipping_lyd ? fmt(o.shipping_lyd) : 'مجاني'}</span></div><div class="row tot"><span>الإجمالي</span><span>{fmt(o.total_lyd)}</span></div>{o.points_earned > 0 && <div class="row" style="color:#b5124f"><span>نقاط مكتسبة</span><span>+{o.points_earned} ⭐</span></div>}</div>
+          <div class="summary"><div class="row"><span>المنتجات</span><span>{fmt(o.subtotal_lyd)}</span></div>{o.discount_lyd > 0 && <div class="row" style="color:#1a9c5b"><span>خصم {o.coupon_code}</span><span>−{fmt(o.discount_lyd)}</span></div>}{o.points_used > 0 && <div class="row" style="color:#1a9c5b"><span>نقاط ({o.points_used})</span><span>−{fmt(o.points_lyd)}</span></div>}<div class="row"><span>التوصيل</span><span>{o.shipping_lyd ? fmt(o.shipping_lyd) : 'مجاني'}</span></div><div class="row tot"><span>الإجمالي</span><span>{fmt(o.total_lyd)}</span></div>{o.points_earned > 0 && <div class="row" style="color:var(--brand)"><span>نقاط مكتسبة</span><span>+{o.points_earned} ⭐</span></div>}</div>
           <div class="card-box" style="margin-top:14px"><h3>التوصيل إلى</h3><div style="font-size:14px">{o.ship_name}<br />{o.ship_phone}<br />{o.ship_city} — {o.ship_address}</div></div>
           <div class="card-box"><h3>تحتاجين مساعدة؟</h3><button type="button" class="btn sm brand" data-chat-order={o.code} style="margin-bottom:8px">💬 راسلينا عن هذا الطلب</button> <a class="btn sm ghost" href={`/account/tickets/new?order=${o.code}&type=question`}>افتحي تذكرة</a> <a class="btn sm ghost" href={`https://wa.me/${s.whatsapp_number}`}>واتساب</a></div>
         </div>
@@ -945,7 +945,7 @@ const PAGES: Record<string, [string, string]> = {
   returns: ['سياسة الإرجاع والتعويض', 'لا يمكن إرجاع البضاعة إلى الصين. لذلك نفحص كل قطعة ونصوّرها قبل الشحن.\n\n• منتج تالف أو مختلف جوهريًا عن الوصف: تعويض كامل (استرجاع للمحفظة أو نقاط أو بديل) — افتحي تذكرة خلال 7 أيام من التسليم مع صورة.\n• منتج نفد عند المورد: تُعاد قيمته كاملة تلقائيًا.\n• المقاسات مسؤولية الزبونة — راجعي دليل المقاسات ورأي الزبونات في المقاس على صفحة المنتج.\n• إلغاء الطلب مجاني قبل الدفع، وبعد الدفع وقبل الشراء عبر تذكرة إلغاء.'],
   contact: ['تواصل معنا', 'واتساب: +218 91 000 0000\nبريد: hello@dlal.ly\nساعات العمل: السبت–الخميس 10ص–8م\nأو افتحي تذكرة من حسابك ويرد فريق الدعم خلال 24 ساعة.'],
   faq: ['الأسئلة الشائعة', 'هل السعر نهائي؟ نعم، شامل الشحن والجمارك، تدفعين التوصيل المحلي فقط.\n\nكيف أدفع؟ بطاقة مصرفية محلية عبر معاملات، سداد، إدفعلي، موبي كاش (فوري عبر ماي باي)، أو تحويل مصرفي، أو عربون 30%.\n\nمتى يصل طلبي؟ 15–25 يومًا من تأكيد الدفع.\n\nماذا لو نفد المنتج؟ يُخبرك فريقنا فورًا وتختارين بديلًا أو استرجاعًا كاملًا.\n\nكيف أكسب النقاط؟ نقطة لكل دينار عند التسليم، ونقاط إضافية للتقييمات. كل 100 نقطة = دينار.\n\nهل أستطيع الإلغاء؟ نعم قبل الدفع مباشرة، وبعده عبر تذكرة قبل بدء الشراء.'],
-  terms: ['الشروط والأحكام', 'بإتمام الطلب توافقين على: أن تالين وكيل شراء يشتري المنتج نيابة عنك من المورد؛ أن الصور والمواصفات من المورد وقد تختلف الألوان قليلًا؛ أن مدة التوصيل تقديرية؛ أن الطلب يبدأ شراؤه بعد تأكيد الدفع؛ وأن سياسة الإرجاع والتعويض المنشورة هي المرجع لأي خلاف.'],
+  terms: ['الشروط والأحكام', 'بإتمام الطلب توافقين على: أن هدهد وكيل شراء يشتري المنتج نيابة عنك من المورد؛ أن الصور والمواصفات من المورد وقد تختلف الألوان قليلًا؛ أن مدة التوصيل تقديرية؛ أن الطلب يبدأ شراؤه بعد تأكيد الدفع؛ وأن سياسة الإرجاع والتعويض المنشورة هي المرجع لأي خلاف.'],
   privacy: ['الخصوصية', 'نستخدم رقم هاتفك وعنوانك لتنفيذ الطلب والتواصل بشأنه فقط. بيانات الدفع تُعالج لدى بوابة ماي باي ولا نخزّن أرقام البطاقات. لا نبيع بياناتك لأي طرف.'],
 };
 store.get('/pages/:key', async (c) => {
