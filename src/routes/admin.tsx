@@ -253,6 +253,9 @@ export async function importProducts(db: D1Database, arr: any[], categoryId: num
     ? (await db.prepare("SELECT id,source_offer_id,source_price_cny,COALESCE(title_src,title_ar) t FROM products WHERE category_id=? AND status='active'").bind(categoryId).all<any>()).results
     : [];
   let imported = 0, updated = 0, skipped = 0, enriched = 0, dupes = 0; const newIds: string[] = [];
+  // ما أُضيف فعلًا لمنتجات موجودة: يغذّي شريط تقدّم الإضافة. `enriched` كان يُعدّ مع كل مرور
+  // ولو لم يُضف شيئًا (١٠٠ من ١٠٠ دائمًا) فلا يقول لصاحب المشروع شيئًا.
+  const gain = { img: 0, vars: 0, wt: 0 };
   const seen = new Set<string>();   // نتائج البحث قد تكرر المنتج نفسه في الدفعة الواحدة
   for (const it of arr) {
     const offerId = String(it.offerId ?? it.offer_id ?? '').trim();
@@ -289,18 +292,22 @@ export async function importProducts(db: D1Database, arr: any[], categoryId: num
       // إثراء: منتج استُورد من صفحة قائمة (صورة واحدة، بلا مقاسات) ثم وصلت تفاصيله من صفحة المنتج
       const enrich: D1PreparedStatement[] = [];
       const cur = await db.prepare('SELECT (SELECT COUNT(*) FROM product_images WHERE product_id=?) imgs,(SELECT COUNT(*) FROM variants WHERE product_id=?) vars,title_ar,min_qty,supplier_name FROM products WHERE id=?').bind(ex.id, ex.id, ex.id).first<any>();
+      let got = false;
       if (Array.isArray(it.images) && it.images.length > 1 && (cur?.imgs ?? 0) <= 1) {
+        gain.img++; got = true;
         enrich.push(db.prepare('DELETE FROM product_images WHERE product_id=?').bind(ex.id));
         it.images.slice(0, 8).forEach((u: string, i: number) => enrich.push(db.prepare('INSERT INTO product_images(product_id,url,sort) VALUES(?,?,?)').bind(ex.id, u, i)));
       }
-      if (Array.isArray(it.variants) && it.variants.length && (cur?.vars ?? 0) === 0) {
+      const newVars = Array.isArray(it.variants) && (cur?.vars ?? 0) === 0 ? it.variants.map(asVariant).filter(Boolean) : [];
+      if (newVars.length) {
         // متغيّر بلا لون ولا مقاس بعد تنظيف رؤوس الأعمدة لا معنى له: لا يُدرج أصلًا
-        it.variants.map(asVariant).filter(Boolean).forEach((v: any) => enrich.push(db.prepare('INSERT INTO variants(product_id,source_sku_id,color,size,price_delta_lyd,in_stock,image_url) VALUES(?,?,?,?,?,?,?)')
+        gain.vars++; got = true;
+        newVars.forEach((v: any) => enrich.push(db.prepare('INSERT INTO variants(product_id,source_sku_id,color,size,price_delta_lyd,in_stock,image_url) VALUES(?,?,?,?,?,?,?)')
           .bind(ex.id, v.skuId ?? null, v.color, v.size, v.priceCny ? Math.round((v.priceCny - price) * parseFloat(s.fx_cny_lyd) * 1.4 * 2) / 2 : 0, v.inStock === false ? 0 : 1, v.image ?? null)));
       }
       // كل مرور على منتج موجود محاولة إثراء تُعدّ، نجحت أو لم تنجح: بها يتقدّم الطابور ولا يدور
       const upd: string[] = ['enrich_tries=enrich_tries+1']; const binds: any[] = [];
-      if ((hasCJK(cur?.title_ar) || !goodTitle(cur?.title_ar)) && !hasCJK(titleAr) && titleAr !== cur?.title_ar && (goodTitle(titleAr) || hasCJK(cur?.title_ar))) { upd.push('title_ar=?'); binds.push(titleAr.slice(0, 200)); upd.push("status=CASE WHEN status='draft' THEN 'active' ELSE status END"); }
+      if ((hasCJK(cur?.title_ar) || !goodTitle(cur?.title_ar)) && !hasCJK(titleAr) && titleAr !== cur?.title_ar && (goodTitle(titleAr) || hasCJK(cur?.title_ar))) { got = true; upd.push('title_ar=?'); binds.push(titleAr.slice(0, 200)); upd.push("status=CASE WHEN status='draft' THEN 'active' ELSE status END"); }
       // الإثراء يكتشف الحد الأدنى الحقيقي بعد أن يكون المنتج على الرف. رفعُه وحده لا يكفي:
       // منتج نشط صار حدّه الأدنى قطعتين يُجبر الزبونة، فيجب أن يُخفى في الجملة نفسها.
       // (سُرِّب منتج واحد بهذا الطريق بعد ترحيل 0023 — العطل يعود من باب الإثراء لا الاستيراد.)
@@ -308,14 +315,15 @@ export async function importProducts(db: D1Database, arr: any[], categoryId: num
         upd.push('min_qty=?'); binds.push(Number(it.minQty));
         if (notRetail(it.title, Number(it.minQty), maxRetail)) upd.push("status=CASE WHEN status='active' THEN 'hidden' ELSE status END");
       }
-      if (it.weightG && Number(it.weightG) > 0 && !ex.weight_g) { upd.push('weight_g=?'); binds.push(Math.round(Number(it.weightG))); }
+      if (it.weightG && Number(it.weightG) > 0 && !ex.weight_g) { upd.push('weight_g=?'); binds.push(Math.round(Number(it.weightG))); gain.wt++; got = true; }
       if (it.volumeCm3 && Number(it.volumeCm3) > 0 && !ex.volume_cm3) { upd.push('volume_cm3=?'); binds.push(Math.round(Number(it.volumeCm3))); }
       if (supplierAr && (!cur?.supplier_name || hasCJK(cur.supplier_name))) { upd.push('supplier_name=?'); binds.push(supplierAr); }
       if (it.title) { upd.push('title_src=COALESCE(title_src,?)'); binds.push(String(it.title)); }
       if (fp) { upd.push('fingerprint=?'); binds.push(fp); }
       const kd = kindOf(it.title); if (kd) { upd.push('kind=COALESCE(kind,?)'); binds.push(kd); }
       if (upd.length) enrich.push(db.prepare(`UPDATE products SET ${upd.join(',')} WHERE id=?`).bind(...binds, ex.id));
-      if (enrich.length) { await db.batch(enrich); enriched++; }
+      if (enrich.length) await db.batch(enrich);
+      if (got) enriched++;
       if (mod.intimate && lingerieId && ex.category_id !== lingerieId) await db.prepare('UPDATE products SET category_id=?,home_ok=0 WHERE id=?').bind(lingerieId, ex.id).run();
       else if (!homeOk) await db.prepare('UPDATE products SET home_ok=0 WHERE id=?').bind(ex.id).run();
       updated++; continue;
@@ -345,7 +353,7 @@ export async function importProducts(db: D1Database, arr: any[], categoryId: num
     imported++; newIds.push(offerId);
   }
   await db.prepare('INSERT INTO import_log(by_user_id,source,page_url,imported,updated,skipped) VALUES(?,?,?,?,?,?)').bind(byUserId, '1688', pageUrl, imported, updated, skipped).run();
-  return { imported, updated, skipped, enriched, dupes, newIds };
+  return { imported, updated, skipped, enriched, dupes, newIds, gain };
 }
 
 // إعلان مصنع تغليف/طباعة/OEM — نفس الكلمات في src/lib/source.ts وفي ترحيل 0020

@@ -26,8 +26,10 @@ async function ordersWithItems(db: D1Database, pid: number, statuses: string[]) 
   const q = statuses.map(() => '?').join(',');
   const orders = await db.prepare(`SELECT o.*,u.name FROM orders o JOIN users u ON u.id=o.user_id WHERE o.partner_id=? AND o.status IN (${q}) ORDER BY o.updated_at ASC`).bind(pid, ...statuses).all<any>();
   if (!orders.results.length) return [];
-  const ids = orders.results.map(o => o.id);
-  const items = await db.prepare(`SELECT oi.*,(SELECT url FROM product_images i WHERE i.product_id=oi.product_id ORDER BY sort LIMIT 1) AS image FROM order_items oi WHERE order_id IN (${ids.map(() => '?').join(',')})`).bind(...ids).all<any>();
+  // D1 يرفض أكثر من ١٠٠ متغيّر مربوط في الجملة: بـ١٠١ طلب مدفوع سقطت صفحة شاهين كلها بـ500
+  // («too many SQL variables»). المعرّفات أعداد صحيحة من القاعدة نفسها فتُكتب حرفيًا.
+  const ids = orders.results.map(o => Number(o.id)).filter(Number.isInteger);
+  const items = await db.prepare(`SELECT oi.*,(SELECT url FROM product_images i WHERE i.product_id=oi.product_id ORDER BY sort LIMIT 1) AS image FROM order_items oi WHERE order_id IN (${ids.join(',')})`).all<any>();
   return orders.results.map(o => ({ ...o, items: items.results.filter(i => i.order_id === o.id) }));
 }
 

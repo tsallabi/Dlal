@@ -7,6 +7,17 @@ async function refresh() {
   $('#st').innerHTML = `<span class="dot" style="background:${!ok ? '#d3262b' : c.paused ? '#d68b00' : s.running ? '#1c47b3' : '#1a9c5b'}"></span>${!ok ? 'غير مضبوطة — افتحي لوحة الزاحف في موقع تالين لتُضبط تلقائيًا' : c.paused ? 'متوقفة مؤقتًا' : s.running ? 'تعمل الآن…' : 'جاهزة'}<br>آخر فحص للمهام: ${c.lastCheck ? new Date(c.lastCheck).toLocaleTimeString('ar-LY') : '—'} · مهام مستحقة: ${c.pending ?? '—'}<br>${c.status || ''}`;
   $('#log').textContent = (c.log || []).join('\n');
   $('#pause').textContent = c.paused ? 'استئناف' : 'إيقاف مؤقت';
+  $('#dashUrl').textContent = c.api ? c.api.replace(/^https?:\/\//, '') + '/admin/crawler' : '';
+}
+// شريط التقدّم من الخادم: كم منتجًا قُرئ في الدفعة الجارية وماذا أُضيف فعلًا
+async function refreshLive() {
+  const l = await chrome.runtime.sendMessage({ type: 'live' }).catch(() => null);
+  if (!l || l.error) { $('#progHead').textContent = 'شريط التقدّم: تعذّر الاتصال بالموقع'; return; }
+  const head = { running: '🟢 تعمل الآن', stalled: '🟠 توقفت في منتصف الدفعة', idle: 'لم تبدأ أي دفعة بعد', finished: l.status === 'blocked' ? '⛔ توقفت عند كابتشا' : '✅ اكتملت الدفعة الأخيرة' }[l.state] || '';
+  $('#progHead').textContent = head;
+  $('#progBar').style.width = (l.pct || 0) + '%';
+  $('#progNums').textContent = `${l.done} من ${l.total} منتجًا · ${l.pct}%` + (l.etaMin ? ` · يتبقّى ~${l.etaMin} دقيقة` : '');
+  $('#progGain').textContent = `أُضيف في هذه الدفعة: صور +${l.gain.img} · مقاسات وألوان +${l.gain.vars} · وزن +${l.gain.wt}` + (l.state === 'running' ? '' : ` — ${l.next}`);
 }
 const saveCfg = async () => {
   const api = $('#api').value.trim().replace(/\/+$/, '');
@@ -37,5 +48,6 @@ $('#probe').onclick = async () => {
   refresh();
 };
 $('#pause').onclick = async () => { const c = await chrome.storage.local.get('paused'); await chrome.storage.local.set({ paused: !c.paused }); refresh(); };
-$('#open').onclick = async () => { const c = await chrome.storage.local.get('api'); chrome.tabs.create({ url: (c.api || '') + '/admin/crawler' }); };
+$('#open').onclick = async (e) => { e.preventDefault(); const c = await chrome.storage.local.get('api'); chrome.tabs.create({ url: (c.api || 'https://dlal.tsallabi.workers.dev') + '/admin/crawler' }); };
 refresh(); setInterval(refresh, 3000);
+refreshLive(); setInterval(refreshLive, 5000);

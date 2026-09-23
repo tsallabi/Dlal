@@ -777,3 +777,25 @@ body{background:#fff}
 /* زرّ مثبّت في شريط اللوحة: صاحب المشروع يعود للزاحف مرات كثيرة في اليوم وهو يراقب الإثراء */
 .hdr-links a.pin{background:#b5124f;color:#fff !important;padding:4px 12px;border-radius:999px;font-weight:700}
 .hdr-links a.pin:hover{background:#8f0e3e}
+/* شريط تقدّم إضافة الزاحف — /admin/crawler */
+.live{margin:0 0 12px;border-inline-start:5px solid #999}
+.live-running{border-inline-start-color:#1a9c5b}.live-stalled{border-inline-start-color:#d68b00}
+.live-finished{border-inline-start-color:#1c47b3}.live-finished.st-blocked,.live-finished.st-error{border-inline-start-color:#d3262b}
+.live-head{font-size:15px;margin-bottom:8px}.live-head small{color:#666;font-size:12.5px}
+.live-dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:#999;margin-inline-end:6px;vertical-align:middle}
+.live-running .live-dot{background:#1a9c5b;animation:livePulse 1.2s infinite}.live-stalled .live-dot{background:#d68b00}
+.live-finished .live-dot{background:#1c47b3}.st-blocked .live-dot,.st-error .live-dot{background:#d3262b}
+@keyframes livePulse{0%{box-shadow:0 0 0 0 rgba(26,156,91,.55)}70%{box-shadow:0 0 0 8px rgba(26,156,91,0)}100%{box-shadow:0 0 0 0 rgba(26,156,91,0)}}
+.live-bar{height:14px;background:#eee;border-radius:999px;overflow:hidden}
+.live-bar i{display:block;height:100%;background:#b5124f;border-radius:999px;transition:width .6s}
+.live-running .live-bar i{background:repeating-linear-gradient(-45deg,#b5124f 0 12px,#d0306f 12px 24px);background-size:34px 34px;animation:liveStripe 1s linear infinite}
+@keyframes liveStripe{from{background-position:0 0}to{background-position:34px 0}}
+.live-nums{margin-top:6px;font-size:13px;color:#444}
+.live-gains{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.live-gains span{background:#f7f5f6;border-radius:999px;padding:3px 10px;font-size:12.5px}
+.live-last,.live-next{margin-top:8px;font-size:12.5px;color:#555;overflow-wrap:anywhere}
+.live-off{margin-top:8px;font-size:12.5px;color:#8c2121;background:#fdecec;border-radius:6px;padding:6px 10px}
+.meters h3{margin-bottom:6px}.meter{margin:8px 0}.meter small{display:block;color:#777;font-size:11.5px;margin-top:3px}
+.meter-top{display:flex;justify-content:space-between;gap:8px;font-size:13px;margin-bottom:4px;flex-wrap:wrap}
+.meter .live-bar{height:9px}.meter .live-bar i{background:#1a9c5b}
+.gains24{margin:0 0 6px;font-size:13px;color:#1f5c1f;background:#eef7ee;border-radius:6px;padding:6px 10px}.gains24 b{margin-inline-start:3px}

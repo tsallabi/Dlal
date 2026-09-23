@@ -7,6 +7,7 @@ import { AdminShell } from '../views/dash';
 import { Flash } from '../views/layout';
 import { Stars } from '../views/account';
 import { getCategories, fmt, timeAgo, notify } from '../lib/db';
+import { liveState, agoAr, type LiveState } from '../lib/crawl-live';
 import { hashPassword, requireRole } from '../lib/auth';
 import { requirePerm, STAFF_ROLES, ROLE_PERMS, PERM_LABELS, logActivity, permsOf } from '../lib/perm';
 import { loadSettings } from '../lib/pricing';
@@ -414,19 +415,63 @@ ops.use('/crawler*', requirePerm('catalog.manage'));
 // نسخة الإضافة المتوقَّعة. تُطابق extension/manifest.json ويحرس التطابقَ فحصٌ في e2e.
 // سببها: صاحب المشروع وجد نسختين مثبّتتين معًا («دلال» القديمة و«تالين») ورقمهما واحد
 // لأني غيّرت الشيفرة ولم أرفع الرقم — فلم يستطع التمييز بينهما، وكلتاهما تزحف معًا.
-export const EXT_VERSION = '1.5.0';
+export const EXT_VERSION = '1.5.1';
+
+// شريط تقدّم الإضافة. طلب صاحب المشروع: «ضع شريطًا يظهر التقدّم حتى أعرف أن الإضافة تعمل
+// وتجلب وتثري المنتجات». يُرسم هنا ويُعاد رسمه كل ٥ ثوانٍ من /admin/crawler/live بلا إعادة تحميل.
+const LiveCard = ({ l }: { l: LiveState }) => {
+  const head = l.state === 'running' ? 'الإضافة تعمل الآن — تقرأ صفحات المنتجات وتُثريها'
+    : l.state === 'stalled' ? 'توقفت الإضافة في منتصف الدفعة'
+    : l.state === 'idle' ? 'لم تبدأ الإضافة أي دفعة إثراء بعد'
+    : l.status === 'blocked' ? 'توقفت الدفعة الأخيرة عند كابتشا أو طلب دخول'
+    : l.status === 'error' ? 'انتهت الدفعة الأخيرة بخطأ'
+    : 'اكتملت الدفعة الأخيرة';
+  const sub = l.state === 'running' ? `بدأت ${agoAr(l.startedAgoS)}`
+    : l.state === 'stalled' ? `آخر منتج ${agoAr(l.lastAgoS)}. غالبًا أُغلق كروم أو نام الحاسوب — تبدأ دفعة جديدة وحدها حين يعود كروم مفتوحًا.`
+    : l.state === 'finished' ? agoAr(l.finishedAgoS) : '';
+  return (
+    <div id="live" class={`card-box live live-${l.state} st-${l.status}`} data-state={l.state}>
+      <div class="live-head"><span class="live-dot"></span><b>{head}</b>{sub && <small> · {sub}</small>}</div>
+      <div class="live-bar" role="progressbar" aria-valuemin={0} aria-valuemax={l.total} aria-valuenow={l.done}><i style={`width:${l.pct}%`}></i></div>
+      <div class="live-nums"><b class="live-count">{l.done.toLocaleString('ar-LY')} من {l.total.toLocaleString('ar-LY')}</b> منتجًا في هذه الدفعة · {l.pct}%
+        {l.etaMin !== null && <> · يتبقّى ~{l.etaMin} دقيقة</>}</div>
+      <div class="live-gains">
+        <span title="منتجات كانت بصورة واحدة فصار لها معرض صور">🖼 صور <b>+{l.gain.img}</b></span>
+        <span title="منتجات لم يكن لها مقاسات ولا ألوان">📏 مقاسات وألوان <b>+{l.gain.vars}</b></span>
+        <span title="منتجات لم يكن لها وزن — الوزن يصحّح سعر الشحن">⚖️ وزن <b>+{l.gain.wt}</b></span>
+        <span title="الصفحة لم تُظهر سعرًا: نزل المنتج من 1688 أو لم تُحمَّل">⛔ لم يُقرأ <b>{l.gone}</b></span>
+      </div>
+      {l.last && <div class="live-last">آخر منتج: {l.last.slug ? <a href={`/p/${l.last.slug}`} target="_blank">{l.last.title.slice(0, 70)}</a> : l.last.title} · {agoAr(l.lastAgoS)}</div>}
+      {l.state !== 'running' && <div class="live-next">{l.next}</div>}
+      {!l.online && l.state !== 'running' && <div class="live-off">الإضافة لم تتصل بالموقع {l.seenAgoS === null ? 'بعد' : `منذ ${agoAr(l.seenAgoS).replace('قبل ', '')}`} — تعمل فقط وكروم مفتوح على هذا الحاسوب.</div>}
+    </div>
+  );
+};
+const Meter = ({ label, n, total, note }: { label: string; n: number; total: number; note?: string }) => {
+  const pct = total ? Math.round((n / total) * 100) : 0;
+  return (
+    <div class="meter"><div class="meter-top"><span>{label}</span><b>{n.toLocaleString('ar-LY')} من {total.toLocaleString('ar-LY')} · {pct}%</b></div>
+      <div class="live-bar"><i style={`width:${pct}%`}></i></div>{note && <small>{note}</small>}</div>
+  );
+};
 
 ops.get('/crawler', async (c) => {
   const db = c.env.DB; const s = await loadSettings(db);
-  const [jobs, runs, cats, thin] = await Promise.all([
+  const [jobs, runs, cats, have] = await Promise.all([
     db.prepare('SELECT j.*,c.name_ar AS cat FROM crawl_jobs j LEFT JOIN categories c ON c.id=j.category_id ORDER BY j.id').all<any>(),
     db.prepare('SELECT r.*,j.name FROM crawl_runs r LEFT JOIN crawl_jobs j ON j.id=r.job_id ORDER BY r.id DESC LIMIT 30').all<any>(),
     getCategories(db),
-    // الرقم الذي يهمّ صاحب المشروع وهو يشغّل الإضافة: كم بقي ينقصه صور أو مقاسات أو وزن
-    db.prepare(`SELECT COUNT(*) n FROM products p WHERE p.status IN ('active','draft') AND p.source='1688'
-       AND ((SELECT COUNT(*) FROM product_images i WHERE i.product_id=p.id) <= 1
-         OR (SELECT COUNT(*) FROM variants v WHERE v.product_id=p.id) = 0 OR p.weight_g IS NULL)`).first<{ n: number }>(),
+    // الرقم الذي يهمّ صاحب المشروع وهو يشغّل الإضافة: كم بقي ينقصه صور أو مقاسات أو وزن — مفصّلًا،
+    // لأن «ناقص» وحدها تخفي أن الوزن هو ما ينقص أغلبها (صفحة 1688 بلا دخول لا تذكره غالبًا)
+    db.prepare(`SELECT COUNT(*) total, COALESCE(SUM(img),0) img, COALESCE(SUM(vars),0) vars, COALESCE(SUM(wt),0) wt, COALESCE(SUM(img AND vars AND wt),0) complete FROM (
+       SELECT (SELECT COUNT(*) FROM product_images i WHERE i.product_id=p.id) > 1 img,
+              EXISTS(SELECT 1 FROM variants v WHERE v.product_id=p.id) vars, p.weight_g IS NOT NULL wt
+         FROM products p WHERE p.status IN ('active','draft') AND p.source='1688')`).first<{ total: number; img: number; vars: number; wt: number; complete: number }>(),
   ]);
+  const thin = { n: (have?.total ?? 0) - (have?.complete ?? 0) };
+  const live = await liveState(db);
+  const gains = await db.prepare(`SELECT COALESCE(SUM(r.gain_img),0) img, COALESCE(SUM(r.gain_var),0) vars, COALESCE(SUM(r.gain_wt),0) wt FROM crawl_runs r JOIN crawl_jobs j ON j.id=r.job_id
+     WHERE j.type='stock' AND r.started_at >= datetime('now','-24 hours')`).first<{ img: number; vars: number; wt: number }>();
   // معدّل آخر ٢٤ ساعة: ما **فحصته مهمة الإثراء وحدها**. كان يجمع `updated` من كل التشغيلات،
   // فدخلت فيه مهام البحث الـ١٥٥ على الخادم (كل منها «يحدّث» عشرات المنتجات) فظهر «١٠٬٦٦٠
   // في ٢٤ ساعة · يكتمل خلال يومين» والإضافة لم تكمل ساعتها الأولى. رقم مطمئن كاذب.
@@ -450,6 +495,14 @@ ops.get('/crawler', async (c) => {
           ثم اضغط <b>تحديث ↻</b> على الحالية.
         </p>
       )}
+      <LiveCard l={live} />
+      <script dangerouslySetInnerHTML={{ __html: `(function(){var busy=0;setInterval(function(){if(document.hidden||busy)return;busy=1;fetch('/admin/crawler/live',{credentials:'same-origin'}).then(function(r){return r.ok?r.text():''}).then(function(h){var el=document.getElementById('live');if(h&&el)el.outerHTML=h}).catch(function(){}).then(function(){busy=0})},5000)})()` }} />
+      <div class="card-box meters"><h3>اكتمال بيانات الكتالوج</h3>
+        <p class="gains24">أضافته الإضافة فعلًا في ٢٤ ساعة: 🖼 صور لـ<b>{(gains?.img ?? 0).toLocaleString('ar-LY')}</b> منتج · 📏 مقاسات وألوان لـ<b>{(gains?.vars ?? 0).toLocaleString('ar-LY')}</b> · ⚖️ وزن لـ<b>{(gains?.wt ?? 0).toLocaleString('ar-LY')}</b></p>
+        <Meter label="🖼 معرض صور (أكثر من صورة)" n={have?.img ?? 0} total={have?.total ?? 0} />
+        <Meter label="📏 مقاسات أو ألوان" n={have?.vars ?? 0} total={have?.total ?? 0} note="منتج بلا مقاسات قد يكون فعلًا بمقاس واحد (كوب، حقيبة)." />
+        <Meter label="⚖️ وزن حقيقي من المورّد" n={have?.wt ?? 0} total={have?.total ?? 0} note="صفحة 1688 بلا تسجيل دخول لا تذكر الوزن في أغلب المنتجات، فهذا الشريط يتقدّم ببطء مهما عملت الإضافة. حتى يصل الوزن الحقيقي يُسعَّر المنتج بالوزن التقديري لقسمه." />
+      </div>
       <div class="kpis">
         <div class="kpi"><b class={online ? 'ok' : ''} style={online ? 'color:#1a9c5b' : 'color:#d3262b'}>{online ? 'متصلة' : 'غير متصلة'}</b><span>آخر اتصال: {seen} {s.crawler_version ? `· v${s.crawler_version}` : ''}</span></div>
         <div class="kpi"><b>{jobs.results.filter(j => j.active).length}</b><span>مهمة نشطة</span></div>
@@ -474,8 +527,8 @@ ops.get('/crawler', async (c) => {
             </table></div>
           </div>
           <div class="card-box"><h3>سجل التشغيل</h3>
-            {runs.results.length === 0 ? <p style="color:#888">لا تشغيلات بعد. ثبّت الإضافة وستظهر هنا.</p> : <div class="tbl-wrap"><table class="tbl"><tr><th>الوقت</th><th>المهمة</th><th>الحالة</th><th>صفحات</th><th>وُجد</th><th>جديد</th><th>محدّث</th><th>مُثرى</th><th>مفحوص</th><th>ملاحظة</th></tr>
-              {runs.results.map(r => <tr><td><small>{timeAgo(r.finished_at)}</small></td><td>{r.name ?? '—'}</td><td><span class={`status ${r.status === 'ok' ? 'green' : r.status === 'blocked' ? 'red' : 'gray'}`}>{r.status}</span></td><td>{r.pages}</td><td>{r.found}</td><td><b>{r.imported}</b></td><td>{r.updated}</td><td>{r.enriched}</td><td>{r.checked}</td><td><small>{r.note}</small></td></tr>)}
+            {runs.results.length === 0 ? <p style="color:#888">لا تشغيلات بعد. ثبّت الإضافة وستظهر هنا.</p> : <div class="tbl-wrap"><table class="tbl"><tr><th>الوقت</th><th>المهمة</th><th>الحالة</th><th>صفحات</th><th>وُجد</th><th>جديد</th><th>محدّث</th><th>أُضيف</th><th>مفحوص</th><th>ملاحظة</th></tr>
+              {runs.results.map(r => <tr><td><small>{timeAgo(r.finished_at)}</small></td><td>{r.name ?? '—'}</td><td><span class={`status ${r.status === 'ok' ? 'green' : r.status === 'blocked' ? 'red' : 'gray'}`}>{r.status}</span></td><td>{r.pages}</td><td>{r.found}</td><td><b>{r.imported}</b></td><td>{r.updated}</td><td>{(r.gain_img || r.gain_var || r.gain_wt) ? <small title="صور · مقاسات وألوان · وزن">🖼{r.gain_img} 📏{r.gain_var} ⚖️{r.gain_wt}</small> : r.enriched}</td><td>{r.checked}</td><td><small>{r.note}</small></td></tr>)}
             </table></div>}
           </div>
         </div>
@@ -504,6 +557,9 @@ ops.get('/crawler', async (c) => {
     </>
   ));
 });
+// جزء الصفحة الذي يتجدّد كل ٥ ثوانٍ: شريط التقدّم وحده (استعلام خفيف بلا إحصاءات الكتالوج)
+ops.get('/crawler/live', async (c) => c.html(<LiveCard l={await liveState(c.env.DB)} />));
+
 ops.post('/crawler/new', async (c) => {
   const f = await c.req.parseBody(); const db = c.env.DB;
   const type = ['search', 'url', 'stock'].includes(String(f.type)) ? String(f.type) : 'search';

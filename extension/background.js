@@ -54,6 +54,8 @@ async function runJob(job) {
       const ids = (q.ids || []).slice(0, job.max_new || 100);
       await log(`فحص المخزون: ${ids.length} منتج`);
       for (const id of ids) {
+        // سطر الحالة في النافذة يتحرّك مع كل منتج (لا يُكتب في السجل حتى لا يُغرقه ١٠٠ سطر)
+        await chrome.storage.local.set({ status: `فحص المخزون والإثراء: ${rep.checked + 1} من ${ids.length}`, progress: { done: rep.checked, total: ids.length, at: Date.now() } });
         const r = await openAndAsk(`https://detail.1688.com/offer/${id}.html`, { type: 'extractDetail' }, tabRef);
         if (r?.blocked) {
           rep.status = 'blocked';
@@ -186,4 +188,6 @@ chrome.runtime.onMessage.addListener((m, _s, reply) => {
   if (m.type === 'status') { cfg().then(c => reply({ running, ...c })); return true; }
   if (m.type === 'test') { testConn().then(reply); return true; }
   if (m.type === 'probe') { probeActiveTab().then(reply); return true; }
+  // شريط التقدّم في النافذة: الخادم يعرف ما أُضيف فعلًا لكل منتج (صور، مقاسات، وزن)
+  if (m.type === 'live') { api('/api/crawl/live').then(reply, e => reply({ error: e.message })); return true; }
 });

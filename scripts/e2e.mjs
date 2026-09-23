@@ -1545,6 +1545,66 @@ expect(!(await has(page, 'نسخة إضافة قديمة متصلة')), 'الت�
 // وصفحة الكوبونات لم تعد تنكسر (وضعتُ التحذير فيها خطأً فسقطت بـ500)
 const cp = await page.goto(BASE + '/admin/coupons');
 expect(cp.status() === 200, `صفحة الكوبونات تعمل (${cp.status()})`);
+// ---------- شريط تقدّم الإضافة: يتحرّك على الشاشة مع كل منتج، بلا إعادة تحميل ----------
+// طلب صاحب المشروع: «ضع شريطًا يظهر التقدّم حتى أعرف أن الإضافة تعمل وتجلب وتثري المنتجات».
+// الإضافة كانت صامتة ٣٠ دقيقة لكل دفعة. نلعب دورها خطوةً خطوة ونراقب الصفحة المفتوحة تتغيّر وحدها.
+const liveOffer = '73' + String(Date.now()).slice(-10), liveOffer2 = '74' + String(Date.now()).slice(-10); const liveTag = uniqTag();
+const extCall = (path, body) => page.evaluate(async ([b, p, d]) => {
+  const r = await fetch(b + p, d ? { method: 'POST', headers: { 'content-type': 'application/json', 'x-import-token': 'dev-import-token' }, body: JSON.stringify(d) } : { headers: { 'x-import-token': 'dev-import-token' } });
+  return r.json();
+}, [BASE, path, body]);
+// عيّنتنا: منتجان كما يصلان من صفحة نتائج البحث — صورة واحدة، بلا مقاسات ولا وزن
+await extCall('/api/import', { category_id: 1, page_url: 'test', items: [
+  { offerId: liveOffer, title: `عيّنة ${liveTag}`, priceCny: 30, images: ['https://cbu01.alicdn.com/img/ibank/live1.jpg'], inStock: true },
+  { offerId: liveOffer2, title: `عيّنة ${liveTag}ب`, priceCny: 30, images: ['https://cbu01.alicdn.com/img/ibank/live2.jpg'], inStock: true }] });
+const stockJob = ((await extCall('/api/crawl/jobs?v=' + extManifest.version)).all || []).find(j => j.type === 'stock');
+await page.goto(BASE + '/admin/crawler');
+expect(await page.locator('#live .live-bar').count() === 1, 'صفحة الزاحف فيها شريط تقدّم الإضافة');
+expect(await has(page, 'اكتمال بيانات الكتالوج') && await has(page, 'وزن حقيقي من المورّد'), 'وتعرض اكتمال الصور والمقاسات والوزن كلٌّ بشريطه');
+const liveText = async () => (await page.locator('#live').textContent().catch(() => '')) || '';
+const waitLive = async (re, what) => {
+  const ok = await page.waitForFunction((src) => new RegExp(src).test(document.getElementById('live')?.textContent || ''), re.source, { timeout: 15000 }).then(() => true, () => false);
+  expect(ok, `${what} (${(await liveText()).replace(/\s+/g, ' ').trim().slice(0, 110)})`);
+};
+// ١) الإضافة تأخذ الطابور = بداية دفعة
+const lq = await extCall('/api/import/queue');
+// حجم الدفعة = الأصغر من طول الطابور وحدّ مهمة الإثراء (max_new) — نأخذه من الخادم نفسه
+const lTotal = (await extCall('/api/crawl/live')).total;
+expect(lTotal > 0 && lTotal <= (lq.ids || []).length, `بداية الدفعة سُجّلت بحجمها (${lTotal} من طابور ${(lq.ids || []).length})`);
+await waitLive(new RegExp(`0 من ${lTotal.toLocaleString('ar-LY')}`), `الشريط يبدأ من الصفر بحجم الدفعة وحده بلا إعادة تحميل`);
+expect((await page.locator('#live').getAttribute('data-state')) === 'running', 'وحالته «تعمل الآن»');
+expect(await has(page, 'الإضافة تعمل الآن'), 'والعنوان يقولها بالعربية');
+// ٢) منتج قرأته الإضافة: صفحته أعطت ثلاث صور ومقاسين ووزنًا
+const r1 = await extCall('/api/import', { category_id: null, page_url: 'ext:stock', items: [{ offerId: liveOffer, url: `https://detail.1688.com/offer/${liveOffer}.html`, title: `عيّنة ${liveTag}`, priceCny: 30,
+  images: ['https://cbu01.alicdn.com/img/ibank/l1.jpg', 'https://cbu01.alicdn.com/img/ibank/l2.jpg', 'https://cbu01.alicdn.com/img/ibank/l3.jpg'],
+  variants: [{ color: 'أحمر', size: 'M', inStock: true }, { color: 'أحمر', size: 'L', inStock: true }], weightG: 250, minQty: 1, inStock: true }] });
+expect(r1.enriched === 1 && r1.gain?.img === 1 && r1.gain?.vars === 1 && r1.gain?.wt === 1, `الخادم يعدّ ما أُضيف فعلًا (${JSON.stringify(r1.gain)})`);
+await waitLive(new RegExp(`1 من ${lTotal.toLocaleString('ar-LY')}`), 'الشريط يتقدّم إلى ١ وحده والصفحة مفتوحة');
+const gainsTxt = (await page.locator('#live .live-gains').textContent()) || '';
+expect(/صور\s*\+1/.test(gainsTxt) && /مقاسات وألوان\s*\+1/.test(gainsTxt) && /وزن\s*\+1/.test(gainsTxt), `ويعرض ما أُضيف: صور ومقاسات ووزن (${gainsTxt.replace(/\s+/g, ' ').trim()})`);
+expect((await page.locator('#live .live-last a').getAttribute('href') || '').startsWith('/p/'), 'آخر منتج قرأته الإضافة رابطٌ يفتح صفحته في المتجر');
+// ٣) المرور الثاني على منتج مكتمل لا يُحسب «إثراءً» — كان كل مرور يُعدّ فظهر «مُثرى ١٠٠ من ١٠٠»
+const r1b = await extCall('/api/import', { category_id: null, page_url: 'ext:test', items: [{ offerId: liveOffer, title: `عيّنة ${liveTag}`, priceCny: 30, images: ['https://cbu01.alicdn.com/img/ibank/l1.jpg', 'https://cbu01.alicdn.com/img/ibank/l2.jpg'], weightG: 300, inStock: true }] });
+expect(r1b.enriched === 0 && r1b.gain.img === 0 && r1b.gain.wt === 0, `مرور بلا إضافة لا يُعدّ إثراءً (enriched=${r1b.enriched})`);
+// ٤) صفحة لم تُظهر سعرًا (نزل المنتج أو لم تُحمَّل) — خطوة في الشريط بلا إضافة
+await extCall('/api/import/check', { offerId: liveOffer2, inStock: false, priceCny: null });
+await waitLive(new RegExp(`2 من ${lTotal.toLocaleString('ar-LY')}`), 'الشريط يتقدّم إلى ٢ مع الصفحة التي لم تُقرأ');
+expect(/لم يُقرأ\s*1/.test((await page.locator('#live .live-gains').textContent()) || ''), 'ويعدّها «لم يُقرأ» لا إثراءً');
+await shot(page, 'crawler-live-running');
+// ٥) تقرير آخر الدفعة: الشريط يقول «اكتملت» وسجلّ التشغيل يحمل ما أُضيف فعلًا لا عدّاد الإضافة
+if (stockJob) {
+  await extCall('/api/crawl/report', { job_id: stockJob.id, started_at: new Date().toISOString(), status: 'ok', pages: 0, found: 0, imported: 0, updated: 1, enriched: 2, checked: 2 });
+  await waitLive(/اكتملت الدفعة الأخيرة/, 'بعد تقرير الإضافة يقول الشريط «اكتملت الدفعة الأخيرة»');
+  await page.reload();
+  const row = (await page.locator('.tbl tr', { hasText: 'فحص' }).filter({ hasText: '🖼1' }).first().textContent().catch(() => '')) || '';
+  expect(/🖼1\s*📏1\s*⚖️1/.test(row), `سجلّ التشغيل يحمل ما أُضيف فعلًا (${row.replace(/\s+/g, ' ').trim().slice(0, 90)})`);
+  expect(await has(page, 'أضافته الإضافة فعلًا في ٢٤ ساعة'), 'وبطاقة «أضافته فعلًا في ٢٤ ساعة» ظاهرة');
+  await shot(page, 'crawler-live-done');
+} else expect(false, 'لا توجد مهمة فحص مخزون محليًا لتجربة التقرير');
+// نقطة الحالة للإضافة محمية بالرمز
+// (من خارج المتصفح: جلسة الأدمن في الصفحة تفتحها كما يجب)
+const liveNoTok = (await fetch(BASE + '/api/crawl/live')).status;
+expect(liveNoTok === 401, `حالة الإضافة لا تُقرأ بلا رمز (${liveNoTok})`);
 // الطابور الذي تقرأه الإضافة يعطي أرقام منتجات حقيقية ويقدّم الناقص
 const queue = await page.evaluate(async (b) => {
   const r = await fetch(b + '/api/import/queue', { headers: { 'x-import-token': 'dev-import-token' } });
