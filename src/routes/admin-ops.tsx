@@ -415,7 +415,7 @@ ops.use('/crawler*', requirePerm('catalog.manage'));
 // نسخة الإضافة المتوقَّعة. تُطابق extension/manifest.json ويحرس التطابقَ فحصٌ في e2e.
 // سببها: صاحب المشروع وجد نسختين مثبّتتين معًا («دلال» القديمة و«تالين») ورقمهما واحد
 // لأني غيّرت الشيفرة ولم أرفع الرقم — فلم يستطع التمييز بينهما، وكلتاهما تزحف معًا.
-export const EXT_VERSION = '1.5.1';
+export const EXT_VERSION = '1.5.2';
 
 // شريط تقدّم الإضافة. طلب صاحب المشروع: «ضع شريطًا يظهر التقدّم حتى أعرف أن الإضافة تعمل
 // وتجلب وتثري المنتجات». يُرسم هنا ويُعاد رسمه كل ٥ ثوانٍ من /admin/crawler/live بلا إعادة تحميل.
@@ -432,9 +432,11 @@ const LiveCard = ({ l }: { l: LiveState }) => {
   return (
     <div id="live" class={`card-box live live-${l.state} st-${l.status}`} data-state={l.state}>
       <div class="live-head"><span class="live-dot"></span><b>{head}</b>{sub && <small> · {sub}</small>}</div>
-      <div class="live-bar" role="progressbar" aria-valuemin={0} aria-valuemax={l.total} aria-valuenow={l.done}><i style={`width:${l.pct}%`}></i></div>
-      <div class="live-nums"><b class="live-count">{l.done.toLocaleString('ar-LY')} من {l.total.toLocaleString('ar-LY')}</b> منتجًا في هذه الدفعة · {l.pct}%
-        {l.etaMin !== null && <> · يتبقّى ~{l.etaMin} دقيقة</>}</div>
+      {/* حجم الدفعة مجهول إن بدأت قبل أن يسجّل الخادم بدايتها (أول دفعة بعد النشر): نعدّ ما قُرئ بلا «من ٠» */}
+      <div class="live-bar" role="progressbar" aria-valuemin={0} aria-valuemax={l.total || undefined} aria-valuenow={l.done}><i style={`width:${l.total ? l.pct : l.done ? 100 : 0}%`}></i></div>
+      <div class="live-nums">{l.total
+        ? <><b class="live-count">{l.done.toLocaleString('ar-LY')} من {l.total.toLocaleString('ar-LY')}</b> منتجًا في هذه الدفعة · {l.pct}%{l.etaMin !== null && <> · يتبقّى ~{l.etaMin} دقيقة</>}</>
+        : <><b class="live-count">{l.done.toLocaleString('ar-LY')}</b> منتجًا قُرئ في هذه الدفعة{l.done ? ' (بدأت قبل تحديث الموقع فحجمها غير معروف — يظهر من الدفعة التالية)' : ''}</>}</div>
       <div class="live-gains">
         <span title="منتجات كانت بصورة واحدة فصار لها معرض صور">🖼 صور <b>+{l.gain.img}</b></span>
         <span title="منتجات لم يكن لها مقاسات ولا ألوان">📏 مقاسات وألوان <b>+{l.gain.vars}</b></span>

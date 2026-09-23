@@ -15,8 +15,8 @@ async function refreshLive() {
   if (!l || l.error) { $('#progHead').textContent = 'شريط التقدّم: تعذّر الاتصال بالموقع'; return; }
   const head = { running: '🟢 تعمل الآن', stalled: '🟠 توقفت في منتصف الدفعة', idle: 'لم تبدأ أي دفعة بعد', finished: l.status === 'blocked' ? '⛔ توقفت عند كابتشا' : '✅ اكتملت الدفعة الأخيرة' }[l.state] || '';
   $('#progHead').textContent = head;
-  $('#progBar').style.width = (l.pct || 0) + '%';
-  $('#progNums').textContent = `${l.done} من ${l.total} منتجًا · ${l.pct}%` + (l.etaMin ? ` · يتبقّى ~${l.etaMin} دقيقة` : '');
+  $('#progBar').style.width = (l.total ? l.pct : l.done ? 100 : 0) + '%';
+  $('#progNums').textContent = l.total ? `${l.done} من ${l.total} منتجًا · ${l.pct}%` + (l.etaMin ? ` · يتبقّى ~${l.etaMin} دقيقة` : '') : `${l.done} منتجًا قُرئ في هذه الدفعة`;
   $('#progGain').textContent = `أُضيف في هذه الدفعة: صور +${l.gain.img} · مقاسات وألوان +${l.gain.vars} · وزن +${l.gain.wt}` + (l.state === 'running' ? '' : ` — ${l.next}`);
 }
 const saveCfg = async () => {
