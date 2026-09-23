@@ -126,11 +126,17 @@ const priceOf = async (p) => {
   const el = p.locator('.pd .price').first();
   return (await el.evaluate(n => { const c = n.cloneNode(true); c.querySelectorAll('s').forEach(x => x.remove()); return c.textContent; }).catch(() => '')) || '';
 };
-let shipSlug = null;
+// قطعة وزنها غرامات يتساوى سعرها جوًّا وبحرًا بعد التقريب لأقرب نصف دينار — ليس عطلًا
+// (قواعد المشروع: «تساوي الجوي والبحري ليس عطلًا»). نختار منتجًا تعرض صفحته «وفّري»
+// بجانب البحري، أي فرقًا حقيقيًا، وإلا فأول منتج فيه بحري ونشترط ألا يكون أغلى فقط.
+let shipSlug = null, shipSaves = false;
 for (const slug of slugs) {
   await page.goto(BASE + slug, { waitUntil: 'domcontentloaded' }).catch(() => {});
-  if (await page.locator('.pship input[value=sea]').count()) { shipSlug = slug; break; }
+  if (!(await page.locator('.pship input[value=sea]').count())) continue;
+  if (await page.locator('.pship label:has(input[value=sea]) b').count()) { shipSlug = slug; shipSaves = true; break; }
+  if (!shipSlug) shipSlug = slug;
 }
+if (shipSlug && !shipSaves) await page.goto(BASE + shipSlug, { waitUntil: 'domcontentloaded' }).catch(() => {});
 // زرّ الراديو مخفي بصريًا خلف وسمه، والترويسة اللاصقة تعترض النقر:
 // الزبونة تنقر الوسم نفسه، فننقره مثلها بعد إبعاد الترويسة
 const pickShip = async (mode) => {
@@ -151,7 +157,8 @@ if (shipSlug) {
       const head = String(t).split('د.ل')[0].replace(/[\s٬]/g, '');
       return parseFloat(head.replace(/\./g, '').replace(/[,٫]/g, '.').replace(/[^\d.]/g, '')) || 0;
     };
-    expect(num(sea) > 0 && num(sea) < num(air), `البحري أرخص من الجوي على ${shipSlug} (${num(sea)} < ${num(air)})`);
+    if (shipSaves) expect(num(sea) > 0 && num(sea) < num(air), `البحري أرخص من الجوي على ${shipSlug} (${num(sea)} < ${num(air)})`);
+    else expect(num(sea) > 0 && num(sea) <= num(air), `البحري ليس أغلى من الجوي على ${shipSlug} (${num(sea)} ≤ ${num(air)} — قطعة خفيفة يتساوى سعرها بعد التقريب)`);
     // السعر المعروض في الشبكة يتبع الوضع نفسه، لا الجوي دائمًا
     await page.goto(BASE + (gridCat || '/new'), { waitUntil: 'domcontentloaded' }).catch(() => {});
     const gridSea = await page.locator('a.card .p').first().textContent().catch(() => '');
