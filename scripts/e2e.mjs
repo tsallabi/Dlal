@@ -1605,6 +1605,20 @@ if (stockJob) {
 // (من خارج المتصفح: جلسة الأدمن في الصفحة تفتحها كما يجب)
 const liveNoTok = (await fetch(BASE + '/api/crawl/live')).status;
 expect(liveNoTok === 401, `حالة الإضافة لا تُقرأ بلا رمز (${liveNoTok})`);
+// ٦) صفحة لم تُحمَّل أو لم تُجب (الإضافة 1.5.3+): «لم يُقرأ» لا «غير متوفر».
+// قبلها كانت القراءة الناقصة تعطي «بلا سعر» فيُعلَّم منتج متوفر غير متوفر.
+await extCall('/api/import/queue');
+const sk = await extCall('/api/import/check', { offerId: liveOffer, skipped: true });
+const lvSk = await extCall('/api/crawl/live');
+expect(sk.skipped === true && lvSk.done === 1 && lvSk.gone === 1, `الصفحة المتخطّاة تُعدّ «لم يُقرأ» في الشريط (done=${lvSk.done} gone=${lvSk.gone})`);
+if (lvSk.last?.slug) {
+  await page.goto(BASE + '/p/' + lvSk.last.slug);
+  expect(!(await has(page, 'غير متوفر حاليًا عند المورد')), 'والمنتج بقي متوفرًا في المتجر');
+}
+// ٧) دفعة ماتت بلا تقرير (أُغلق كروم أو توقف عامل الإضافة): الدفعة التالية تسجّلها بما أضافته
+await extCall('/api/import/queue');
+await page.goto(BASE + '/admin/crawler');
+expect(await has(page, 'انقطعت الدفعة بعد 1'), 'الدفعة المنقطعة تظهر في سجل التشغيل بدل أن تختفي');
 // الطابور الذي تقرأه الإضافة يعطي أرقام منتجات حقيقية ويقدّم الناقص
 const queue = await page.evaluate(async (b) => {
   const r = await fetch(b + '/api/import/queue', { headers: { 'x-import-token': 'dev-import-token' } });

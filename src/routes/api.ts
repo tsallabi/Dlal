@@ -61,7 +61,15 @@ api.get('/import/queue', async (c) => {
      ORDER BY (${THIN} AND p.enrich_tries < 3) DESC, (p.status='draft') DESC, p.enrich_tries ASC,
               (p.last_checked_at IS NULL) DESC, p.last_checked_at ASC, (p.sales*10+p.views) DESC LIMIT 300`).all<{ source_offer_id: string }>();
   // بداية دفعة: الإضافة تأخذ من الطابور بقدر حدّ مهمة الإثراء (max_new)
-  const job = await c.env.DB.prepare("SELECT max_new FROM crawl_jobs WHERE type='stock' AND runner IN ('any','extension') ORDER BY active DESC,id LIMIT 1").first<{ max_new: number | null }>();
+  const job = await c.env.DB.prepare("SELECT id,max_new FROM crawl_jobs WHERE type='stock' AND runner IN ('any','extension') ORDER BY active DESC,id LIMIT 1").first<{ id: number; max_new: number | null }>();
+  // دفعة سابقة لم ترسل تقريرها (مات عامل الخلفية في كروم): نسجّلها في سجل التشغيل بما أضافته،
+  // وإلا ضاع ما أُضيف من «أضافته في ٢٤ ساعة» ولم يعرف صاحب المشروع أن الدفعات تنقطع.
+  const prev = await c.env.DB.prepare('SELECT * FROM crawler_live WHERE id=1').first<any>();
+  if (job && prev?.status === 'running' && prev.done > 0) {
+    await c.env.DB.prepare(`INSERT INTO crawl_runs(job_id,started_at,status,pages,found,imported,updated,enriched,checked,note,gain_img,gain_var,gain_wt) VALUES(?,?,'partial',0,0,0,?,?,?,?,?,?,?)`)
+      .bind(job.id, prev.started_at ?? prev.last_at, prev.done, Math.max(prev.gain_img, prev.gain_var, prev.gain_wt), prev.done,
+        `انقطعت الدفعة بعد ${prev.done}${prev.total ? ' من ' + prev.total : ''} منتج بلا تقرير (أُغلق كروم أو توقف عامل الإضافة)`, prev.gain_img, prev.gain_var, prev.gain_wt).run();
+  }
   const total = Math.min(results.length, job?.max_new || 100);
   await c.env.DB.prepare(`UPDATE crawler_live SET started_at=datetime('now'),finished_at=NULL,status='running',total=?,done=0,gain_img=0,gain_var=0,gain_wt=0,gone=0,last_offer=NULL,last_at=datetime('now') WHERE id=1`).bind(total).run();
   return c.json({ ids: results.map(r => r.source_offer_id) });
@@ -69,9 +77,16 @@ api.get('/import/queue', async (c) => {
 
 api.post('/import/check', async (c) => {
   if (!tokenOk(c)) return c.json({ error: 'رمز غير صحيح' }, 401);
-  const b = await c.req.json<{ offerId: string; inStock: boolean; priceCny: number | null }>();
+  const b = await c.req.json<{ offerId: string; inStock: boolean; priceCny: number | null; skipped?: boolean }>();
   const p = await c.env.DB.prepare("SELECT id,source_price_cny FROM products WHERE source='1688' AND source_offer_id=?").bind(b.offerId).first<any>();
   if (!p) return c.json({ ok: false });
+  // صفحة لم تُحمَّل أو لم تُجب (الإضافة 1.5.3+): ليست «غير متوفر». نؤخّرها في الطابور فقط، ولا نكتب
+  // last_checked_at لأنها لم تُفحص فعلًا، ونعدّها «لم يُقرأ» في شريط التقدّم.
+  if (b.skipped) {
+    await c.env.DB.prepare('UPDATE products SET enrich_tries=enrich_tries+1 WHERE id=?').bind(p.id).run();
+    await liveStep(c.env.DB, 1, null, 1, String(b.offerId));
+    return c.json({ ok: true, skipped: true });
+  }
   // تغيّر السعر أكثر من 15% يوقف المنتج لمراجعة الأدمن بدل بيعه بخسارة
   const bigChange = b.priceCny && Math.abs(b.priceCny - p.source_price_cny) / p.source_price_cny > 0.15;
   await c.env.DB.prepare("UPDATE products SET in_stock=?,status=CASE WHEN ?=1 THEN 'hidden' ELSE status END,source_price_cny=COALESCE(?,source_price_cny),enrich_tries=enrich_tries+1,last_checked_at=datetime('now') WHERE id=?")

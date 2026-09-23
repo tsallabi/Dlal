@@ -19,6 +19,11 @@ async function api(path, opt = {}) {
   if (!r.ok) throw new Error(`API ${path} → ${r.status}`);
   return r.json();
 }
+// مهلة لأي انتظار: صفحة 1688 لا يكتمل تحميلها كانت تُعلّق الدفعة كلها — executeScript ينتظر
+// اكتمال المستند بلا حدّ، وبعد ٥ دقائق يقتل كروم عامل الخلفية فتموت الدفعة بلا أي تقرير.
+// (حدث ثلاث مرات مساء ٢٣/٠٩/٢٦: ١٧ ثم ٠ ثم ٤ منتجات ثم صمت.)
+const within = (p, ms) => Promise.race([p, new Promise(r => setTimeout(() => r({ timeout: true }), ms))]);
+const PRODUCT_MS = 60000;
 function notify(title, message) { try { chrome.notifications.create({ type: 'basic', iconUrl: 'icon.png', title, message }); } catch (e) {} }
 
 // فتح صفحة في تبويب خلفي وانتظار تحميلها ثم سؤال سكربت المحتوى
@@ -27,18 +32,20 @@ async function openAndAsk(url, msg, tabRef) {
   if (!tab) { tab = await chrome.tabs.create({ url, active: false }); tabRef.id = tab.id; }
   else await chrome.tabs.update(tab.id, { url });
   // انتظار اكتمال التحميل
-  await new Promise(res => { const t = setTimeout(res, 30000); const h = (id, info) => { if (id === tab.id && info.status === 'complete') { clearTimeout(t); chrome.tabs.onUpdated.removeListener(h); res(); } }; chrome.tabs.onUpdated.addListener(h); });
+  const loaded = await new Promise(res => { const h = (id, info) => { if (id === tab.id && info.status === 'complete') { clearTimeout(t); chrome.tabs.onUpdated.removeListener(h); res(true); } }; const t = setTimeout(() => { chrome.tabs.onUpdated.removeListener(h); res(false); }, 30000); chrome.tabs.onUpdated.addListener(h); });
+  // صفحة لم يكتمل تحميلها في ٣٠ ثانية لا تُقرأ: قراءتها ناقصة تعطي «بلا سعر» فيُعلَّم منتج متوفر «غير متوفر»
+  if (!loaded) return { timeout: true, url };
   await sleep(pace(4000, 8000));   // وقت لعرض المحتوى الديناميكي + إيقاع بشري
   if (msg.type === 'extractDetail') {   // بيانات SKU تعيش في window الصفحة (العالم الرئيسي) وليس في عالم سكربت المحتوى
     try {
-      const [r] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, world: 'MAIN', func: () => { try { const d = (window.__INIT_DATA__ && window.__INIT_DATA__.globalData) || window.iDetailData || null; if (!d) return null; const m = d.skuModel || d; return JSON.stringify({ skuInfoMap: m.skuInfoMap || null, skuProps: m.skuProps || null }); } catch (e) { return null; } } });
+      const [r] = await within(chrome.scripting.executeScript({ target: { tabId: tab.id }, world: 'MAIN', injectImmediately: true, func: () => { try { const d = (window.__INIT_DATA__ && window.__INIT_DATA__.globalData) || window.iDetailData || null; if (!d) return null; const m = d.skuModel || d; return JSON.stringify({ skuInfoMap: m.skuInfoMap || null, skuProps: m.skuProps || null }); } catch (e) { return null; } } }), 10000).then(x => Array.isArray(x) ? x : [null]);
       msg = { ...msg, init: r && r.result ? JSON.parse(r.result) : null };
     } catch (e) {}
   }
-  try { return await chrome.tabs.sendMessage(tab.id, msg); }
+  try { return await within(chrome.tabs.sendMessage(tab.id, msg), 15000); }
   catch (e) {   // سكربت المحتوى لم يُحقن (صفحة خطأ/إعادة توجيه خارج 1688)
-    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content.js'] }).catch(() => {});
-    try { return await chrome.tabs.sendMessage(tab.id, msg); } catch (e2) { return { error: e2.message, url }; }
+    await within(chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content.js'], injectImmediately: true }), 10000).catch(() => {});
+    try { return await within(chrome.tabs.sendMessage(tab.id, msg), 15000); } catch (e2) { return { error: e2.message, url }; }
   }
 }
 const searchUrl = (q, page) => `https://s.1688.com/selloffer/offer_search.htm?keywords=${encodeURIComponent(q)}&beginPage=${page}`;
@@ -48,6 +55,8 @@ async function runJob(job) {
   const started = new Date().toISOString();
   const rep = { job_id: job.id, started_at: started, status: 'ok', pages: 0, found: 0, imported: 0, updated: 0, enriched: 0, checked: 0, note: '' };
   const tabRef = { id: null };
+  // كروم يوقف عامل الخلفية بعد ٣٠ ثانية بلا نداء لواجهات الإضافة: نداء خفيف كل ٢٠ ثانية طوال الدفعة
+  const keepAlive = setInterval(() => chrome.runtime.getPlatformInfo(() => {}), 20000);
   try {
     if (job.type === 'stock') {
       const q = await api('/api/import/queue');
@@ -56,7 +65,16 @@ async function runJob(job) {
       for (const id of ids) {
         // سطر الحالة في النافذة يتحرّك مع كل منتج (لا يُكتب في السجل حتى لا يُغرقه ١٠٠ سطر)
         await chrome.storage.local.set({ status: `فحص المخزون والإثراء: ${rep.checked + 1} من ${ids.length}`, progress: { done: rep.checked, total: ids.length, at: Date.now() } });
-        const r = await openAndAsk(`https://detail.1688.com/offer/${id}.html`, { type: 'extractDetail' }, tabRef);
+        const r = await within(openAndAsk(`https://detail.1688.com/offer/${id}.html`, { type: 'extractDetail' }, tabRef), PRODUCT_MS);
+        if (r?.timeout || r?.error) {
+          // الصفحة لم تُحمَّل أو لم تُجب خلال دقيقة: نغلق تبويبها (الجديد يُفتح للمنتج التالي) ونتخطّاها.
+          // الخادم يؤخّرها في الطابور ويعدّها «لم يُقرأ» — لا يعلّمها غير متوفرة.
+          if (tabRef.id) { chrome.tabs.remove(tabRef.id).catch(() => {}); tabRef.id = null; }
+          rep.skipped = (rep.skipped || 0) + 1;
+          await api('/api/import/check', { method: 'POST', body: JSON.stringify({ offerId: id, skipped: true }) }).catch(() => {});
+          rep.checked++;
+          continue;
+        }
         if (r?.blocked) {
           rep.status = 'blocked';
           rep.note = r.blocked === 'login'
@@ -94,7 +112,8 @@ async function runJob(job) {
         const ids = newIds.slice(0, job.max_new || 40);
         for (const id of ids) {
           await log(`${job.name}: تفاصيل ${id} (${rep.enriched + 1}/${ids.length})`);
-          const r = await openAndAsk(`https://detail.1688.com/offer/${id}.html`, { type: 'extractDetail' }, tabRef);
+          const r = await within(openAndAsk(`https://detail.1688.com/offer/${id}.html`, { type: 'extractDetail' }, tabRef), PRODUCT_MS);
+          if (r?.timeout) { if (tabRef.id) { chrome.tabs.remove(tabRef.id).catch(() => {}); tabRef.id = null; } continue; }
           if (r?.blocked) { rep.status = 'partial'; rep.note += ' توقف الإثراء عند كابتشا.'; break; }
           if (r?.item && r.item.priceCny) { await api('/api/import', { method: 'POST', body: JSON.stringify({ category_id: job.category_id, page_url: r.url, items: [r.item] }) }); rep.enriched++; }
           await sleep(pace(8000, 14000));
@@ -102,7 +121,8 @@ async function runJob(job) {
       }
     }
   } catch (e) { rep.status = rep.status === 'blocked' ? 'blocked' : 'error'; rep.note += ' ' + e.message; }
-  finally { if (tabRef.id) chrome.tabs.remove(tabRef.id).catch(() => {}); }
+  finally { clearInterval(keepAlive); if (tabRef.id) chrome.tabs.remove(tabRef.id).catch(() => {}); }
+  if (rep.skipped) rep.note += ` تخطّيت ${rep.skipped} صفحة لم تُجب خلال دقيقة.`;
   await api('/api/crawl/report', { method: 'POST', body: JSON.stringify(rep) }).catch(e => log('تعذر إرسال التقرير: ' + e.message));
   await log(`${job.name}: ${rep.status} — جديد ${rep.imported} · محدّث ${rep.updated} · مُثرى ${rep.enriched} · مفحوص ${rep.checked}`);
   if (rep.status === 'blocked') notify('تالين — توقف الزاحف', /تسجيل دخول/.test(rep.note)
