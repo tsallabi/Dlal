@@ -55,7 +55,13 @@ async function runJob(job) {
       await log(`فحص المخزون: ${ids.length} منتج`);
       for (const id of ids) {
         const r = await openAndAsk(`https://detail.1688.com/offer/${id}.html`, { type: 'extractDetail' }, tabRef);
-        if (r?.blocked) { rep.status = 'blocked'; rep.note = 'كابتشا/حجب عند ' + id; break; }
+        if (r?.blocked) {
+          rep.status = 'blocked';
+          rep.note = r.blocked === 'login'
+            ? `1688 طلب تسجيل دخول لعرض صفحة المنتج ${id} — لم تعد تفتح لزائر غير مسجّل`
+            : 'كابتشا/حجب عند ' + id;
+          break;
+        }
         const it = r?.item;
         if (it && it.priceCny) {
           // الصفحة تُقرأ كاملة بلا تسجيل دخول: نرسل المنتج كله ليُحدَّث السعر ويُثرى بالصور والمقاسات والوزن
@@ -97,7 +103,9 @@ async function runJob(job) {
   finally { if (tabRef.id) chrome.tabs.remove(tabRef.id).catch(() => {}); }
   await api('/api/crawl/report', { method: 'POST', body: JSON.stringify(rep) }).catch(e => log('تعذر إرسال التقرير: ' + e.message));
   await log(`${job.name}: ${rep.status} — جديد ${rep.imported} · محدّث ${rep.updated} · مُثرى ${rep.enriched} · مفحوص ${rep.checked}`);
-  if (rep.status === 'blocked') notify('تالين — توقف الزاحف', `1688 طلب تحققًا. افتح 1688 وحلّ الكابتشا ثم اضغط "شغّل الآن". (${job.name})`);
+  if (rep.status === 'blocked') notify('تالين — توقف الزاحف', /تسجيل دخول/.test(rep.note)
+    ? `1688 لم يعد يعرض صفحات المنتجات لزائر غير مسجّل. لا تُعِد المحاولة — راجع تالين. (${job.name})`
+    : `1688 طلب تحققًا. افتح 1688 وحلّ الكابتشا ثم اضغط "شغّل الآن". (${job.name})`);
   return rep;
 }
 

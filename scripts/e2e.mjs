@@ -1517,6 +1517,9 @@ await login(page, '0910000000', 'admin123');
 await page.goto(BASE + '/admin/crawler');
 expect(await has(page, 'متبقٍ للإثراء'), 'صفحة الزاحف تعرض كم بقي للإثراء');
 expect(await has(page, 'أُنجز في ٢٤ ساعة'), 'وتعرض معدّل الإنجاز اليومي');
+// صاحب المشروع لا يملك حسابًا صينيًا: يجب أن تقول الصفحة صراحةً إنه لا يحتاجه
+expect(await has(page, 'لا تحتاج تسجيل دخول في 1688 إطلاقًا'), 'الصفحة تنفي الحاجة لحساب 1688 صراحةً');
+expect(await has(page, 'detail.1688.com/offer'), 'وتسمّي الصفحة التي تقرؤها الإضافة');
 // الطابور الذي تقرأه الإضافة يعطي أرقام منتجات حقيقية ويقدّم الناقص
 const queue = await page.evaluate(async (b) => {
   const r = await fetch(b + '/api/import/queue', { headers: { 'x-import-token': 'dev-import-token' } });

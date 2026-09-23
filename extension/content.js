@@ -8,10 +8,14 @@
   const offerIdFrom = (u) => (String(u || '').match(/offer\/(\d+)/) || [])[1] || (String(u || '').match(/[?&]offerId=(\d+)/) || [])[1] || '';
   const cleanImg = (u) => u.replace(/\.\d+x\d+(\.\w+)$/, '$1').replace(/_\d+x\d+\w*\.jpg$/, '.jpg');
 
-  // حجب / كابتشا / دخول
+  // حجب / كابتشا / دخول — نفرّق بينها لأن العلاج مختلف تمامًا:
+  // كابتشا = افتح 1688 وحلّها ثم أعد التشغيل (دقيقة واحدة).
+  // طلب تسجيل دخول = صفحة المنتج لم تعد تفتح لزائر غير مسجّل، وصاحب المشروع **لا يملك
+  // حسابًا صينيًا**، فلا جدوى من إعادة المحاولة — هذا تغيّر في 1688 يحتاج خطة أخرى.
   function blocked() {
     const u = location.href, t = document.title;
-    if (/punish|captcha|login\.1688|passport\.|\/verify|访问被拒绝|安全验证|滑动验证|baxia/i.test(u + ' ' + t)) return 'captcha';
+    if (/login\.1688|passport\.|member\.1688\.com\/(login|signin)|请登录|登录后查看/i.test(u + ' ' + t)) return 'login';
+    if (/punish|captcha|\/verify|访问被拒绝|安全验证|滑动验证|baxia/i.test(u + ' ' + t)) return 'captcha';
     if ($('#nc_1_n1z, .nc-container, #baxia-dialog-content, .J_MIDDLEWARE_FRAME_WIDGET')) return 'captcha';
     return null;
   }
