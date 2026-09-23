@@ -431,7 +431,17 @@ const LiveCard = ({ l }: { l: LiveState }) => {
     : l.state === 'finished' ? agoAr(l.finishedAgoS) : '';
   return (
     <div id="live" class={`card-box live live-${l.state} st-${l.status}`} data-state={l.state}>
-      <div class="live-head"><span class="live-dot"></span><b>{head}</b>{sub && <small> · {sub}</small>}</div>
+      {/* نسخة قديمة متصلة = نسخة ثانية مثبّتة تزحف بالتوازي. داخل البطاقة المتجدّدة كل ٥ ثوانٍ:
+          كان تحذيرًا ثابتًا فبقي أحمر بعد أن حدّث صاحب المشروع الإضافة حتى يعيد تحميل الصفحة */}
+      {l.version && l.version !== EXT_VERSION && (
+        <p class="live-old" style="font-size:13px;margin:0 0 10px;padding:10px 12px;border-radius:8px;background:#fdecec;border:1px solid #f0b4b4;color:#8c2121">
+          <b>نسخة إضافة قديمة متصلة: v{l.version}</b> (الحالية v{EXT_VERSION}).
+          غالبًا لديك نسختان مثبّتتان في كروم تعملان معًا — وهذا يضاعف فتح صفحات 1688 ويضاعف خطر الكابتشا،
+          والقديمة تقرأ الوزن خطأً فتُفسد الأسعار. افتح <span class="mono" dir="ltr">chrome://extensions</span> واحذف القديمة،
+          ثم اضغط <b>تحديث ↻</b> على الحالية.
+        </p>
+      )}
+      <div class="live-head"><span class="live-dot"></span><b>{head}</b>{sub && <small> · {sub}</small>}{l.version && <small class="live-ver"> · الإضافة v{l.version}</small>}</div>
       {/* حجم الدفعة مجهول إن بدأت قبل أن يسجّل الخادم بدايتها (أول دفعة بعد النشر): نعدّ ما قُرئ بلا «من ٠» */}
       <div class="live-bar" role="progressbar" aria-valuemin={0} aria-valuemax={l.total || undefined} aria-valuenow={l.done}><i style={`width:${l.total ? l.pct : l.done ? 100 : 0}%`}></i></div>
       <div class="live-nums">{l.total
@@ -488,15 +498,6 @@ ops.get('/crawler', async (c) => {
   return shell(c, 'crawler', 'الزاحف — إضافة المتصفح', (
     <>
       <Flash msg={c.req.query('ok') ? 'تم ✓' : undefined} />
-      {/* نسخة قديمة متصلة = نسخة ثانية مثبّتة في المتصفح تزحف بالتوازي وتضاعف خطر الكابتشا */}
-      {s.crawler_version && s.crawler_version !== EXT_VERSION && (
-        <p style="font-size:13px;margin:0 0 10px;padding:10px 12px;border-radius:8px;background:#fdecec;border:1px solid #f0b4b4;color:#8c2121">
-          <b>نسخة إضافة قديمة متصلة: v{s.crawler_version}</b> (الحالية v{EXT_VERSION}).
-          غالبًا لديك نسختان مثبّتتان في كروم تعملان معًا — وهذا يضاعف فتح صفحات 1688 ويضاعف خطر الكابتشا،
-          والقديمة تقرأ الوزن خطأً فتُفسد الأسعار. افتح <span class="mono" dir="ltr">chrome://extensions</span> واحذف القديمة،
-          ثم اضغط <b>تحديث ↻</b> على الحالية.
-        </p>
-      )}
       <LiveCard l={live} />
       <script dangerouslySetInnerHTML={{ __html: `(function(){var busy=0;setInterval(function(){if(document.hidden||busy)return;busy=1;fetch('/admin/crawler/live',{credentials:'same-origin'}).then(function(r){return r.ok?r.text():''}).then(function(h){var el=document.getElementById('live');if(h&&el)el.outerHTML=h}).catch(function(){}).then(function(){busy=0})},5000)})()` }} />
       <div class="card-box meters"><h3>اكتمال بيانات الكتالوج</h3>

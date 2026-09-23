@@ -1549,10 +1549,14 @@ await page.evaluate(async (b) => {
 }, BASE);
 await page.goto(BASE + '/admin/crawler');
 expect(await has(page, 'نسخة إضافة قديمة متصلة: v1.4.0'), 'اللوحة تحذّر حين تتصل نسخة إضافة قديمة');
-// وتختفي حين تتصل الحالية — نُعيد الحالة كما كانت (قاعدة: كل فحص يُعيد ما غيّره)
+// وتختفي حين تتصل الحالية — **بلا إعادة تحميل**: صاحب المشروع حدّث الإضافة والصفحة مفتوحة
+// فبقي التحذير الأحمر و«v1.5.0» حتى ضغط F5. نُعيد الحالة كما كانت (قاعدة: كل فحص يُعيد ما غيّره)
 await page.evaluate(async ([b, v]) => {
   await fetch(b + '/api/crawl/jobs?v=' + v, { headers: { 'x-import-token': 'dev-import-token' } });
 }, [BASE, extManifest.version]);
+const oldGone = await page.waitForFunction(() => !document.querySelector('#live .live-old'), null, { timeout: 15000 }).then(() => true, () => false);
+expect(oldGone, 'تحذير النسخة القديمة يختفي وحده خلال ثوانٍ من اتصال الحالية، والصفحة مفتوحة');
+expect(((await page.locator('#live .live-ver').textContent().catch(() => '')) || '').includes('v' + extManifest.version), `وبطاقة التقدّم تذكر النسخة المتصلة الآن (v${extManifest.version})`);
 await page.goto(BASE + '/admin/crawler');
 expect(!(await has(page, 'نسخة إضافة قديمة متصلة')), 'التحذير يختفي حين تتصل النسخة الحالية');
 // وصفحة الكوبونات لم تعد تنكسر (وضعتُ التحذير فيها خطأً فسقطت بـ500)
