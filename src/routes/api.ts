@@ -137,7 +137,7 @@ api.post('/crawl/report', async (c) => {
   const g = { img: live?.gain_img ?? 0, vars: live?.gain_var ?? 0, wt: live?.gain_wt ?? 0 };
   const enriched = live ? Math.max(g.img, g.vars, g.wt) : (b.enriched ?? 0);
   const summary = live
-    ? `${status}: فُحص ${b.checked ?? 0} · صور +${g.img} · مقاسات/ألوان +${g.vars} · وزن +${g.wt} · غير متوفر ${live.gone ?? 0}`
+    ? `${status}: فُحص ${b.checked ?? 0} · صور +${g.img} · مقاسات/ألوان +${g.vars} · وزن +${g.wt} · لم يُقرأ ${live.gone ?? 0}`
     : `${status}: صفحات ${b.pages ?? 0} · وُجد ${b.found ?? 0} · جديد ${b.imported ?? 0} · محدّث ${b.updated ?? 0} · مُثرى ${b.enriched ?? 0} · مفحوص ${b.checked ?? 0}`;
   await db.batch([
     db.prepare('INSERT INTO crawl_runs(job_id,started_at,status,pages,found,imported,updated,enriched,checked,note,gain_img,gain_var,gain_wt) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)')
