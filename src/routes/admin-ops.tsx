@@ -37,7 +37,8 @@ ops.get('/coupons', async (c) => {
   const T: Record<string, string> = { percent: 'نسبة %', fixed: 'مبلغ ثابت', free_ship: 'توصيل مجاني' };
   return shell(c, 'coupons', 'الكوبونات والعروض', (
     <>
-      <Flash msg={c.req.query('ok') ? 'تم ✓' : undefined} /><Flash type="err" msg={c.req.query('err') ? 'الكود مستخدم مسبقًا' : undefined} />
+      <Flash msg={c.req.query('ok') ? 'تم ✓' : undefined} />
+<Flash type="err" msg={c.req.query('err') ? 'الكود مستخدم مسبقًا' : undefined} />
       <div class="two" style="grid-template-columns:1fr 360px">
         <div class="tbl-wrap"><table class="tbl"><tr><th>الكود</th><th>النوع</th><th>القيمة</th><th>شروط</th><th>الاستخدام</th><th>إجمالي الخصم</th><th>الحالة</th><th class="acts"></th></tr>
           {rows.results.map(cp => <tr><td><b class="mono" style="display:inline">{cp.code}</b><br /><small>{cp.note}</small></td><td>{T[cp.type]}</td><td>{cp.type === 'percent' ? `${cp.value}%` : cp.type === 'fixed' ? fmt(cp.value) : '—'}{cp.max_discount_lyd ? <><br /><small>حد أقصى {fmt(cp.max_discount_lyd)}</small></> : null}</td><td><small>حد أدنى {fmt(cp.min_order_lyd)}<br />{cp.per_user_limit}/زبونة{cp.ends_at ? ` · حتى ${cp.ends_at.slice(0, 10)}` : ''}</small></td><td>{cp.used_count}{cp.usage_limit ? ` / ${cp.usage_limit}` : ''}</td><td>{fmt(cp.total_disc)}</td><td><span class={`status ${cp.active ? 'green' : 'gray'}`}>{cp.active ? 'نشط' : 'موقوف'}</span></td><td><form method="post" action={`/admin/coupons/${cp.id}/toggle`}><button class="btn sm ghost">{cp.active ? 'إيقاف' : 'تفعيل'}</button></form></td></tr>)}
@@ -410,6 +411,11 @@ ops.post('/staff/:id', async (c) => {
 
 // ---------- الزاحف: إضافة المتصفح ----------
 ops.use('/crawler*', requirePerm('catalog.manage'));
+// نسخة الإضافة المتوقَّعة. تُطابق extension/manifest.json ويحرس التطابقَ فحصٌ في e2e.
+// سببها: صاحب المشروع وجد نسختين مثبّتتين معًا («دلال» القديمة و«تالين») ورقمهما واحد
+// لأني غيّرت الشيفرة ولم أرفع الرقم — فلم يستطع التمييز بينهما، وكلتاهما تزحف معًا.
+export const EXT_VERSION = '1.5.0';
+
 ops.get('/crawler', async (c) => {
   const db = c.env.DB; const s = await loadSettings(db);
   const [jobs, runs, cats, thin] = await Promise.all([
@@ -421,9 +427,11 @@ ops.get('/crawler', async (c) => {
        AND ((SELECT COUNT(*) FROM product_images i WHERE i.product_id=p.id) <= 1
          OR (SELECT COUNT(*) FROM variants v WHERE v.product_id=p.id) = 0 OR p.weight_g IS NULL)`).first<{ n: number }>(),
   ]);
-  // معدّل آخر ٢٤ ساعة من سجل التشغيلات: يحوّل الرقم الكبير إلى مدة يفهمها
-  const day = await db.prepare(`SELECT COALESCE(SUM(enriched + updated),0) n FROM crawl_runs
-     WHERE started_at >= datetime('now','-24 hours')`).first<{ n: number }>();
+  // معدّل آخر ٢٤ ساعة: ما **فحصته مهمة الإثراء وحدها**. كان يجمع `updated` من كل التشغيلات،
+  // فدخلت فيه مهام البحث الـ١٥٥ على الخادم (كل منها «يحدّث» عشرات المنتجات) فظهر «١٠٬٦٦٠
+  // في ٢٤ ساعة · يكتمل خلال يومين» والإضافة لم تكمل ساعتها الأولى. رقم مطمئن كاذب.
+  const day = await db.prepare(`SELECT COALESCE(SUM(r.checked),0) n FROM crawl_runs r JOIN crawl_jobs j ON j.id=r.job_id
+     WHERE j.type='stock' AND r.started_at >= datetime('now','-24 hours')`).first<{ n: number }>();
   const left = thin?.n ?? 0; const rate = day?.n ?? 0;
   const eta = rate > 0 ? Math.ceil(left / rate) : null;
   const origin = new URL(c.req.url).origin;
@@ -433,13 +441,22 @@ ops.get('/crawler', async (c) => {
   return shell(c, 'crawler', 'الزاحف — إضافة المتصفح', (
     <>
       <Flash msg={c.req.query('ok') ? 'تم ✓' : undefined} />
+      {/* نسخة قديمة متصلة = نسخة ثانية مثبّتة في المتصفح تزحف بالتوازي وتضاعف خطر الكابتشا */}
+      {s.crawler_version && s.crawler_version !== EXT_VERSION && (
+        <p style="font-size:13px;margin:0 0 10px;padding:10px 12px;border-radius:8px;background:#fdecec;border:1px solid #f0b4b4;color:#8c2121">
+          <b>نسخة إضافة قديمة متصلة: v{s.crawler_version}</b> (الحالية v{EXT_VERSION}).
+          غالبًا لديك نسختان مثبّتتان في كروم تعملان معًا — وهذا يضاعف فتح صفحات 1688 ويضاعف خطر الكابتشا،
+          والقديمة تقرأ الوزن خطأً فتُفسد الأسعار. افتح <span class="mono" dir="ltr">chrome://extensions</span> واحذف القديمة،
+          ثم اضغط <b>تحديث ↻</b> على الحالية.
+        </p>
+      )}
       <div class="kpis">
         <div class="kpi"><b class={online ? 'ok' : ''} style={online ? 'color:#1a9c5b' : 'color:#d3262b'}>{online ? 'متصلة' : 'غير متصلة'}</b><span>آخر اتصال: {seen} {s.crawler_version ? `· v${s.crawler_version}` : ''}</span></div>
         <div class="kpi"><b>{jobs.results.filter(j => j.active).length}</b><span>مهمة نشطة</span></div>
         <div class="kpi"><b>{runs.results.reduce((a, r) => a + r.imported, 0)}</b><span>منتج جديد في آخر 30 تشغيلًا</span></div>
         <div class="kpi"><b>{runs.results.filter(r => r.status === 'blocked').length}</b><span>حجب/كابتشا مؤخرًا</span></div>
         <div class="kpi"><b style={left > 0 ? 'color:#d68b00' : 'color:#1a9c5b'}>{left.toLocaleString('ar-LY')}</b><span>متبقٍ للإثراء (ينقصه صور أو مقاسات أو وزن)</span></div>
-        <div class="kpi"><b>{rate.toLocaleString('ar-LY')}</b><span>أُنجز في ٢٤ ساعة{eta !== null ? ` · يكتمل خلال ~${eta} يومًا` : ''}</span></div>
+        <div class="kpi"><b>{rate.toLocaleString('ar-LY')}</b><span>فحصتها الإضافة في ٢٤ ساعة{eta !== null ? ` · يكتمل خلال ~${eta} يومًا بهذا المعدل` : ''}</span></div>
       </div>
       <div class="two" style="grid-template-columns:1fr 360px">
         <div>

@@ -1,7 +1,7 @@
 // تجربة حقيقية على الشاشة (Playwright) — الإصدار 2
 // زبونة (كوبون + ماي باي) → أدمن → موظف شاهين → تسليم → نقاط وتقييم وتذكرة → مراجعة الأدمن → الأدوار والصلاحيات → دفع فاشل وإلغاء → جوال
 import { chromium } from 'playwright';
-import { mkdirSync, existsSync } from 'node:fs';
+import { mkdirSync, existsSync, readFileSync } from 'node:fs';
 import { createHmac } from 'node:crypto';
 import { createServer } from 'node:http';
 
@@ -1516,10 +1516,35 @@ if (/من \d+/.test(admTotal)) {
 await login(page, '0910000000', 'admin123');
 await page.goto(BASE + '/admin/crawler');
 expect(await has(page, 'متبقٍ للإثراء'), 'صفحة الزاحف تعرض كم بقي للإثراء');
-expect(await has(page, 'أُنجز في ٢٤ ساعة'), 'وتعرض معدّل الإنجاز اليومي');
+expect(await has(page, 'فحصتها الإضافة في ٢٤ ساعة'), 'وتعرض معدّل الإضافة وحدها لا مجموع كل المهام');
+// زرّ الزاحف مثبّت في شريط اللوحة: نقرة واحدة من أي صفحة
+await page.goto(BASE + '/admin/orders');
+const pin = page.locator('.hdr-links a.pin').first();
+expect((await pin.getAttribute('href')) === '/admin/crawler', 'زرّ الزاحف مثبّت في شريط اللوحة العلوي');
+await pin.click(); await page.waitForLoadState('networkidle');
+expect(page.url().endsWith('/admin/crawler'), `النقر عليه يفتح صفحة الزاحف (${page.url()})`);
 // صاحب المشروع لا يملك حسابًا صينيًا: يجب أن تقول الصفحة صراحةً إنه لا يحتاجه
 expect(await has(page, 'لا تحتاج تسجيل دخول في 1688 إطلاقًا'), 'الصفحة تنفي الحاجة لحساب 1688 صراحةً');
 expect(await has(page, 'detail.1688.com/offer'), 'وتسمّي الصفحة التي تقرؤها الإضافة');
+// رقم النسخة في الشيفرة يجب أن يطابق ملف الإضافة، وإلا لم يعرف صاحب المشروع أيّ نسخة تعمل
+const extManifest = JSON.parse(readFileSync('extension/manifest.json', 'utf8'));
+const srvVer = readFileSync('src/routes/admin-ops.tsx', 'utf8').match(/EXT_VERSION = '([^']+)'/)?.[1];
+expect(extManifest.version === srvVer, `نسخة الإضافة في اللوحة تطابق manifest (${srvVer} = ${extManifest.version})`);
+// نسخة قديمة تتصل ⟵ اللوحة تحذّر. نزوّر اتصال v1.4.0 عبر نقطة المهام التي تناديها الإضافة
+await page.evaluate(async (b) => {
+  await fetch(b + '/api/crawl/jobs?v=1.4.0', { headers: { 'x-import-token': 'dev-import-token' } });
+}, BASE);
+await page.goto(BASE + '/admin/crawler');
+expect(await has(page, 'نسخة إضافة قديمة متصلة: v1.4.0'), 'اللوحة تحذّر حين تتصل نسخة إضافة قديمة');
+// وتختفي حين تتصل الحالية — نُعيد الحالة كما كانت (قاعدة: كل فحص يُعيد ما غيّره)
+await page.evaluate(async ([b, v]) => {
+  await fetch(b + '/api/crawl/jobs?v=' + v, { headers: { 'x-import-token': 'dev-import-token' } });
+}, [BASE, extManifest.version]);
+await page.goto(BASE + '/admin/crawler');
+expect(!(await has(page, 'نسخة إضافة قديمة متصلة')), 'التحذير يختفي حين تتصل النسخة الحالية');
+// وصفحة الكوبونات لم تعد تنكسر (وضعتُ التحذير فيها خطأً فسقطت بـ500)
+const cp = await page.goto(BASE + '/admin/coupons');
+expect(cp.status() === 200, `صفحة الكوبونات تعمل (${cp.status()})`);
 // الطابور الذي تقرأه الإضافة يعطي أرقام منتجات حقيقية ويقدّم الناقص
 const queue = await page.evaluate(async (b) => {
   const r = await fetch(b + '/api/import/queue', { headers: { 'x-import-token': 'dev-import-token' } });

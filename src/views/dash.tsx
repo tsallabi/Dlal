@@ -25,7 +25,7 @@ export const AdminShell: FC<{ user: User; active: string; title: string; childre
       </head>
       <body class="admin-body">
         <header class="hdr"><div class="hdr-top wrap"><a href="/" class="logo"><b>تالين</b><i>TALIN</i></a><span class="pill">لوحة الإدارة</span>
-          <nav class="hdr-links"><a href="/" target="_blank">المتجر ↗</a><a href="/partner" target="_blank">لوحة الشحن ↗</a><span class="me">{user.name} <small>· {STAFF_ROLES[user.staff_role ?? 'admin']?.ar}</small></span><a href="/logout">خروج</a></nav></div></header>
+          <nav class="hdr-links"><a href="/admin/crawler" class="pin">🕷 الزاحف</a><a href="/" target="_blank">المتجر ↗</a><a href="/partner" target="_blank">لوحة الشحن ↗</a><span class="me">{user.name} <small>· {STAFF_ROLES[user.staff_role ?? 'admin']?.ar}</small></span><a href="/logout">خروج</a></nav></div></header>
         <div class="dash wrap">
           <aside class="side">
             {items.map(([h, ls]) => ls.some(Boolean) ? <><h3>{h}</h3>{ls}</> : null)}
