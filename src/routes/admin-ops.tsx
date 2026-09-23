@@ -412,11 +412,20 @@ ops.post('/staff/:id', async (c) => {
 ops.use('/crawler*', requirePerm('catalog.manage'));
 ops.get('/crawler', async (c) => {
   const db = c.env.DB; const s = await loadSettings(db);
-  const [jobs, runs, cats] = await Promise.all([
+  const [jobs, runs, cats, thin] = await Promise.all([
     db.prepare('SELECT j.*,c.name_ar AS cat FROM crawl_jobs j LEFT JOIN categories c ON c.id=j.category_id ORDER BY j.id').all<any>(),
     db.prepare('SELECT r.*,j.name FROM crawl_runs r LEFT JOIN crawl_jobs j ON j.id=r.job_id ORDER BY r.id DESC LIMIT 30').all<any>(),
     getCategories(db),
+    // الرقم الذي يهمّ صاحب المشروع وهو يشغّل الإضافة: كم بقي ينقصه صور أو مقاسات أو وزن
+    db.prepare(`SELECT COUNT(*) n FROM products p WHERE p.status IN ('active','draft') AND p.source='1688'
+       AND ((SELECT COUNT(*) FROM product_images i WHERE i.product_id=p.id) <= 1
+         OR (SELECT COUNT(*) FROM variants v WHERE v.product_id=p.id) = 0 OR p.weight_g IS NULL)`).first<{ n: number }>(),
   ]);
+  // معدّل آخر ٢٤ ساعة من سجل التشغيلات: يحوّل الرقم الكبير إلى مدة يفهمها
+  const day = await db.prepare(`SELECT COALESCE(SUM(enriched + updated),0) n FROM crawl_runs
+     WHERE started_at >= datetime('now','-24 hours')`).first<{ n: number }>();
+  const left = thin?.n ?? 0; const rate = day?.n ?? 0;
+  const eta = rate > 0 ? Math.ceil(left / rate) : null;
   const origin = new URL(c.req.url).origin;
   const seen = s.crawler_last_seen ? timeAgo(s.crawler_last_seen) : 'لم تتصل بعد';
   const online = s.crawler_last_seen && (Date.now() - new Date(s.crawler_last_seen + 'Z').getTime()) < 40 * 60000;
@@ -429,6 +438,8 @@ ops.get('/crawler', async (c) => {
         <div class="kpi"><b>{jobs.results.filter(j => j.active).length}</b><span>مهمة نشطة</span></div>
         <div class="kpi"><b>{runs.results.reduce((a, r) => a + r.imported, 0)}</b><span>منتج جديد في آخر 30 تشغيلًا</span></div>
         <div class="kpi"><b>{runs.results.filter(r => r.status === 'blocked').length}</b><span>حجب/كابتشا مؤخرًا</span></div>
+        <div class="kpi"><b style={left > 0 ? 'color:#d68b00' : 'color:#1a9c5b'}>{left.toLocaleString('ar-LY')}</b><span>متبقٍ للإثراء (ينقصه صور أو مقاسات أو وزن)</span></div>
+        <div class="kpi"><b>{rate.toLocaleString('ar-LY')}</b><span>أُنجز في ٢٤ ساعة{eta !== null ? ` · يكتمل خلال ~${eta} يومًا` : ''}</span></div>
       </div>
       <div class="two" style="grid-template-columns:1fr 360px">
         <div>

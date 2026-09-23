@@ -1510,6 +1510,20 @@ if (/من \d+/.test(admTotal)) {
   expect(/[?&]page=2(&|$)/.test(page.url()), `لوحة المنتجات: وصلنا فعلًا للصفحة ٢ (${page.url()})`);
   expect(await has(page, 'الصفحة 2'), 'لوحة المنتجات تقول إنها الصفحة الثانية');
 }
+// ---------- الإضافة المجانية: الطابور والكرون لا يتنازعان ----------
+// الكرون كان يأخذ مهمة الإضافة بمعرّفها فيتجاوز فلتر `runner`، فيُنفق كريدت المزوّد على
+// عمل تفعله الإضافة مجانًا ويكتب «error (خادم)» فيظنّ صاحب المشروع أن الإضافة فشلت.
+await login(page, '0910000000', 'admin123');
+await page.goto(BASE + '/admin/crawler');
+expect(await has(page, 'متبقٍ للإثراء'), 'صفحة الزاحف تعرض كم بقي للإثراء');
+expect(await has(page, 'أُنجز في ٢٤ ساعة'), 'وتعرض معدّل الإنجاز اليومي');
+// الطابور الذي تقرأه الإضافة يعطي أرقام منتجات حقيقية ويقدّم الناقص
+const queue = await page.evaluate(async (b) => {
+  const r = await fetch(b + '/api/import/queue', { headers: { 'x-import-token': 'dev-import-token' } });
+  return r.json();
+}, BASE);
+expect(Array.isArray(queue.ids), 'طابور الإضافة يعيد قائمة أرقام');
+expect(queue.ids.every(x => /^[0-9]{9,}$/.test(String(x))), `كل رقم في الطابور رقم منتج 1688 صالح (${queue.ids.slice(0, 2).join(',')})`);
 await page.goto(BASE + '/logout');
 
 // ---------- جوال ----------

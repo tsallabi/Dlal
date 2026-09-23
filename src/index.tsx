@@ -66,7 +66,10 @@ export default {
         if (env.AI) { const r = await retranslatePending(env.DB, env.AI, 40); console.log('cron translate', JSON.stringify(r)); }
         if (!s.src_key) return;
         if (left <= 0) { console.log('cron enrich skipped: budget spent', spent, '/', budget); return; }
-        const job = await env.DB.prepare("SELECT id FROM crawl_jobs WHERE type='stock' ORDER BY id LIMIT 1").first<{ id: number }>();
+        // **يجب احترام `runner`**: مهمة موسومة للإضافة ليست للخادم. الكرون كان يأخذها بالمعرّف
+        // فيتجاوز الفلتر في runServerJobs، فيُنفق كريدت المزوّد على عمل تفعله الإضافة مجانًا،
+        // ويكتب «error (خادم)» في ملخّص المهمة فيظنّ صاحب المشروع أن الإضافة هي التي فشلت.
+        const job = await env.DB.prepare("SELECT id FROM crawl_jobs WHERE type='stock' AND runner IN ('any','server') ORDER BY id LIMIT 1").first<{ id: number }>();
         if (!job) return;
         const r = await runServerJobs(env, { jobId: job.id, enrichOnly: true, maxItems: Math.min(perHour, left) });
         const x = (r.results ?? [{}])[0] as any;
