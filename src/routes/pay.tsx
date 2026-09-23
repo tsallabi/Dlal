@@ -163,7 +163,7 @@ pay.get('/pay/mock/:token', async (c) => {
         <div class="mock-gw">
           <div class="mock-hdr"><b>MyPay</b> <span>بيئة محاكاة — لا يتم خصم أي مبلغ</span></div>
           <div class="mock-body">
-            <div class="row"><span>التاجر</span><b>هدهد الصين</b></div>
+            <div class="row"><span>التاجر</span><b>هدهدي</b></div>
             <div class="row"><span>الطلب</span><b>{p.code}</b></div>
             <div class="row"><span>المرجع</span><b class="mono" style="display:inline">{p.trx_ref}</b></div>
             <div class="row"><span>الوسيلة</span><b>{GW[p.gateway] ?? p.gateway}</b></div>
@@ -180,7 +180,7 @@ pay.get('/pay/mock/:token', async (c) => {
               </form>
             )}
           </div>
-          <div class="mock-ftr">هذه الصفحة تحاكي صفحة الدفع المستضافة لدى ماي باي وترسل Webhook موقّعًا إلى هدهد تمامًا كما تفعل البوابة الحقيقية.</div>
+          <div class="mock-ftr">هذه الصفحة تحاكي صفحة الدفع المستضافة لدى ماي باي وترسل Webhook موقّعًا إلى هدهدي تمامًا كما تفعل البوابة الحقيقية.</div>
         </div>
       </body></html>,
   );

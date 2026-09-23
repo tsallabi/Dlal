@@ -31,7 +31,7 @@ jobs:
           curl -s "$BASE/" > /tmp/home.html
           cards=$(grep -o 'class="card"' /tmp/home.html | wc -l)
           echo "product cards on home: $cards"; [ "$cards" -ge 20 ] || fail=1
-          grep -q 'هدهد' /tmp/home.html && echo "brand text OK" || fail=1
+          grep -q 'هدهدي' /tmp/home.html && echo "brand text OK" || fail=1
           grep -q 'فساتين' /tmp/home.html && echo "categories OK" || fail=1
           echo "--- product image proxy:"
           pimg=$(grep -oE '/img/[A-Za-z0-9_-]+' /tmp/home.html | head -1)

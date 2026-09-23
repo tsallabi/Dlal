@@ -201,9 +201,9 @@ admin.get('/import', async (c) => {
         <div>
           <div class="card-box"><h3>الطريقة 1 — زر الاستيراد في متصفحك (موصى بها)</h3>
             <ol style="font-size:14px;line-height:1.9">
-              <li>اسحب هذا الزر إلى شريط المفضلة في Chrome: <a href={bookmarklet} class="btn sm brand" onclick="return false" draggable="true">⬇️ استورد إلى هدهد</a></li>
+              <li>اسحب هذا الزر إلى شريط المفضلة في Chrome: <a href={bookmarklet} class="btn sm brand" onclick="return false" draggable="true">⬇️ استورد إلى هدهدي</a></li>
               <li>افتح <a href="https://www.1688.com" target="_blank" class="src-link">1688.com</a> وسجّل الدخول بحسابك، وابحث عن أي منتج أو افتح صفحة قسم.</li>
-              <li>اضغط الزر من شريط المفضلة: تظهر نافذة تعرض منتجات الصفحة، تختار القسم في هدهد وتضغط "استيراد".</li>
+              <li>اضغط الزر من شريط المفضلة: تظهر نافذة تعرض منتجات الصفحة، تختار القسم في هدهدي وتضغط "استيراد".</li>
               <li>في صفحة منتج واحد يستورد الزر المنتج بكل صوره ومقاساته وألوانه.</li>
             </ol>
             <p style="font-size:13px;color:#666">الزبون لا يرى أبدًا رابط المصدر أو السعر الأصلي. السعر يُحسب تلقائيًا بقواعد التسعير.</p>

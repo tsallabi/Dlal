@@ -20,7 +20,7 @@ database_id = "b45c2ed9-976b-4c4f-a9ae-162b8664fdaf"
 # bucket_name = "dlal-images"
 
 [vars]
-SITE_NAME = "هدهد الصين"
+SITE_NAME = "هدهدي"
 SITE_URL = "https://dlal.ly"
 DEFAULT_CURRENCY = "LYD"
 

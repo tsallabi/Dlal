@@ -17,7 +17,7 @@ export const Layout: FC<Props> = ({ title, user, cartCount = 0, wishCount = 0, c
     <head>
       <meta charset="utf-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1" />
-      <title>{title ? `${title} | هدهد الصين HUDHUD` : 'هدهد الصين HUDHUD — تسوّقي من الصين إلى ليبيا'}</title>
+      <title>{title ? `${title} | هدهدي HUDHUDE` : 'هدهدي HUDHUDE — بوابتك إلى الصين'}</title>
       <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
       <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" />
@@ -41,7 +41,7 @@ export const Layout: FC<Props> = ({ title, user, cartCount = 0, wishCount = 0, c
         {/* الشريط الرئيسي: الشعار + بحث + أيقونات */}
         <div class="hdr-main wrap">
           <button type="button" class="burger" data-drawer aria-label="الأقسام"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16" /></svg></button>
-          <a href="/" class="logo" aria-label="هدهد الصين HUDHUD"><img src="/hudhud-logo.svg" alt="" width="77" height="64" /><span class="t"><b>هدهد <em>الصين</em></b><i>HUDHUD</i></span></a>
+          <a href="/" class="logo" aria-label="هدهدي HUDHUDE"><img src="/hudhud-logo.svg" alt="" width="77" height="64" /><span class="t"><b>هدهدي</b><i>HUDHUDE</i><u>بوابتك إلى الصين</u></span></a>
           <form class="search" action="/search" method="get" role="search">
             <input name="q" placeholder="ابحثي عن فستان، عباية، حقيبة…" value={q ?? ''} aria-label="ابحثي عن منتج" />
             <button type="submit" aria-label="بحث"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.2-3.2" stroke-linecap="round" /></svg></button>
@@ -94,7 +94,7 @@ export const Layout: FC<Props> = ({ title, user, cartCount = 0, wishCount = 0, c
       <footer class="ftr">
         <div class="ftr-top">
           <div class="ftr-col">
-            <h5>عن هدهد</h5>
+            <h5>عن هدهدي</h5>
             <a href="/pages/how">من نحن وكيف نعمل</a>
             <a href="/pages/branches">فروعنا في ليبيا</a>
             <a href="/pages/privacy">إشعار الخصوصية</a>
@@ -148,7 +148,7 @@ export const Layout: FC<Props> = ({ title, user, cartCount = 0, wishCount = 0, c
         </div>
         <div class="ftr-legal">
           <div class="wrap">
-            <span>© {new Date().getFullYear()} هدهد الصين HUDHUD — جميع الحقوق محفوظة</span>
+            <span>© {new Date().getFullYear()} هدهدي HUDHUDE — جميع الحقوق محفوظة</span>
             <a href="/pages/privacy">الخصوصية</a>
             <a href="/pages/terms">الشروط</a>
             <a href="/pages/returns">الإرجاع</a>
@@ -175,7 +175,7 @@ export const Layout: FC<Props> = ({ title, user, cartCount = 0, wishCount = 0, c
         <span class="ic">💬</span><span class="lbl">تواصلي معنا</span><i class="dot" id="chatDot" hidden></i>
       </div>
       <div class="chat-panel" id="chatPanel" hidden>
-        <div class="ch-h"><b>خدمة زبائن هدهد</b><span id="chatSub">نرد خلال ساعات العمل</span><button type="button" id="chatClose" aria-label="إغلاق">✕</button></div>
+        <div class="ch-h"><b>خدمة زبائن هدهدي</b><span id="chatSub">نرد خلال ساعات العمل</span><button type="button" id="chatClose" aria-label="إغلاق">✕</button></div>
         <div class="ch-body" id="chatBody"><div class="ch-empty">اكتبي رسالتك وسيصلك الرد هنا وفي «التذاكر والإرجاع» داخل حسابك.</div></div>
         <form class="ch-f" id="chatForm"><input id="chatInput" placeholder="اكتبي رسالتك…" autocomplete="off" maxlength={1000} /><button class="btn brand sm" type="submit">إرسال</button></form>
       </div>

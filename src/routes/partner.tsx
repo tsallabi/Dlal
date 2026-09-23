@@ -197,7 +197,7 @@ partner.post('/item/:id/unavailable', async (c) => {
     db.prepare("UPDATE order_items SET purchase_status='unavailable' WHERE id=?").bind(id),
     db.prepare("UPDATE products SET in_stock=0,last_checked_at=datetime('now') WHERE id=?").bind(it.product_id),   // يُخفى فورًا من الموقع
   ]);
-  await notify(db, it.user_id, `منتج غير متوفر في طلبك ${it.code}`, `"${it.title_ar}" نفد عند المورد. سيتواصل معك فريق هدهد لاختيار بديل أو استرجاع قيمته.`, `/orders/${it.code}`);
+  await notify(db, it.user_id, `منتج غير متوفر في طلبك ${it.code}`, `"${it.title_ar}" نفد عند المورد. سيتواصل معك فريق هدهدي لاختيار بديل أو استرجاع قيمته.`, `/orders/${it.code}`);
   return c.redirect('/partner?ok=1');
 });
 

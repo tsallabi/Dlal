@@ -33,9 +33,11 @@ button,input,select,textarea{font:inherit}
 .logo .t{display:flex;flex-direction:column;align-items:center;gap:6px}
 .logo b{font-size:28px;font-weight:900;letter-spacing:.5px;display:block}
 .logo b em{font-style:normal;color:#C8702F}
+/* «بوابتك إلى الصين» تحت الاسمين — بالقرفة الداكنة: الفاتحة لا تُقرأ بخط صغير (تباين ٣٫٦) */
+.logo u{text-decoration:none;font-size:11px;font-weight:700;color:var(--brand);letter-spacing:.3px;display:block;white-space:nowrap}
 .logo i{font-style:normal;font-size:10.5px;font-weight:700;letter-spacing:7px;text-indent:7px;opacity:.7;display:block}
 .logo:hover b,.logo:hover i{color:var(--brand)}
-@media(max-width:560px){.logo img{height:44px}.logo .t{gap:4px}.logo b{font-size:21px}.logo i{font-size:8.5px;letter-spacing:5px;text-indent:5px}}
+@media(max-width:560px){.logo img{height:44px}.logo .t{gap:3px}.logo b{font-size:21px}.logo i{font-size:8.5px;letter-spacing:5px;text-indent:5px}.logo u{font-size:9.5px}}
 .search{flex:1;display:flex;max-width:640px;border:2px solid var(--ink);background:#fff;height:44px}
 .search input{flex:1;border:0;padding:0 14px;outline:0;background:transparent;font-size:14.5px;min-width:0}
 .search button{border:0;background:var(--ink);color:#fff;width:56px;display:grid;place-items:center;cursor:pointer;flex:none}

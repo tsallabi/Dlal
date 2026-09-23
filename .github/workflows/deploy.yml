@@ -1,4 +1,4 @@
-# نشر هدهد الصين على Cloudflare Workers عند كل دفع إلى main (أو يدويًا)
+# نشر هدهدي على Cloudflare Workers عند كل دفع إلى main (أو يدويًا)
 # يلزم إضافة الأسرار في GitHub → Settings → Secrets and variables → Actions:
 #   CLOUDFLARE_API_TOKEN   (صلاحيات: Workers Scripts:Edit, D1:Edit, Account Settings:Read)
 #   CLOUDFLARE_ACCOUNT_ID
@@ -44,4 +44,4 @@ jobs:
           MYPAY_SECRET_ID: ${{ secrets.MYPAY_SECRET_ID }}
           MYPAY_WEBHOOK_SECRET: ${{ secrets.MYPAY_WEBHOOK_SECRET }}
       - name: Summary
-        run: echo "### 🚀 نُشر هدهد الصين على ${{ steps.deploy.outputs.url }}" >> "$GITHUB_STEP_SUMMARY"
+        run: echo "### 🚀 نُشر هدهدي على ${{ steps.deploy.outputs.url }}" >> "$GITHUB_STEP_SUMMARY"

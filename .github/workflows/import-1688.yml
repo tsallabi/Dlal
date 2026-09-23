@@ -8,7 +8,7 @@ on:
         default: 连衣裙 女
         required: true
       category:
-        description: slug القسم في هدهد
+        description: slug القسم في هدهدي
         default: dresses
         required: true
       base:

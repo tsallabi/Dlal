@@ -283,8 +283,8 @@ const tilesX2 = await page.evaluate(() => document.getElementById('catTiles').sc
 expect(Math.abs(tilesX2 - tilesX) > 50, `سهم البلاطات يمرّرها (${tilesX} → ${tilesX2})`);
 await page.setViewportSize({ width: 1280, height: 860 });
 await page.goto(BASE + '/'); await page.waitForLoadState('networkidle');
-// «بوابة الصين» حُذفت من الشعار: «الصين» صارت جزءًا من الاسم «هدهد الصين» ومميّزة بلون القرفة
-expect(await page.locator('.hdr-main .logo b em').textContent() === 'الصين' && await page.locator('.hdr-main .logo u').count() === 0, 'الشعار: «الصين» مميّزة داخل الاسم بدل سطر «بوابة الصين»');
+// الاسم صار «هدهدي» وسطر «بوابتك إلى الصين» عاد تحته (قرار صاحب المشروع بعد شراء hudhude.com)
+expect(await page.locator('.hdr-main .logo u').textContent() === 'بوابتك إلى الصين' && await page.locator('.hdr-main .logo b em').count() === 0, 'الشعار: «هدهدي» وتحته «بوابتك إلى الصين»');
 // طوابق الأقسام: كل طابق شريط أفقي يمرَّر وله رابط إلى قسمه
 const floors = await page.locator('.floor').count();
 expect(floors >= 4, `الرئيسية تعرض ${floors} طوابق أقسام`);
@@ -472,7 +472,7 @@ await page.goto(BASE + '/admin/coupons');
 await page.fill('input[name=code]', 'test' + String(Date.now()).slice(-4)); await page.fill('input[name=value]', '15'); await page.click('button:has-text("إنشاء")'); await page.waitForLoadState('networkidle');
 expect(await has(page, 'TEST'), 'إنشاء كوبون جديد من الإدارة'); await shot(page, 'admin-coupons');
 for (const [path, name, check] of [
-  ['/admin/import', 'admin-import', 'استورد إلى هدهد'], ['/admin/products', 'admin-products', 'offerId'], ['/admin/categories', 'admin-categories', 'الوزن التقديري'],
+  ['/admin/import', 'admin-import', 'استورد إلى هدهدي'], ['/admin/products', 'admin-products', 'offerId'], ['/admin/categories', 'admin-categories', 'الوزن التقديري'],
   ['/admin/stock', 'admin-stock', 'فحص المخزون'], ['/admin/pricing', 'admin-pricing', 'سعر الصرف'], ['/admin/partners', 'admin-partners', 'شاهين'], ['/admin/staff', 'admin-staff', 'مصفوفة الصلاحيات'], ['/admin/customers', 'admin-customers', 'منى'],
   ['/admin/reports', 'admin-reports', 'المبيعات اليومية'], ['/admin/activity', 'admin-activity', 'سجل النشاط'], ['/admin/tickets', 'admin-tickets', 'التذاكر'], ['/admin/reviews', 'admin-reviews', 'بانتظار المراجعة'],
 ]) { await page.goto(BASE + path); expect(await has(page, check), `صفحة ${path} تعمل`); await shot(page, name); }
@@ -651,8 +651,8 @@ await page.goto(BASE + '/account/orders?stage=cancelled'); expect(await has(page
 
 // ---------- صفحات المساعدة والسياسات بالعربية ----------
 const HELP = [
-  ['/pages/how', 'كيف يعمل هدهد؟', 'شحن جوي إلى ليبيا'],
-  ['/pages/how-to-order', 'كيف أطلب من هدهد؟', 'أكّدي الطلب وادفعي'],
+  ['/pages/how', 'كيف يعمل هدهدي؟', 'شحن جوي إلى ليبيا'],
+  ['/pages/how-to-order', 'كيف أطلب من هدهدي؟', 'أكّدي الطلب وادفعي'],
   ['/pages/shipping', 'معلومات الشحن', 'التوصيل داخل ليبيا'],
   ['/pages/returns', 'سياسة الإرجاع والاسترداد', 'متى تستحقين تعويضًا كاملًا'],
   ['/pages/payment', 'طرق الدفع والرسوم', 'الدفع كاش في أحد فروعنا'],
@@ -746,16 +746,17 @@ await page.goto(BASE + '/c/dresses?sort=price_asc');
 await page.goto(BASE + '/logout'); await page.goto(BASE + '/');
 expect(await page.locator('.hdr-strip a', { hasText: 'معلومات الشحن' }).isVisible(), 'الشريط العلوي يعرض معلومات الشحن');
 expect(await page.locator('.hdr-main .logo').isVisible() && await page.locator('.hdr-main .search input').isVisible(), 'الشعار وحقل البحث في الشريط الرئيسي');
-expect(await page.locator('.hdr-main .logo b').textContent() === 'هدهد الصين', 'الشعار يحمل الاسم العربي «هدهد الصين»');
-expect(await page.locator('.hdr-main .logo i').textContent() === 'HUDHUD', 'وتحته الاسم اللاتيني «HUDHUD»');
-expect((await page.title()).includes('هدهد الصين HUDHUD'), 'عنوان الصفحة يحمل الاسمين');
+expect(await page.locator('.hdr-main .logo b').textContent() === 'هدهدي', 'الشعار يحمل الاسم العربي «هدهدي»');
+expect(await page.locator('.hdr-main .logo i').textContent() === 'HUDHUDE', 'وتحته الاسم اللاتيني «HUDHUDE» (كالنطاق hudhude.com)');
+expect(await page.locator('.hdr-main .logo u').textContent() === 'بوابتك إلى الصين', 'وتحتهما «بوابتك إلى الصين»');
+expect((await page.title()).includes('هدهدي HUDHUDE'), 'عنوان الصفحة يحمل الاسمين');
 // الهدهد نفسه: صورة تُحمَّل فعلًا (لا مربع مكسور)، وحركتها تعمل داخلها، ولون الموقع صار القرفة
 const hh = await page.locator('.hdr-main .logo img').evaluate(i => ({ w: i.naturalWidth, h: i.getBoundingClientRect().height, src: i.getAttribute('src') }));
 expect(hh.src === '/hudhud-logo.svg' && hh.w > 0 && hh.h >= 40, `صورة الهدهد في الترويسة محمّلة (${hh.src} · ${Math.round(hh.h)}px)`);
 const hhSvg = await (await ctx.request.get(BASE + '/hudhud-logo.svg')).text();
 expect(/@keyframes fan/.test(hhSvg) && /@keyframes peck/.test(hhSvg) && /prefers-reduced-motion/.test(hhSvg), 'ملف الشعار فيه حركة العُرف والنقر ويحترم «تقليل الحركة»');
 const fav = await page.locator('link[rel=icon]').getAttribute('href');
-expect(fav === '/favicon.svg' && (await (await ctx.request.get(BASE + fav)).text()).includes('aria-label="هدهد HUDHUD"'), 'أيقونة التبويب صارت الهدهد');
+expect(fav === '/favicon.svg' && (await (await ctx.request.get(BASE + fav)).text()).includes('aria-label="هدهدي HUDHUDE"'), 'أيقونة التبويب صارت الهدهد');
 expect((await ctx.request.get(BASE + '/apple-touch-icon.png')).status() === 200, 'أيقونة شاشة الجوال موجودة');
 const brandCol = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--brand').trim().toLowerCase());
 expect(brandCol === '#b05a20', `لون الموقع صار القرفة (${brandCol})`);
