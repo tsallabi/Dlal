@@ -1869,6 +1869,67 @@ await shot(page, 'request-by-link');
 if (stockJob) await extCall('/api/crawl/report', { job_id: stockJob.id, started_at: new Date().toISOString(), status: 'ok', checked: 0 });
 await page.goto(BASE + '/logout');
 
+// ---------- أدوات الإعلان على ميتا: كتالوج المنتجات والبكسل (٢٤/٠٩/٢٦) ----------
+// صاحب المشروع: «كيف يمكنك أن تدير صفحات فيسبوك لتكون الميديا باير خاصتي؟». الإعلان الديناميكي يحتاج كتالوجًا
+// تقرؤه ميتا وبكسلًا يعدّ المشاهدة والسلة والشراء. نفحص الملف كما تقرؤه ميتا، والبكسل كما يرسله المتصفح.
+const feedRes = await page.request.get(BASE + '/feeds/meta.csv?fresh=1');   // بلا المخزَّن: نفحص حالة الرف الآن
+const feed = await feedRes.text();
+const feedRows = feed.split('\n');
+expect(feedRes.status() === 200 && (feedRes.headers()['content-type'] || '').includes('text/csv'), `الكتالوج يُخدم ملف CSV (${feedRes.status()})`);
+expect(feedRows[0] === 'id,title,description,availability,condition,price,link,image_link,additional_image_link,brand,product_type', 'أعمدته بأسماء مدير التجارة');
+expect(feedRows.length > 20, `ويحمل منتجات الرف (${feedRows.length - 1} منتجًا)`);
+const feedBad = feedRows.slice(1).filter(r => !/"\d+\.\d\d LYD"/.test(r) || !/"https?:\/\/[^"]+\/p\/[^"]+\?utm_source=facebook&utm_medium=catalog"/.test(r) || !/"https?:\/\/[^"]+","/.test(r));
+expect(feedBad.length === 0, `كل سطر: سعر «49.00 LYD» ورابط المنتج مطلق بوسم الحملة وصورة برابط مطلق (${feedBad.length} مخالفًا${feedBad[0] ? ': ' + feedBad[0].slice(0, 90) : ''})`);
+expect(!/[一-鿿]/.test(feed), 'لا حرف صيني في الكتالوج');
+expect(!feed.includes(`${packHref}?utm_source`), `إعلان مصنع التغليف المخفي ليس في الكتالوج (${packHref})`);
+await login(page, '0910000000', 'admin123');
+await page.goto(BASE + '/admin/pricing');
+const pxBefore = await page.locator('input[name=meta_pixel_id]').inputValue();
+const vfBefore = await page.locator('input[name=meta_domain_verify]').inputValue();
+expect(await has(page, '/feeds/meta.csv'), 'لوحة التسعير تعرض رابط الكتالوج لنسخه');
+await page.route('**/connect.facebook.net/**', r => r.abort());   // لا نرسل شيئًا لميتا من الفحص؛ نقرأ طابور البكسل نفسه
+try {
+  await page.goto(BASE + '/');
+  expect(!(await has(page, 'fbq(')), 'بلا معرّف مضبوط لا بكسل في الصفحة');
+  await page.goto(BASE + '/admin/pricing');
+  await page.fill('input[name=meta_pixel_id]', 'abc-not-a-pixel');
+  await page.fill('input[name=meta_domain_verify]', '<meta name="facebook-domain-verification" content="e2everify0123456789abc" />');
+  await page.locator('form:has(input[name=air_days]) button', { hasText: 'حفظ' }).first().click(); await page.waitForLoadState('networkidle');
+  expect((await page.locator('input[name=meta_pixel_id]').inputValue()) === '', 'معرّف بكسل غير رقمي يُرفض ولا يُحقن');
+  expect((await page.locator('input[name=meta_domain_verify]').inputValue()) === 'e2everify0123456789abc', 'وسم التحقق الكامل يُحفظ رمزه وحده');
+  await page.fill('input[name=meta_pixel_id]', '1234567890123456');
+  await page.locator('form:has(input[name=air_days]) button', { hasText: 'حفظ' }).first().click(); await page.waitForLoadState('networkidle');
+  expect(!(await has(page, "fbq('init'")), 'البكسل لا يُحقن في لوحة الإدارة');
+  await page.goto(BASE + '/');
+  const homeHtml = await page.content();
+  expect(homeHtml.includes("fbq('init','1234567890123456')") && homeHtml.includes('<meta name="facebook-domain-verification" content="e2everify0123456789abc">'), 'الرئيسية تحمل البكسل ووسم إثبات النطاق');
+  const pxq = () => page.evaluate(() => (window.fbq && window.fbq.queue ? window.fbq.queue.map(a => [a[0], a[1], a[2] || null]) : []));
+  expect((await pxq()).some(a => a[0] === 'track' && a[1] === 'PageView'), 'حدث PageView أُرسل');
+  await page.goto(BASE + '/p/' + productSlug);
+  const vc = (await pxq()).find(a => a[1] === 'ViewContent');
+  expect(vc && vc[2].currency === 'LYD' && vc[2].content_ids.length === 1 && vc[2].value > 0, `صفحة المنتج ترسل ViewContent بمعرّفه وسعره بالدينار (${JSON.stringify(vc?.[2])})`);
+  await page.evaluate(() => { const f = document.getElementById('addForm'); f.addEventListener('submit', e => e.preventDefault()); f.requestSubmit(); });
+  const atc = (await pxq()).find(a => a[1] === 'AddToCart');
+  expect(atc && atc[2].content_ids[0] === vc?.[2].content_ids[0], 'زر الإضافة للسلة يرسل AddToCart للمنتج نفسه');
+  // الشراء: صفحة طلب مدفوع للزبونة ترسل Purchase مرة واحدة
+  await login(page, PHONE, 'secret456');
+  await page.goto(BASE + '/account/orders');
+  const oLinks = await page.locator('a[href^="/orders/DL-"]').evaluateAll(as => [...new Set(as.map(a => a.getAttribute('href')))]);
+  let bought = null;
+  for (const h of oLinks.slice(0, 8)) { await page.goto(BASE + h); if (await page.locator('[data-px-purchase]').count()) { bought = (await pxq()).find(a => a[1] === 'Purchase'); break; } }
+  expect(bought && bought[2].value > 0 && bought[2].currency === 'LYD', `صفحة الطلب المدفوع ترسل Purchase بقيمته (${JSON.stringify(bought?.[2])})`);
+  await page.reload();
+  expect(!(await pxq()).some(a => a[1] === 'Purchase'), 'وعند العودة لها لا يُعدّ الشراء مرة ثانية');
+} finally {
+  await page.unroute('**/connect.facebook.net/**');
+  await login(page, '0910000000', 'admin123');
+  await page.goto(BASE + '/admin/pricing');
+  await page.fill('input[name=meta_pixel_id]', pxBefore); await page.fill('input[name=meta_domain_verify]', vfBefore);
+  await page.locator('form:has(input[name=air_days]) button', { hasText: 'حفظ' }).first().click(); await page.waitForLoadState('networkidle');
+  expect((await page.locator('input[name=meta_pixel_id]').inputValue()) === pxBefore, `أُعيد معرّف البكسل كما كان («${pxBefore}»)`);
+  await page.goto(BASE + '/logout');
+}
+
 // ---------- جوال ----------
 const m = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, locale: 'ar' });
 const mp = await m.newPage();

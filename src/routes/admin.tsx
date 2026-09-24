@@ -13,6 +13,7 @@ import { requireRole } from '../lib/auth';
 import { attrValue, notRetail, kindOf } from '../lib/source';
 import { requirePerm, logActivity } from '../lib/perm';
 import { settleLinkRequests, LINK_SOURCES, LINK_STATUS } from '../lib/link-requests';
+import { validPixel, validVerify, bustMetaCache } from '../lib/meta';
 import { setOrderStatus, markOrderPaid } from '../lib/orders';
 import { Translator, hasCJK, goodTitle, retranslatePending, releaseHeldDrafts, BROKEN_SQL } from '../lib/translate';
 
@@ -639,6 +640,11 @@ admin.get('/pricing', async (c) => {
         <label>صفحة فيسبوك</label><input type="url" name="facebook_url" dir="ltr" value={s.facebook_url ?? ''} placeholder="https://facebook.com/..." />
         <label>إنستغرام</label><input type="url" name="instagram_url" dir="ltr" value={s.instagram_url ?? ''} placeholder="https://instagram.com/..." />
         <label>تيك توك</label><input type="url" name="tiktok_url" dir="ltr" value={s.tiktok_url ?? ''} placeholder="https://tiktok.com/@..." />
+        <h3 style="margin-top:16px" id="meta">إعلانات فيسبوك وإنستغرام (ميتا)</h3>
+        <p style="font-size:13px;color:#666">البكسل يعدّ من شاهد المنتج وأضافه للسلة وبدأ الدفع واشترى، فتعرف ميتا لمن تعرض الإعلان وتقيس ما يربحه كل دينار. يُحقن في صفحات المتجر وحدها ولا يظهر في اللوحة.</p>
+        <label>معرّف بكسل ميتا (Pixel ID — أرقام من مدير الأحداث)</label><input type="text" name="meta_pixel_id" dir="ltr" inputmode="numeric" value={validPixel(s.meta_pixel_id)} placeholder="123456789012345" />
+        <label>رمز إثبات ملكية النطاق (من إعدادات الأعمال ← النطاقات — الصقي الوسم كاملًا أو الرمز وحده)</label><input type="text" name="meta_domain_verify" dir="ltr" value={validVerify(s.meta_domain_verify)} placeholder="abc123xyz…" />
+        <p class="feed-url" style="font-size:12.5px;margin:6px 0 0">كتالوج المنتجات لمدير التجارة (مصدر بيانات مجدول يوميًا): <span class="mono" dir="ltr">{new URL(c.req.url).origin}/feeds/meta.csv</span></p>
         <button class="btn" style="margin-top:12px">حفظ</button>
       </form>
       <div>
@@ -675,8 +681,9 @@ admin.get('/pricing', async (c) => {
 });
 admin.post('/pricing', async (c) => {
   const f = await c.req.parseBody();
-  const keys = ['fx_cny_lyd', 'fx_usd_lyd', 'markup_percent', 'safety_percent', 'ship_usd_per_kg', 'customs_percent', 'domestic_cn_ship_cny', 'delivery_lyd', 'free_ship_over_lyd', 'ship_mode', 'ship_usd_per_cbm', 'volumetric_divisor', 'default_volume_cm3', 'sea_enabled', 'ship_usd_per_kg_sea', 'ship_usd_per_cbm_sea', 'air_days', 'sea_days', 'delivery_city_rates', 'retail_max_moq', 'whatsapp_number', 'facebook_url', 'instagram_url', 'tiktok_url'];
-  await c.env.DB.batch(keys.filter(k => f[k] !== undefined).map(k => c.env.DB.prepare("INSERT INTO settings(key,value,updated_at) VALUES(?,?,datetime('now')) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at").bind(k, latinDigits(String(f[k])))));
+  const keys = ['fx_cny_lyd', 'fx_usd_lyd', 'markup_percent', 'safety_percent', 'ship_usd_per_kg', 'customs_percent', 'domestic_cn_ship_cny', 'delivery_lyd', 'free_ship_over_lyd', 'ship_mode', 'ship_usd_per_cbm', 'volumetric_divisor', 'default_volume_cm3', 'sea_enabled', 'ship_usd_per_kg_sea', 'ship_usd_per_cbm_sea', 'air_days', 'sea_days', 'delivery_city_rates', 'retail_max_moq', 'whatsapp_number', 'facebook_url', 'instagram_url', 'tiktok_url', 'meta_pixel_id', 'meta_domain_verify'];
+  await c.env.DB.batch(keys.filter(k => f[k] !== undefined).map(k => c.env.DB.prepare("INSERT INTO settings(key,value,updated_at) VALUES(?,?,datetime('now')) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at").bind(k, k === 'meta_pixel_id' ? validPixel(latinDigits(String(f[k]))) : k === 'meta_domain_verify' ? validVerify(String(f[k])) : latinDigits(String(f[k])))));
+  bustMetaCache();
   return c.redirect('/admin/pricing?ok=1');
 });
 // الطلبات التي سبقت تفعيل لقطة التكلفة تظهر بربح 100% لأن تكلفتها فارغة — نحسبها من بيانات المنتج

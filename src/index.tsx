@@ -19,6 +19,8 @@ import { retranslatePending } from './lib/translate';
 import { Client1688, type Tokens } from './lib/api1688';
 import { runServerJobs } from './lib/crawl';
 import { settleLinkRequests } from './lib/link-requests';
+import { metaSettings, metaHead } from './lib/meta';
+import feeds from './routes/feeds';
 
 const app = new Hono<Env>();
 
@@ -43,9 +45,16 @@ const toLatin = (ch: string) => {
 app.use('*', async (c, next) => {
   await next();
   if (!(c.res.headers.get('content-type') ?? '').includes('text/html')) return;
-  const html = await c.res.text();
+  let html = await c.res.text();
   AR_DIGITS.lastIndex = 0;
-  c.res = new Response(AR_DIGITS.test(html) ? html.replace(AR_DIGITS, toLatin) : html, { status: c.res.status, headers: c.res.headers });
+  if (AR_DIGITS.test(html)) html = html.replace(AR_DIGITS, toLatin);
+  // بكسل ميتا ووسم إثبات النطاق في صفحات الزبونة وحدها — لا اللوحة ولا لوحة الشحن ولا أجزاء HTML
+  const path = new URL(c.req.url).pathname;
+  if (!/^\/(admin|partner|api)(\/|$)/.test(path) && html.includes('</head>')) {
+    const head = metaHead(await metaSettings(c.env.DB));
+    if (head) html = html.replace('</head>', head + '</head>');
+  }
+  c.res = new Response(html, { status: c.res.status, headers: c.res.headers });
 });
 
 app.use('*', async (c, next) => {
@@ -67,6 +76,7 @@ app.route('/', pay);
 app.route('/partner', partner);
 app.route('/pages', pages);
 app.route('/request', request);
+app.route('/feeds', feeds);
 app.route('/', auth);
 app.route('/', store);
 

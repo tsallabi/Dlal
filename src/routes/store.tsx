@@ -578,7 +578,7 @@ store.get('/p/:slug', async (c) => {
             </form>
           ) : null}
           {!p.in_stock && <Flash type="err" msg="هذا المنتج غير متوفر حاليًا عند المورد. أضيفيه للمفضلة وسنخبرك عند توفره." />}
-          <form method="post" action="/cart/add" id="addForm">
+          <form method="post" action="/cart/add" id="addForm" data-px-pid={String(p.id)} data-px-value={String(shown)}>
             <input type="hidden" name="product_id" value={p.id} />
             <input type="hidden" name="variant_id" id="variantId" value="" />
             {colors.length > 0 && (
@@ -1051,6 +1051,8 @@ store.get('/orders/:code', async (c) => {
       <Flash msg={c.req.query('new') ? '🎉 تم استلام طلبك! أكملي الدفع بالطريقة المختارة ليبدأ الشراء.' : c.req.query('paid') ? '✅ تم الدفع بنجاح! بدأ فريقنا في الصين شراء منتجاتك.' : undefined} />
       <Flash type="err" msg={c.req.query('pay') === 'cancelled' ? 'أُلغيت عملية الدفع. يمكنك المحاولة مرة أخرى.' : c.req.query('pay') === 'failed' ? 'فشلت عملية الدفع. تحققي من الرصيد وحاولي مجددًا أو اختاري طريقة أخرى.' : c.req.query('err') === 'cancel' ? 'لا يمكن إلغاء الطلب بعد الدفع — افتحي تذكرة إلغاء.' : undefined} />
       <div class="crumbs"><a href="/account">حسابي</a> › <a href="/account/orders">طلباتي</a> › {o.code}</div>
+      {/* حدث الشراء لبكسل ميتا (public/app.js يرسله مرة واحدة لكل طلب) */}
+      {paid && <i hidden data-px-purchase={o.code} data-px-value={String(o.total_lyd)} data-px-ids={items.results.map((x: any) => x.product_id).join(',')}></i>}
       <div class="sec-h"><h2>الطلب {o.code}</h2><span class={`status ${ORDER_STATUS[o.status]?.color}`}>{ORDER_STATUS[o.status]?.ar}</span></div>
       <p style="margin:-6px 0 14px;font-size:13.5px;color:var(--ink-2)">
         {o.ship_method === 'sea' ? '🚢 شحن بحري' : '✈️ شحن جوي'} · مدة الوصول المتوقعة <b>{o.ship_method === 'sea' ? (s.sea_days || '30 — 45 يومًا') : (s.air_days || '12 — 18 يومًا')}</b>

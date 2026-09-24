@@ -302,3 +302,26 @@ document.addEventListener('click', e => {
   dr.querySelectorAll('[data-drawer-close]').forEach(b => b.addEventListener('click', close));
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && !dr.hidden) close(); });
 })();
+
+// ---------- أحداث بكسل ميتا (يُحقن البكسل في الصفحة متى ضُبط معرّفه في /admin/pricing؛ وإلا لا شيء هنا) ----------
+(function () {
+  if (typeof window.fbq !== 'function') return;
+  const cur = { currency: 'LYD' };
+  const add = document.getElementById('addForm');
+  if (add && add.dataset.pxPid) {
+    const d = { content_ids: [add.dataset.pxPid], content_type: 'product', value: parseFloat(add.dataset.pxValue) || 0, ...cur };
+    fbq('track', 'ViewContent', d);
+    add.addEventListener('submit', () => { const q = parseInt((add.querySelector('[name=qty]') || {}).value, 10) || 1; fbq('track', 'AddToCart', { ...d, value: d.value * q }); });
+  }
+  if (location.pathname === '/checkout') fbq('track', 'InitiateCheckout', cur);
+  const buy = document.querySelector('[data-px-purchase]');
+  if (buy) {
+    // مرة واحدة لكل طلب: الزبونة تعود لصفحة طلبها مرات، والشراء يُعدّ مرة
+    const k = 'px-bought-' + buy.dataset.pxPurchase;
+    let seen = false; try { seen = !!localStorage.getItem(k); } catch (e) {}
+    if (!seen) {
+      fbq('track', 'Purchase', { value: parseFloat(buy.dataset.pxValue) || 0, content_ids: (buy.dataset.pxIds || '').split(',').filter(Boolean), content_type: 'product', ...cur });
+      try { localStorage.setItem(k, '1'); } catch (e) {}
+    }
+  }
+})();
