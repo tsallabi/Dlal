@@ -1761,6 +1761,47 @@ try {
   await page.locator('form:has(input[name=air_days]) button', { hasText: 'حفظ' }).first().click(); await page.waitForLoadState('networkidle');
   expect((await page.locator('input[name=air_days]').inputValue()) === airBefore, `أُعيدت مدة الشحن كما كانت (${airBefore})`);
 }
+// ---------- روابط التواصل الحقيقية (٢٤/٠٩/٢٦) ----------
+// جولة دراسة المنافس على موقعنا كشفت أن التذييل يحمل wa.me/218000000000 وfacebook.com الفارغ، وأن
+// الرئيسية وصفحة الطلب تعرضان واتساب البذرة 218910000000 — رقم لا يملكه أحد، ورسالة زبونة إليه تضيع.
+await login(page, '0910000000', 'admin123');
+await page.goto(BASE + '/admin/pricing');
+const waBefore = await page.locator('input[name=whatsapp_number]').inputValue();
+const fbBefore = await page.locator('input[name=facebook_url]').inputValue();
+try {
+  await page.fill('input[name=whatsapp_number]', ''); await page.fill('input[name=facebook_url]', '');
+  await page.locator('form:has(input[name=air_days]) button', { hasText: 'حفظ' }).first().click(); await page.waitForLoadState('networkidle');
+  expect(await page.locator('.wa-missing').isVisible(), 'اللوحة تنبّه: لا رقم واتساب حقيقي مضبوط');
+  await page.goto(BASE + '/');
+  expect(!(await has(page, '218910000000')) && !(await has(page, '218000000000')), 'الرئيسية لا تعرض رقم واتساب وهميًا');
+  expect(await page.locator('.ftr-social a[aria-label=واتساب]').getAttribute('href') === '/pages/go/whatsapp', 'أيقونة واتساب في التذييل تمرّ بالخادم');
+  await page.locator('.ftr-social a[aria-label=واتساب]').evaluate(a => a.removeAttribute('target'));
+  await page.click('.ftr-social a[aria-label=واتساب]'); await page.waitForLoadState('domcontentloaded');
+  expect(page.url().endsWith('/pages/contact'), `بلا رقم مضبوط تفتح صفحة خدمة الزبائن لا رقمًا وهميًا (${page.url().replace(BASE, '')})`);
+  expect(!(await has(page, '91 000 0000')), 'صفحة خدمة الزبائن بلا الرقم الوهمي');
+  // صاحب المشروع يكتب رقمه بمسافات وعلامة + كما يكتبه الناس
+  await page.goto(BASE + '/admin/pricing');
+  await page.fill('input[name=whatsapp_number]', '+218 92 345 6789'); await page.fill('input[name=facebook_url]', 'https://facebook.com/hudhude.ly');
+  await page.locator('form:has(input[name=air_days]) button', { hasText: 'حفظ' }).first().click(); await page.waitForLoadState('networkidle');
+  expect((await page.locator('input[name=whatsapp_number]').inputValue()) === '218923456789', `الرقم يُحفظ ويُعرض أرقامًا فقط (${await page.locator('input[name=whatsapp_number]').inputValue()})`);
+  await page.goto(BASE + '/');
+  expect(await has(page, '+218923456789'), 'الرئيسية تعرض رقم الواتساب الحقيقي');
+  const goWa = await page.request.get(BASE + '/pages/go/whatsapp', { maxRedirects: 0 });
+  expect(goWa.status() === 302 && goWa.headers().location === 'https://wa.me/218923456789', `أيقونة واتساب تفتح wa.me بالرقم الحقيقي (${goWa.headers().location})`);
+  const goFb = await page.request.get(BASE + '/pages/go/facebook', { maxRedirects: 0 });
+  expect(goFb.headers().location === 'https://facebook.com/hudhude.ly', `أيقونة فيسبوك تفتح صفحة المتجر (${goFb.headers().location})`);
+  const goIg = await page.request.get(BASE + '/pages/go/instagram', { maxRedirects: 0 });
+  expect(goIg.headers().location === '/pages/contact', 'إنستغرام غير مضبوط ⟵ صفحة خدمة الزبائن');
+  await page.goto(BASE + '/pages/contact');
+  expect(await page.locator('a[href="https://wa.me/218923456789"]').count() > 0, 'صفحة خدمة الزبائن تعرض الرقم الحقيقي رابطًا');
+  await page.goto(BASE + '/pages/shipping');
+  expect(!(await has(page, '8 — 14')) && !(await has(page, '25 — 40')), 'صفحة الشحن لا تناقض المدة الإجمالية بأرقام أخرى');
+} finally {
+  await page.goto(BASE + '/admin/pricing');
+  await page.fill('input[name=whatsapp_number]', waBefore); await page.fill('input[name=facebook_url]', fbBefore);
+  await page.locator('form:has(input[name=air_days]) button', { hasText: 'حفظ' }).first().click(); await page.waitForLoadState('networkidle');
+  expect((await page.locator('input[name=whatsapp_number]').inputValue()) === waBefore, `أُعيد رقم الواتساب كما كان («${waBefore}»)`);
+}
 await page.goto(BASE + '/logout');
 
 // ---------- جوال ----------

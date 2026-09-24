@@ -6,7 +6,7 @@ import { ORDER_STATUS, PAYMENT_METHODS, CITIES } from '../types';
 import { Layout, Flash } from '../views/layout';
 import { Grid, ProductCard } from '../views/product-card';
 import { Stars } from '../views/account';
-import { getCategories, PRODUCT_SELECT, fmt, imgUrl, orderCode, timeAgo, notify } from '../lib/db';
+import { getCategories, PRODUCT_SELECT, fmt, imgUrl, orderCode, timeAgo, notify, realWa } from '../lib/db';
 import type { ProductRow } from '../lib/db';
 import { KIND_NOTE, type ListingKind } from '../lib/source';
 import { loadSettings, computePrice, shipRates, seaOn } from '../lib/pricing';
@@ -148,7 +148,9 @@ store.get('/', async (c) => {
         <div><b>🏭 مباشرة من مصانع الصين</b><span>نشتري بأسعار الجملة ونبيع بالقطعة.</span></div>
         <div><b>🔢 {stats?.p ?? 0} منتج</b><span>يزداد كل يوم بمنتجات جديدة.</span></div>
         <div><b>📦 {stats?.d ?? 0} طلب مُسلَّم</b><span>إلى كل المدن الليبية.</span></div>
-        <div><b>🤝 واتساب {s.whatsapp_number ? '+' + s.whatsapp_number : ''}</b><span>فريق دعم يرد خلال ساعات العمل.</span></div>
+        {realWa(s.whatsapp_number)
+          ? <div><b>🤝 واتساب <a href={`https://wa.me/${realWa(s.whatsapp_number)}`} dir="ltr">+{realWa(s.whatsapp_number)}</a></b><span>فريق دعم يرد خلال ساعات العمل.</span></div>
+          : <div><b>💬 دعم مباشر</b><span>زر «تواصلي معنا» أسفل كل صفحة — يرد فريقنا خلال ساعات العمل.</span></div>}
       </section>
     </Layout>,
   );
@@ -1066,7 +1068,9 @@ store.get('/orders/:code', async (c) => {
               ) : (
                 <>
                   <p style="font-size:13px;color:#666">{pm?.desc}</p>
-                  <p style="font-size:13px">واتساب التأكيد: <a href={`https://wa.me/${s.whatsapp_number}?text=${encodeURIComponent(`طلب ${o.code} — المبلغ ${o.total_lyd} د.ل`)}`} style="color:var(--brand);direction:ltr">+{s.whatsapp_number}</a></p>
+                  {realWa(s.whatsapp_number)
+                    ? <p style="font-size:13px">واتساب التأكيد: <a href={`https://wa.me/${realWa(s.whatsapp_number)}?text=${encodeURIComponent(`طلب ${o.code} — المبلغ ${o.total_lyd} د.ل`)}`} style="color:var(--brand);direction:ltr">+{realWa(s.whatsapp_number)}</a></p>
+                    : <p style="font-size:13px">أرسلي إيصال التحويل من زر <b>«راسلينا عن هذا الطلب»</b> أدناه — تصلنا الرسالة مربوطة برقم طلبك.</p>}
                 </>
               )}
               <form method="post" action={`/account/orders/${o.code}/cancel`} style="margin-top:10px" onsubmit="return confirm('إلغاء الطلب؟')"><button class="btn sm ghost" style="color:#d3262b">إلغاء الطلب</button></form>
@@ -1092,27 +1096,11 @@ store.get('/orders/:code', async (c) => {
         <div>
           <div class="summary"><div class="row"><span>المنتجات</span><span>{fmt(o.subtotal_lyd)}</span></div>{o.discount_lyd > 0 && <div class="row" style="color:#1a9c5b"><span>خصم {o.coupon_code}</span><span>−{fmt(o.discount_lyd)}</span></div>}{o.points_used > 0 && <div class="row" style="color:#1a9c5b"><span>نقاط ({o.points_used})</span><span>−{fmt(o.points_lyd)}</span></div>}<div class="row"><span>التوصيل</span><span>{o.shipping_lyd ? fmt(o.shipping_lyd) : 'مجاني'}</span></div><div class="row tot"><span>الإجمالي</span><span>{fmt(o.total_lyd)}</span></div>{o.points_earned > 0 && <div class="row" style="color:var(--brand)"><span>نقاط مكتسبة</span><span>+{o.points_earned} ⭐</span></div>}</div>
           <div class="card-box" style="margin-top:14px"><h3>التوصيل إلى</h3><div style="font-size:14px">{o.ship_name}<br />{o.ship_phone}<br />{o.ship_city} — {o.ship_address}</div></div>
-          <div class="card-box"><h3>تحتاجين مساعدة؟</h3><button type="button" class="btn sm brand" data-chat-order={o.code} style="margin-bottom:8px">💬 راسلينا عن هذا الطلب</button> <a class="btn sm ghost" href={`/account/tickets/new?order=${o.code}&type=question`}>افتحي تذكرة</a> <a class="btn sm ghost" href={`https://wa.me/${s.whatsapp_number}`}>واتساب</a></div>
+          <div class="card-box"><h3>تحتاجين مساعدة؟</h3><button type="button" class="btn sm brand" data-chat-order={o.code} style="margin-bottom:8px">💬 راسلينا عن هذا الطلب</button> <a class="btn sm ghost" href={`/account/tickets/new?order=${o.code}&type=question`}>افتحي تذكرة</a> {realWa(s.whatsapp_number) && <a class="btn sm ghost" href={`https://wa.me/${realWa(s.whatsapp_number)}`}>واتساب</a>}</div>
         </div>
       </div>
     </Layout>,
   );
-});
-
-// ---------- صفحات ثابتة ----------
-const PAGES: Record<string, [string, string]> = {
-  how: ['كيف نعمل؟', '1) تختارين المنتج وتدفعين بالدينار (بطاقة، سداد، إدفعلي، موبي كاش أو تحويل).\n2) فريقنا في الصين يشتريه من المورد خلال 48 ساعة.\n3) يصل إلى مخزننا في الصين، نفحصه ونصوّره لك.\n4) يُشحن جوًّا مع طلبات أخرى إلى ليبيا.\n5) يُخلّص جمركيًا ويُوصَّل إلى بابك.\nالمدة الإجمالية 15–25 يومًا. تتابعين كل مرحلة من صفحة الطلب وتصلك إشعارات.'],
-  shipping: ['الشحن والتوصيل', 'السعر المعروض شامل الشحن الدولي والجمارك. التوصيل داخل المدن الرئيسية 15 د.ل ومجاني للطلبات فوق 500 د.ل. المدة 15–25 يومًا من تأكيد الدفع. المندوب يتصل بك قبل التسليم.'],
-  returns: ['سياسة الإرجاع والتعويض', 'لا يمكن إرجاع البضاعة إلى الصين. لذلك نفحص كل قطعة ونصوّرها قبل الشحن.\n\n• منتج تالف أو مختلف جوهريًا عن الوصف: تعويض كامل (استرجاع للمحفظة أو نقاط أو بديل) — افتحي تذكرة خلال 7 أيام من التسليم مع صورة.\n• منتج نفد عند المورد: تُعاد قيمته كاملة تلقائيًا.\n• المقاسات مسؤولية الزبونة — راجعي دليل المقاسات ورأي الزبونات في المقاس على صفحة المنتج.\n• إلغاء الطلب مجاني قبل الدفع، وبعد الدفع وقبل الشراء عبر تذكرة إلغاء.'],
-  contact: ['تواصل معنا', 'واتساب: +218 91 000 0000\nبريد: hello@hudhude.com\nساعات العمل: السبت–الخميس 10ص–8م\nأو افتحي تذكرة من حسابك ويرد فريق الدعم خلال 24 ساعة.'],
-  faq: ['الأسئلة الشائعة', 'هل السعر نهائي؟ نعم، شامل الشحن والجمارك، تدفعين التوصيل المحلي فقط.\n\nكيف أدفع؟ بطاقة مصرفية محلية عبر معاملات، سداد، إدفعلي، موبي كاش (فوري عبر ماي باي)، أو تحويل مصرفي، أو عربون 30%.\n\nمتى يصل طلبي؟ 15–25 يومًا من تأكيد الدفع.\n\nماذا لو نفد المنتج؟ يُخبرك فريقنا فورًا وتختارين بديلًا أو استرجاعًا كاملًا.\n\nكيف أكسب النقاط؟ نقطة لكل دينار عند التسليم، ونقاط إضافية للتقييمات. كل 100 نقطة = دينار.\n\nهل أستطيع الإلغاء؟ نعم قبل الدفع مباشرة، وبعده عبر تذكرة قبل بدء الشراء.'],
-  terms: ['الشروط والأحكام', 'بإتمام الطلب توافقين على: أن هدهدي وكيل شراء يشتري المنتج نيابة عنك من المورد؛ أن الصور والمواصفات من المورد وقد تختلف الألوان قليلًا؛ أن مدة التوصيل تقديرية؛ أن الطلب يبدأ شراؤه بعد تأكيد الدفع؛ وأن سياسة الإرجاع والتعويض المنشورة هي المرجع لأي خلاف.'],
-  privacy: ['الخصوصية', 'نستخدم رقم هاتفك وعنوانك لتنفيذ الطلب والتواصل بشأنه فقط. بيانات الدفع تُعالج لدى بوابة ماي باي ولا نخزّن أرقام البطاقات. لا نبيع بياناتك لأي طرف.'],
-};
-store.get('/pages/:key', async (c) => {
-  const pg = PAGES[c.req.param('key')]; if (!pg) return c.notFound();
-  const b = await base(c);
-  return c.html(<Layout {...b} title={pg[0]}><div class="form" style="max-width:720px"><h1>{pg[0]}</h1><p style="white-space:pre-line;font-size:15px;line-height:1.9">{pg[1]}</p></div></Layout>);
 });
 
 export default store;

@@ -40,6 +40,18 @@ export function latinDigits(v: string) {
     .replace(/\u066B/g, '.').replace(/\u066C/g, ',').replace(/\u066A/g, '%');
 }
 
+// رقم واتساب حقيقي أو فارغ. البذرة وضعت 218910000000 فظهر للزبونة رقم لا يملكه أحد في الرئيسية
+// وفي صفحة الطلب («واتساب التأكيد» لمن تدفع بالتحويل) — رسالة إليه تضيع (٢٤/٠٩/٢٦)
+export function realWa(n?: string | null) {
+  const d = latinDigits(String(n ?? '')).replace(/\D/g, '').replace(/^00/, '');
+  return d.length >= 11 && d.length <= 15 && !/0{6,}/.test(d) ? d : '';
+}
+// رابط صفحة تواصل اجتماعي حقيقي (لا «facebook.com» الفارغ الذي كان في التذييل)
+export function realSocial(u?: string | null) {
+  const v = String(u ?? '').trim();
+  return /^https:\/\/(www\.|m\.)?(facebook|instagram|tiktok)\.com\/[^\s/?#]{2,}/i.test(v) ? v : '';
+}
+
 export function fmt(v: number) {
   return new Intl.NumberFormat('en-US', { maximumFractionDigits: v % 1 ? 2 : 0 }).format(v) + ' د.ل';
 }

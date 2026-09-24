@@ -4,7 +4,7 @@ import type { Env } from '../types';
 import { ORDER_STATUS, PAYMENT_METHODS } from '../types';
 import { AdminShell } from '../views/dash';
 import { Flash } from '../views/layout';
-import { getCategories, PRODUCT_SELECT, fmt, imgUrl, timeAgo, latinDigits } from '../lib/db';
+import { getCategories, PRODUCT_SELECT, fmt, imgUrl, timeAgo, latinDigits, realWa } from '../lib/db';
 import type { ProductRow } from '../lib/db';
 import { classifyModesty } from '../lib/modesty';
 import { fingerprint, sameProduct } from '../lib/dedupe';
@@ -630,6 +630,13 @@ admin.get('/pricing', async (c) => {
         <label>أجرة التوصيل لكل مدينة (اختياري)</label>
         <textarea name="delivery_city_rates" rows={5} dir="rtl" style="width:100%;font-family:inherit">{s.delivery_city_rates ?? ''}</textarea>
         <p style="font-size:12px;color:#666;margin:4px 0 0">سطر لكل مدينة بالصيغة <span class="mono">المدينة = المبلغ</span>. المدينة غير المذكورة تأخذ الرسوم العامة أعلاه. التوصيل إلى سبها أو الكفرة يكلّف أضعاف طرابلس، فاضبطي الفرق هنا.<br />مثال:<br /><span class="mono" dir="rtl">طرابلس = 15</span><br /><span class="mono" dir="rtl">سبها = 45</span></p>
+        <h3 style="margin-top:16px" id="contact">بيانات التواصل الظاهرة للزبونة</h3>
+        <p style="font-size:13px;color:#666">تظهر في الرئيسية وصفحة خدمة الزبائن وصفحة الطلب وأيقونات التذييل. ما يبقى فارغًا لا يظهر للزبونة (الأيقونة تفتح صفحة خدمة الزبائن بدله).</p>
+        {(() => { const wa = realWa(s.whatsapp_number); return !wa && <p class="wa-missing" style="font-size:12.5px;margin:0 0 6px;padding:6px 10px;border-radius:8px;background:#fdecec;border:1px solid #f0b4b4;color:#8c2121">لا رقم واتساب حقيقي مضبوط{s.whatsapp_number ? ` (المحفوظ «${s.whatsapp_number}» رقم تجريبي)` : ''} — زبونة الدفع بالتحويل تُوجَّه للدردشة بدله.</p>; })()}
+        <label>رقم واتساب (بالمفتاح الدولي، مثل 218912345678)</label><input type="text" name="whatsapp_number" dir="ltr" inputmode="tel" value={realWa(s.whatsapp_number)} placeholder="2189XXXXXXXX" />
+        <label>صفحة فيسبوك</label><input type="url" name="facebook_url" dir="ltr" value={s.facebook_url ?? ''} placeholder="https://facebook.com/..." />
+        <label>إنستغرام</label><input type="url" name="instagram_url" dir="ltr" value={s.instagram_url ?? ''} placeholder="https://instagram.com/..." />
+        <label>تيك توك</label><input type="url" name="tiktok_url" dir="ltr" value={s.tiktok_url ?? ''} placeholder="https://tiktok.com/@..." />
         <button class="btn" style="margin-top:12px">حفظ</button>
       </form>
       <div>
@@ -666,7 +673,7 @@ admin.get('/pricing', async (c) => {
 });
 admin.post('/pricing', async (c) => {
   const f = await c.req.parseBody();
-  const keys = ['fx_cny_lyd', 'fx_usd_lyd', 'markup_percent', 'safety_percent', 'ship_usd_per_kg', 'customs_percent', 'domestic_cn_ship_cny', 'delivery_lyd', 'free_ship_over_lyd', 'ship_mode', 'ship_usd_per_cbm', 'volumetric_divisor', 'default_volume_cm3', 'sea_enabled', 'ship_usd_per_kg_sea', 'ship_usd_per_cbm_sea', 'air_days', 'sea_days', 'delivery_city_rates', 'retail_max_moq'];
+  const keys = ['fx_cny_lyd', 'fx_usd_lyd', 'markup_percent', 'safety_percent', 'ship_usd_per_kg', 'customs_percent', 'domestic_cn_ship_cny', 'delivery_lyd', 'free_ship_over_lyd', 'ship_mode', 'ship_usd_per_cbm', 'volumetric_divisor', 'default_volume_cm3', 'sea_enabled', 'ship_usd_per_kg_sea', 'ship_usd_per_cbm_sea', 'air_days', 'sea_days', 'delivery_city_rates', 'retail_max_moq', 'whatsapp_number', 'facebook_url', 'instagram_url', 'tiktok_url'];
   await c.env.DB.batch(keys.filter(k => f[k] !== undefined).map(k => c.env.DB.prepare("INSERT INTO settings(key,value,updated_at) VALUES(?,?,datetime('now')) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at").bind(k, latinDigits(String(f[k])))));
   return c.redirect('/admin/pricing?ok=1');
 });

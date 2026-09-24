@@ -118,10 +118,11 @@ export const Layout: FC<Props> = ({ title, user, cartCount = 0, wishCount = 0, c
           <div class="ftr-col">
             <h5>تابعينا</h5>
             <div class="ftr-social">
-              <a href="https://facebook.com" target="_blank" rel="noopener" aria-label="فيسبوك">f</a>
-              <a href="https://instagram.com" target="_blank" rel="noopener" aria-label="إنستغرام">◎</a>
-              <a href="https://wa.me/218000000000" target="_blank" rel="noopener" aria-label="واتساب">✆</a>
-              <a href="https://tiktok.com" target="_blank" rel="noopener" aria-label="تيك توك">♪</a>
+              {/* الروابط تمرّ بالخادم: يقرأ الحساب الحقيقي من الإعدادات، وبلا حساب يفتح صفحة التواصل بدل صفحة فارغة */}
+              <a href="/pages/go/facebook" target="_blank" rel="noopener" aria-label="فيسبوك">f</a>
+              <a href="/pages/go/instagram" target="_blank" rel="noopener" aria-label="إنستغرام">◎</a>
+              <a href="/pages/go/whatsapp" target="_blank" rel="noopener" aria-label="واتساب">✆</a>
+              <a href="/pages/go/tiktok" target="_blank" rel="noopener" aria-label="تيك توك">♪</a>
             </div>
             <div class="ftr-news">
               <h5>وصلك كل جديد وعروضنا</h5>

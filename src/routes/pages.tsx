@@ -4,7 +4,7 @@ import type { Context } from 'hono';
 import type { Env } from '../types';
 import { Layout } from '../views/layout';
 import { Doc, Step, Faq } from '../views/pages';
-import { getCategories, fmt } from '../lib/db';
+import { getCategories, fmt, realWa, realSocial } from '../lib/db';
 import { loadSettings } from '../lib/pricing';
 
 const pages = new Hono<Env>();
@@ -76,13 +76,13 @@ pages.get('/shipping', async (c) => {
           <tr><th>المرحلة</th><th>المدة المتوقعة</th><th>التكلفة</th></tr>
           <tr><td>الشراء من المورد في الصين</td><td>يوم إلى يومان بعد الدفع</td><td><b>مشمولة في السعر</b></td></tr>
           <tr><td>الفحص والتصوير في مخزننا بالصين</td><td>يوم إلى ثلاثة أيام</td><td><b>مجانية</b></td></tr>
-          <tr><td>الشحن إلى ليبيا</td><td>جوًّا 8 — 14 يومًا · بحرًا 25 — 40 يومًا</td><td><b>مشمولة في السعر</b></td></tr>
+          <tr><td>الشحن إلى ليبيا</td><td>جوًّا أو بحرًا حسب اختيارك — داخل المدة الإجمالية أدناه</td><td><b>مشمولة في السعر</b></td></tr>
           <tr><td>التخليص الجمركي</td><td>يومان إلى أربعة</td><td><b>مشمولة في السعر</b></td></tr>
           <tr><td>التوصيل داخل ليبيا</td><td>يوم إلى ثلاثة أيام</td><td>{fmt(delivery)} — <b class="mark">مجاني للطلبات فوق {fmt(free)}</b></td></tr>
           <tr><td><b>الإجمالي من الدفع إلى بابك</b></td><td><b>جوًّا {s.air_days || '12 — 18 يومًا'} · بحرًا {s.sea_days || '30 — 45 يومًا'}</b></td><td>—</td></tr>
         </table>
         <h2>ماذا يعني «سعر نهائي»؟</h2>
-        <p>السعر الظاهر على كل منتج يشمل: ثمن البضاعة، والشحن داخل الصين إلى مخزننا، والشحن الجوي إلى ليبيا، والرسوم الجمركية. لا توجد مفاجآت عند الاستلام — الشيء الوحيد الذي يُضاف هو التوصيل داخل ليبيا، ويظهر لك في ملخص الطلب قبل الدفع.</p>
+        <p>السعر الظاهر على كل منتج يشمل: ثمن البضاعة، والشحن داخل الصين إلى مخزننا، والشحن الدولي إلى ليبيا (جوًّا أو بحرًا حسب اختيارك)، والرسوم الجمركية. لا توجد مفاجآت عند الاستلام — الشيء الوحيد الذي يُضاف هو التوصيل داخل ليبيا، ويظهر لك في ملخص الطلب قبل الدفع.</p>
         <h2>أين نوصّل؟</h2>
         <p>نوصّل إلى كل المدن الليبية. المندوب يتصل بك على الرقم المسجّل قبل التسليم بوقت كافٍ. إن لم يصلك اتصال خلال 3 أيام من وصول الطلب إلى ليبيا، راسلينا فورًا من زر الدردشة.</p>
         <div class="note">
@@ -305,7 +305,16 @@ pages.get('/faq', async (c) => c.html(
 ));
 
 // ---------- خدمة الزبائن ----------
-pages.get('/contact', async (c) => c.html(
+// روابط التواصل في التذييل: الحساب الحقيقي من الإعدادات (/admin/pricing ← بيانات التواصل)،
+// وما لم يُضبط يفتح صفحة خدمة الزبائن بدل صفحة فيسبوك فارغة أو رقم واتساب وهمي
+pages.get('/go/:net', async (c) => {
+  const s = await loadSettings(c.env.DB); const net = c.req.param('net');
+  const url = net === 'whatsapp' ? (realWa(s.whatsapp_number) ? `https://wa.me/${realWa(s.whatsapp_number)}` : '')
+    : ['facebook', 'instagram', 'tiktok'].includes(net) ? realSocial((s as any)[`${net}_url`]) : '';
+  return c.redirect(url || '/pages/contact', 302);
+});
+
+pages.get('/contact', async (c) => { const wa = realWa((await loadSettings(c.env.DB)).whatsapp_number); return c.html(
   <Layout {...await base(c)} title="خدمة الزبائن">
     <Doc title="خدمة الزبائن" sub="نحن هنا — اختاري ما تحتاجينه." active="/pages/contact">
       <div class="svc-grid">
@@ -324,7 +333,7 @@ pages.get('/contact', async (c) => c.html(
       <table>
         <tr><th>القناة</th><th>التفاصيل</th><th>وقت الرد</th></tr>
         <tr><td><b>الدردشة المباشرة</b></td><td>زر «تواصلي معنا» أسفل أي صفحة</td><td>خلال ساعات العمل</td></tr>
-        <tr><td>واتساب</td><td dir="ltr">+218 91 000 0000</td><td>خلال ساعات العمل</td></tr>
+        {wa && <tr><td>واتساب</td><td dir="ltr"><a href={`https://wa.me/${wa}`} style="color:var(--brand)">+{wa}</a></td><td>خلال ساعات العمل</td></tr>}
         <tr><td>تذكرة دعم</td><td><a href="/account/tickets/new" style="color:var(--brand)">افتحي تذكرة</a></td><td>خلال 24 ساعة</td></tr>
         <tr><td>البريد</td><td dir="ltr">hello@hudhude.com</td><td>خلال 24 ساعة</td></tr>
       </table>
@@ -333,7 +342,7 @@ pages.get('/contact', async (c) => c.html(
       <p>أغلب الأسئلة لها إجابة جاهزة في <a href="/pages/faq" style="color:var(--brand);font-weight:700">الأسئلة الشائعة</a>. وإن كان سؤالك عن طلب محدّد، افتحي صفحة الطلب واضغطي «راسلينا عن هذا الطلب» — تصلنا المحادثة مربوطة برقم طلبك فيكون الرد أسرع.</p>
     </Doc>
   </Layout>,
-));
+); });
 
 // ---------- كيف نعمل ----------
 pages.get('/how', async (c) => c.html(
