@@ -387,7 +387,7 @@ export function enOk(src: string, out: string): boolean {
 // تشترك مع مقاسات حقيقية فتفسدها. ذاكرة الترجمة الفاشلة تُحذف.
 async function revertBadEnglish(db: D1Database): Promise<number> {
   // وما ترجمه النموذج الصغير بالتعليمة الصينية قبل SYS_ATTR_EN («Black A-line skirt» ⟵ «تنجيد أسود») يُعاد مرة واحدة
-  const { results } = await db.prepare("SELECT src,dst,created_at<'2026-09-24 13:15:00' old FROM translations WHERE kind='attr' AND src GLOB '*[A-Za-z][A-Za-z][A-Za-z]*' AND src NOT GLOB '*[一-龥]*' LIMIT 500").all<{ src: string; dst: string; old: number }>();
+  const { results } = await db.prepare("SELECT src,dst,created_at<'2026-09-24 13:15:00' old FROM translations WHERE kind='attr' AND src GLOB '*[A-Za-z][A-Za-z][A-Za-z]*' AND src NOT GLOB '*[一-龥]*' LIMIT 5000").all<{ src: string; dst: string; old: number }>();
   let n = 0;
   for (const { src, dst, old } of results) {
     if (!needsEnTr(src)) continue;
