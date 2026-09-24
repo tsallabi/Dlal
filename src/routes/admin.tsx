@@ -17,7 +17,7 @@ import { settleLinkRequests, LINK_SOURCES, LINK_STATUS } from '../lib/link-reque
 import { validPixel, validVerify, bustMetaCache } from '../lib/meta';
 import { setOrderStatus, markOrderPaid } from '../lib/orders';
 import { RATE_KEYS, RATE_AR, PP_KEY, syncPricingPartner, pricingPartnerId, attemptDispatch } from '../lib/partner';
-import { Translator, hasCJK, goodTitle, retranslatePending, releaseHeldDrafts, BROKEN_SQL } from '../lib/translate';
+import { Translator, hasCJK, hasArabic, enTitle, goodTitle, retranslatePending, releaseHeldDrafts, BROKEN_SQL } from '../lib/translate';
 
 const admin = new Hono<Env>();
 admin.use('*', requireRole('admin'));
@@ -270,7 +270,7 @@ export async function importProducts(db: D1Database, arr: any[], categoryId: num
     if (seen.has(offerId)) { skipped++; continue; }
     seen.add(offerId);
     let titleAr: string = it.titleAr ?? it.title_ar ?? it.title ?? 'منتج';
-    if (hasCJK(titleAr)) titleAr = (await tr.t(titleAr, 'title', it.titleEn)) ?? titleAr;
+    if (hasCJK(titleAr) || enTitle(titleAr)) titleAr = (await tr.t(titleAr, 'title', it.titleEn)) ?? titleAr;
     const supplierAr = it.supplier ? ((await tr.t(String(it.supplier))) ?? it.supplier) : null;
     if (Array.isArray(it.variants)) it.variants = await trVariants(it.variants);
     // حشمة: ملابس النوم والداخلية تُنقل إلى قسمها مهما كانت كلمة البحث، ولا تظهر على الرئيسية
@@ -313,7 +313,7 @@ export async function importProducts(db: D1Database, arr: any[], categoryId: num
       }
       // كل مرور على منتج موجود محاولة إثراء تُعدّ، نجحت أو لم تنجح: بها يتقدّم الطابور ولا يدور
       const upd: string[] = ['enrich_tries=enrich_tries+1']; const binds: any[] = [];
-      if ((hasCJK(cur?.title_ar) || !goodTitle(cur?.title_ar)) && !hasCJK(titleAr) && titleAr !== cur?.title_ar && (goodTitle(titleAr) || hasCJK(cur?.title_ar))) { got = true; upd.push('title_ar=?'); binds.push(titleAr.slice(0, 200)); upd.push("status=CASE WHEN status='draft' THEN 'active' ELSE status END"); }
+      if ((hasCJK(cur?.title_ar) || !goodTitle(cur?.title_ar)) && !hasCJK(titleAr) && titleAr !== cur?.title_ar && (goodTitle(titleAr) || hasCJK(cur?.title_ar))) { got = true; upd.push('title_ar=?'); binds.push(titleAr.slice(0, 200)); if (hasArabic(titleAr)) upd.push("status=CASE WHEN status='draft' THEN 'active' ELSE status END"); }
       // الإثراء يكتشف الحد الأدنى الحقيقي بعد أن يكون المنتج على الرف. رفعُه وحده لا يكفي:
       // منتج نشط صار حدّه الأدنى قطعتين يُجبر الزبونة، فيجب أن يُخفى في الجملة نفسها.
       // (سُرِّب منتج واحد بهذا الطريق بعد ترحيل 0023 — العطل يعود من باب الإثراء لا الاستيراد.)
@@ -347,7 +347,7 @@ export async function importProducts(db: D1Database, arr: any[], categoryId: num
        VALUES('1688',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL,?,?,?,?,?)`,
     ).bind(offerId, it.url ?? `https://detail.1688.com/offer/${offerId}.html`, slug, titleAr, it.title ?? null, it.descriptionAr ?? null,
       targetCat, price, pr.total_lyd, Math.random() < 0.4 ? Math.ceil(pr.total_lyd * 1.25 / 5) * 5 : null, prSea.total_lyd, it.weightG ?? null, it.volumeCm3 ?? null,
-      moq, it.inStock === false ? 0 : 1, notRetail(it.title, moq, maxRetail) ? 'hidden' : hasCJK(titleAr) ? 'draft' : 'active', supplierAr, parseInt(it.sales ?? 0) || 0, 0, homeOk, fp || null, kindOf(it.title)).run();
+      moq, it.inStock === false ? 0 : 1, notRetail(it.title, moq, maxRetail) ? 'hidden' : hasCJK(titleAr) || !hasArabic(titleAr) ? 'draft' : 'active', supplierAr, parseInt(it.sales ?? 0) || 0, 0, homeOk, fp || null, kindOf(it.title)).run();
     const pid = ins.meta.last_row_id as number;
     if (!pid || !ins.meta.changes) { skipped++; continue; }   // تجاهل صفّ لم يُدرج (تعارض مع استيراد متزامن)
     const stmts: D1PreparedStatement[] = [];

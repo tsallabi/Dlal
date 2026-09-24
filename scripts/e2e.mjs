@@ -1718,6 +1718,14 @@ const qAfter = await extCall('/api/import/queue?v=' + extManifest.version);
 expect(!(qAfter.fresh || []).some(f => f.id === d1 || f.id === d2), 'المستورد والمتعذّر مرتين يخرجان من الطابور');
 await page.goto(BASE + '/admin/products?q=' + d1);
 expect(await has(page, `مكتشف ${liveTag}`), 'المنتج المكتشف يظهر في لوحة المنتجات');
+// الإضافة تقرأ العنوان الإنجليزي لزائر غير مسجّل (document.title). أول منتج من الجلب المجاني على الحي
+// دخل الرف نشطًا بـ«Front zipper sports bra…» (٢٤/٠٩/٢٦). العنوان الإنجليزي يُترجم، وإن تعذّر يبقى مسودة لا تراها الزبونة
+const dEn = '84' + String(Date.now()).slice(-10);
+const rEn = await extCall('/api/import', { category_id: null, page_url: 'ext:discover', items: [{ offerId: dEn, url: `https://detail.1688.com/offer/${dEn}.html`, title: 'Front zipper sports bra breathable running vest', priceCny: 11, images: [], variants: [], weightG: 100, minQty: 1, inStock: true }] });
+expect(rEn.imported === 1, `منتج بعنوان إنجليزي يُستورد (${rEn.imported})`);
+await page.goto(BASE + '/admin/products?q=' + dEn);
+const enRow = (await page.locator('table.tbl tr', { hasText: dEn }).first().textContent()) || '';
+expect(/[\u0621-\u064A]/.test(enRow.split(dEn)[0]) || /draft/.test(enRow), `العنوان الإنجليزي لا يصل الرف: يُعرَّب أو يبقى مسودة (${enRow.replace(/\s+/g, ' ').slice(0, 90)})`);
 // على الشاشة: بطاقة الاكتشاف في صفحة الزاحف، وضبط العدد في الدفعة من الزر
 await extCall('/api/crawl/discover', { from: liveOffer, ids: [d2.replace(/^82/, '83')] });
 await page.goto(BASE + '/admin/crawler');
