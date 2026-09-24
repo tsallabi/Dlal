@@ -376,6 +376,9 @@ export async function retranslatePending(db: D1Database, ai: any, limit = 40): P
 // (أول تشغيل حي أعطى «Women's black» ⟵ «S»، و«1.38inch» ⟵ «38 سم»)
 export function enOk(src: string, out: string): boolean {
   if (!/[\u0621-\u064A]/.test(out) || !colorsKept(src, out)) return false;
+  // ورمز المقاس أيضًا: «M pure cotton 210g 40-50kg» ⟵ «قمصية قطن نقي…» أسقط M (Xxl ⟵ 2XL مقبول)
+  const SZ = /(^|[\s\[(\-/])(XXS|XS|S|M|L|XL|XXL|XXXL|[2-7]XL)(?![A-Za-z])/i;
+  if (SZ.test(src) && !SZ.test(' ' + out)) return false;
   const nums = (x: string): string[] => x.match(/\d+(?:\.\d+)?/g) ?? [];
   const o = nums(out);
   return nums(src).every(n => o.includes(n));
@@ -384,7 +387,7 @@ export function enOk(src: string, out: string): boolean {
 // تشترك مع مقاسات حقيقية فتفسدها. ذاكرة الترجمة الفاشلة تُحذف.
 async function revertBadEnglish(db: D1Database): Promise<number> {
   // وما ترجمه النموذج الصغير بالتعليمة الصينية قبل SYS_ATTR_EN («Black A-line skirt» ⟵ «تنجيد أسود») يُعاد مرة واحدة
-  const { results } = await db.prepare("SELECT src,dst,created_at<'2026-09-24 13:40:00' old FROM translations WHERE kind='attr' AND src GLOB '*[A-Za-z][A-Za-z][A-Za-z]*' AND src NOT GLOB '*[一-龥]*' LIMIT 500").all<{ src: string; dst: string; old: number }>();
+  const { results } = await db.prepare("SELECT src,dst,created_at<'2026-09-24 13:15:00' old FROM translations WHERE kind='attr' AND src GLOB '*[A-Za-z][A-Za-z][A-Za-z]*' AND src NOT GLOB '*[一-龥]*' LIMIT 500").all<{ src: string; dst: string; old: number }>();
   let n = 0;
   for (const { src, dst, old } of results) {
     if (!needsEnTr(src)) continue;
