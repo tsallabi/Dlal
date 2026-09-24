@@ -393,7 +393,12 @@ async function revertBadEnglish(db: D1Database): Promise<number> {
     if (!needsEnTr(src)) continue;
     const bad = !!old || !enOk(src, dst) || /^[A-Za-z]{0,3}\d{1,5}[A-Za-z]?\s*[-–]?\s+/.test(src);
     if (!bad) continue;
-    if (/[\u0621-\u064A]/.test(dst)) for (const f of ['color', 'size'] as const) n += (await db.prepare(`UPDATE variants SET ${f}=? WHERE ${f}=?`).bind(src, dst).run()).meta?.changes ?? 0;
+    if (/[\u0621-\u064A]/.test(dst)) for (const f of ['color', 'size'] as const) {
+      n += (await db.prepare(`UPDATE variants SET ${f}=? WHERE ${f}=?`).bind(src, dst).run()).meta?.changes ?? 0;
+      // «2011 قميص قصير»: رقم التصميم أمام الترجمة (Translator.t يفصله) — المطابقة التامة لا تراه
+      if (!/^[A-Za-z]{0,3}\d{1,5}[A-Za-z]?\s/.test(src)) n += (await db.prepare(`UPDATE variants SET ${f}=substr(${f},1,length(${f})-length(?)) || ? WHERE ${f} LIKE ? AND length(${f})-length(?) BETWEEN 2 AND 10
+         AND substr(${f},1,length(${f})-length(?)-1) NOT GLOB '*[^A-Za-z0-9]*'`).bind(dst, src, '% ' + dst, dst, dst).run()).meta?.changes ?? 0;
+    }
     await db.prepare("DELETE FROM translations WHERE src=? AND kind='attr'").bind(src).run();
   }
   return n;
@@ -408,7 +413,7 @@ export async function fixEnglishVariants(db: D1Database, tr: Translator, limit =
   await revertBadEnglish(db);
   // شظايا عربية قديمة من الترجمة: «جميع المقاسات متوفرة»، «حجم المادة: حرير الحليب 230 جرام…»
   for (const f of ['color', 'size'] as const) {
-    const r = await db.prepare(`UPDATE variants SET ${f}=NULL WHERE ${f} IN ('جميع المقاسات متوفرة','جميع المقاسات','المقاسات متوفرة') OR (${f} LIKE '%:%' AND length(${f}) > 20)`).run();
+    const r = await db.prepare(`UPDATE variants SET ${f}=NULL WHERE ${f} IN ('جميع المقاسات متوفرة','جميع المقاسات','المقاسات متوفرة') OR (${f} LIKE '%:%' AND length(${f}) > 20) OR ${f} LIKE 'المواصفات%' OR ${f} LIKE 'مواصفات%'`).run();
     dropped += r.meta?.changes ?? 0;
   }
   for (const f of ['color', 'size'] as const) {

@@ -23,7 +23,7 @@ const COLORS: Record<string, string> = {
   lined: 'مبطّن', 'fleece-lined': 'مبطّن بالفرو', 'fleece lined': 'مبطّن بالفرو', 'lilac purple': 'ليلكي', 'jujube red': 'أحمر عنابي', 'dark blue': 'أزرق غامق', 'deep blue': 'أزرق غامق', 'light blue': 'أزرق فاتح', 'as shown in picture': 'كما في الصورة', 'as shown in the picture': 'كما في الصورة', 'as shown in the figure': 'كما في الصورة', 'real shot images': 'كما في الصورة', 'real shot': 'كما في الصورة',
   printed: 'مطبوع', floral: 'مزهّر', striped: 'مخطط', plaid: 'كاروهات', 'dusty pink': 'وردي باهت',
   'as picture': 'كما في الصورة', 'as shown': 'كما في الصورة', 'picture color': 'كما في الصورة', 'image color': 'كما في الصورة', 'photo color': 'كما في الصورة',
-  'main picture': 'كما في الصورة', 'same as picture': 'كما في الصورة', 'as the picture': 'كما في الصورة',
+  'main picture': 'كما في الصورة', 'main picture model': 'كما في الصورة', 'main picture style': 'كما في الصورة', 'same as picture': 'كما في الصورة', 'as the picture': 'كما في الصورة',
   image: 'كما في الصورة', picture: 'كما في الصورة', photo: 'كما في الصورة',
 };
 const SHADE: Record<string, string> = { light: 'فاتح', dark: 'غامق', deep: 'غامق', pale: 'باهت', bright: 'فاتح' };
@@ -42,6 +42,8 @@ export function junkAttr(v: string | null | undefined): boolean {
   const t = String(v ?? '').trim();
   if (!t) return false;
   if (JUNK.has(bare(t))) return true;
+  // «Specifications (length*width)»، «Parameters»، «المواصفات (الطول * العرض)»: رأس جدول لا خيار
+  if (/^(size\s+)?(specifications?|parameters?|product parameters)\b/i.test(t) || /^(ال)?مواصفات/.test(t)) return true;
   // «Weight: S: 530g XXL: 600g» و«حجم المادة: حرير الحليب 230 جرام…» — وصف لا قيمة
   if (/[:：]/.test(t) && (t.length > 20 || /\d/.test(t))) return true;
   return false;
@@ -87,6 +89,7 @@ export function enAttr(raw: string): string | null {
   if (sz && /^(size\s+)?\S+(\s+size)?(\s*[\[(（【].*(recommend|kg|weight).*)?$/i.test(t)) return add(sz[1].toUpperCase() + kgRange(t));
   // مقاس رقمي بحاشية: «40 [Standard Size]» بعد حذفها صار «40»
   if (/^\d{2,3}(\.\d)?$/.test(t) || /^\d{2}-\d{2}$/.test(t)) return add(t);
+  const szn = t.match(/^size\s*(\d{2,3}(?:\.\d)?)$/i); if (szn) return add(`مقاس ${szn[1]}`);   // «Size 36»
   // «44-45 recommended 43-44 feet»: مقاس حذاء وتحته مقاس القدم المناسب
   const shoe = t.match(/^(\d{2}-\d{2})\s*(?:\[\s*)?recommended\s+(\d{2}-\d{2})\s*(feet|foot)?\s*\]?$/i);
   if (shoe) return add(`${shoe[1]} (يناسب قدم ${shoe[2]})`);
