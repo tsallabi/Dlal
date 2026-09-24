@@ -46,6 +46,9 @@ const open = async (path, label) => {
   const txt = await visibleText(page);
   const cn = (txt.match(CJK) || []).join('');
   expect(!cn, `${label} بلا نص صيني${cn ? ` («${cn.slice(0, 24)}»)` : ''}`);
+  // أرقام إنجليزية في كل الموقع (قرار صاحب المشروع ٢٤/٠٩/٢٦) — على البضاعة الحية: عناوين ترجمها النموذج بأرقام عربية
+  const ar = (txt.match(/.{0,14}[\u0660-\u0669\u06F0-\u06F9].{0,14}/) || [''])[0];
+  expect(!ar, `${label} بأرقام إنجليزية فقط${ar ? ` («${ar.trim()}»)` : ''}`);
   const html = await page.content();
   expect(!/alicdn\.com|detail\.1688\.com|1688\.com/.test(html), `${label} لا تكشف مصدر البضاعة للزبونة`);
   return true;
