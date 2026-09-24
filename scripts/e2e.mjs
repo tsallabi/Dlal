@@ -2273,8 +2273,33 @@ await mp.screenshot({ path: `${OUT}/${String(++n).padStart(2, '0')}-mobile-order
     expect(await page.locator('button:has-text("اعتمد أسعار")').count() === 1, 'زر اعتماد أسعار الشريك ظاهر لشريك وضع سعر الشحن');
     expect(await has(page, `${pCode}`) && await has(page, 'وصل ✓'), 'سجل الإرسال في لوحة الأدمن يعرض الطلب الذي وصل الشريك');
     await shot(page, 'admin-partners-preview');
+    // R2 (فُعّل ٢٤/٠٩/٢٦): الصورتان المرفوعتان في هذه التشغيلة ذهبتا إلى الحاوية لا إلى القاعدة
+    const r2n = parseInt(await page.locator('.media-store .m-r2').textContent()) || 0;
+    expect(r2n >= 2, `صور المراحل تُحفظ في R2 (${r2n} في الحاوية)`);
+    if (await page.locator('button:has-text("من القاعدة إلى R2")').count()) {
+      await page.click('button:has-text("من القاعدة إلى R2")'); await page.waitForLoadState('networkidle');
+      expect((await page.locator('.media-store .m-d1').textContent()).trim() === '0', 'زر النقل ينقل صور القاعدة القديمة كلها إلى R2');
+    }
+    const afterMove = await page.request.get(BASE + mediaSrc);
+    expect(afterMove.ok() && (afterMove.headers()['content-type'] || '').startsWith('image/') && (await afterMove.body()).length > 1000, `الصورة تُقدَّم من R2 (${afterMove.status()} ${afterMove.headers()['content-type']})`);
     await page.goto(BASE + '/admin/partners?preview=2');
     expect(await has(page, 'لم يضع سعر الشحن الجوي') && await page.locator('button:has-text("اعتمد أسعار")').count() === 0, 'شريك بلا سعر شحن لا يُعتمد للتسعير');
+    // الهاتف بصيغة دولية: صاحب المشروع أنشأ موظف شاهين بـ218913509213 فرُفض دخوله بكلمة مرور صحيحة
+    // (الصفحة حفظت الرقم كما كُتب والدخول حوّله إلى 09…). الآن يُوحَّد عند الحفظ ويُقبل بالصيغتين عند الدخول
+    await page.goto(BASE + '/admin/staff');
+    if (!(await has(page, '0920000088'))) {
+      const sf = page.locator('form[action="/admin/staff/new"]');
+      await sf.locator('input[name=name]').fill('موظف برقم دولي'); await sf.locator('input[name=phone]').fill('+218 92 000 0088');
+      await sf.locator('input[name=password]').fill('partner888'); await sf.locator('select[name=role]').selectOption('partner');
+      await sf.locator('select[name=partner_id]').selectOption('1'); await sf.locator('button').click(); await page.waitForLoadState('networkidle');
+      await page.goto(BASE + '/admin/staff');
+    }
+    expect(await has(page, '0920000088') && !(await has(page, '>218920000088<')), 'رقم الموظف الدولي يُحفظ بصيغة 09… الموحّدة');
+    for (const ph of ['218920000088', '0920000088']) {
+      await login(page, ph, 'partner888'); await page.goto(BASE + '/partner');
+      expect(page.url().endsWith('/partner') && await has(page, 'لوحة الشحن'), `موظف الشريك يدخل برقمه بصيغة ${ph}`);
+    }
+    await login(page, '0910000000', 'admin123');
     await login(page, '0920000077', 'partner777');
     const r403 = await page.goto(BASE + '/partner/order/' + pCode);
     expect(r403.status() === 403, `موظف شريك آخر يُمنع من طلب شاهين (${r403.status()})`);

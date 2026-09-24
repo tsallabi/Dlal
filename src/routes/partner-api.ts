@@ -45,7 +45,7 @@ papi.post('/orders/:code/photos', async (c) => {
   const stage = PARTNER_FLOW.includes(String(b.stage)) ? String(b.stage) : o.status;
   const img = b.image_base64 ? b64ToBytes(String(b.image_base64)) : null;
   if (b.image_base64 && !img) return c.json({ ok: false, error: 'image_base64 غير صالح' }, 400);
-  const r = await saveMedia(c.env.DB, o.id, stage, img ? { bytes: img.bytes, mime: img.mime } : { url: b.url ?? null }, b.caption ? String(b.caption).slice(0, 200) : null, !!b.public, null);
+  const r = await saveMedia(c.env.DB, o.id, stage, img ? { bytes: img.bytes, mime: img.mime } : { url: b.url ?? null }, b.caption ? String(b.caption).slice(0, 200) : null, !!b.public, null, c.env.MEDIA);
   return c.json(r, r.ok ? 200 : 400);
 });
 

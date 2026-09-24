@@ -172,7 +172,7 @@ export async function testDispatch(p: { api_url: string | null; api_secret: stri
 export const MEDIA_MAX = 1_500_000;   // الصورة تُصغَّر في المتصفح إلى ~٢٠٠ ك.ب؛ السقف يحمي القاعدة من صورة كاميرا خام
 const MIME_OK = /^image\/(jpeg|png|webp)$/;
 export async function saveMedia(db: D1Database, orderId: number, stage: string, file: { bytes?: ArrayBuffer | null; mime?: string; url?: string | null },
-  caption: string | null, pub: boolean, byUserId: number | null): Promise<{ ok: boolean; error?: string; id?: number }> {
+  caption: string | null, pub: boolean, byUserId: number | null, bucket?: R2Bucket): Promise<{ ok: boolean; error?: string; id?: number }> {
   if (file.url) {
     if (!/^https:\/\//.test(file.url)) return { ok: false, error: 'رابط الصورة يجب أن يبدأ بـ https://' };
     const r = await db.prepare('INSERT INTO order_media(order_id,stage,url,caption,public,by_user_id) VALUES(?,?,?,?,?,?)').bind(orderId, stage, file.url.slice(0, 500), caption, pub ? 1 : 0, byUserId).run();
@@ -182,9 +182,45 @@ export async function saveMedia(db: D1Database, orderId: number, stage: string, 
   if (!n) return { ok: false, error: 'لم تصل صورة' };
   if (n > MEDIA_MAX) return { ok: false, error: `الصورة ${Math.round(n / 1024)} ك.ب — الحد ${Math.round(MEDIA_MAX / 1024)} ك.ب` };
   const mime = MIME_OK.test(file.mime ?? '') ? file.mime! : 'image/jpeg';
+  // R2 أولًا؛ إن تعذّر (غير مربوط أو عطل مؤقت) تُحفظ في D1 فلا تضيع صورة الموظف، والكرون ينقلها لاحقًا
+  if (bucket) {
+    const key = `orders/${orderId}/${Date.now()}-${newSecret().slice(0, 8)}.${mime.split('/')[1].replace('jpeg', 'jpg')}`;
+    try {
+      await bucket.put(key, file.bytes!, { httpMetadata: { contentType: mime } });
+      const r = await db.prepare('INSERT INTO order_media(order_id,stage,mime,r2_key,bytes,caption,public,by_user_id) VALUES(?,?,?,?,?,?,?,?)')
+        .bind(orderId, stage, mime, key, n, caption, pub ? 1 : 0, byUserId).run();
+      return { ok: true, id: r.meta.last_row_id as number };
+    } catch (e: any) { console.error('R2 put', e?.message ?? e); }
+  }
   const r = await db.prepare('INSERT INTO order_media(order_id,stage,mime,data,bytes,caption,public,by_user_id) VALUES(?,?,?,?,?,?,?,?)')
     .bind(orderId, stage, mime, file.bytes, n, caption, pub ? 1 : 0, byUserId).run();
   return { ok: true, id: r.meta.last_row_id as number };
+}
+// يقدّم الصورة من R2 أو من D1 (ما لم يُنقل بعد) — m: صفّ فيه r2_key و data و mime و url
+export async function mediaResponse(m: { r2_key?: string | null; data?: ArrayBuffer | null; mime: string; url?: string | null }, bucket?: R2Bucket): Promise<Response | null> {
+  if (m.url) return Response.redirect(m.url, 302);
+  const h = { 'content-type': m.mime, 'cache-control': 'private, max-age=86400' };
+  if (m.r2_key && bucket) { const o = await bucket.get(m.r2_key); if (o) return new Response(o.body, { headers: h }); }
+  if (m.data) return new Response(new Uint8Array(m.data), { headers: h });
+  return null;
+}
+export async function deleteMedia(db: D1Database, id: number, orderCode: string, bucket?: R2Bucket) {
+  const m = await db.prepare('SELECT m.r2_key FROM order_media m JOIN orders o ON o.id=m.order_id WHERE m.id=? AND o.code=?').bind(id, orderCode).first<{ r2_key: string | null }>();
+  if (!m) return;
+  if (m.r2_key && bucket) await bucket.delete(m.r2_key).catch(() => {});
+  await db.prepare('DELETE FROM order_media WHERE id=?').bind(id).run();
+}
+// الكرون: ما حُفظ في D1 (قبل تفعيل R2 أو عند عطل مؤقت) يُنقل إلى R2 ويُفرغ من القاعدة، عشرون صورة في المرة
+export async function moveMediaToR2(db: D1Database, bucket?: R2Bucket, limit = 20): Promise<number> {
+  if (!bucket) return 0;
+  const { results } = await db.prepare('SELECT id,order_id,mime,data FROM order_media WHERE data IS NOT NULL AND r2_key IS NULL ORDER BY id LIMIT ?').bind(limit).all<any>();
+  let n = 0;
+  for (const m of results) {
+    const key = `orders/${m.order_id}/moved-${m.id}.${String(m.mime).split('/')[1].replace('jpeg', 'jpg')}`;
+    await bucket.put(key, new Uint8Array(m.data), { httpMetadata: { contentType: m.mime } });
+    await db.prepare('UPDATE order_media SET r2_key=?,data=NULL WHERE id=?').bind(key, m.id).run(); n++;
+  }
+  return n;
 }
 export function b64ToBytes(b64: string): { bytes: ArrayBuffer; mime: string } | null {
   const m = b64.match(/^data:(image\/[a-z]+);base64,(.+)$/);

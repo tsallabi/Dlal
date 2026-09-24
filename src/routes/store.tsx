@@ -10,7 +10,7 @@ import { getCategories, PRODUCT_SELECT, fmt, imgUrl, orderCode, timeAgo, notify,
 import type { ProductRow } from '../lib/db';
 import { KIND_NOTE, type ListingKind } from '../lib/source';
 import { loadSettings, computePrice, shipRates, seaOn } from '../lib/pricing';
-import { partnerDelivery, pricingPartnerId } from '../lib/partner';
+import { partnerDelivery, pricingPartnerId, mediaResponse } from '../lib/partner';
 import type { ShipMode, Settings } from '../lib/pricing';
 import { checkCoupon } from '../lib/coupons';
 import { loadMyPay } from '../lib/mypay';
@@ -1036,11 +1036,10 @@ store.post('/checkout', async (c) => {
 // صورة مرحلة أظهرها الشريك: لصاحبة الطلب (أو الأدمن) وحدها، وما لم يُعلَّم «للزبونة» لا يُقدَّم أبدًا
 store.get('/orders/:code/photo/:id', async (c) => {
   const u = c.get('user'); if (!u) return c.notFound();
-  const m = await c.env.DB.prepare('SELECT m.data,m.mime,m.url FROM order_media m JOIN orders o ON o.id=m.order_id WHERE m.id=? AND o.code=? AND m.public=1 AND (o.user_id=? OR ?=1)')
+  const m = await c.env.DB.prepare('SELECT m.data,m.r2_key,m.mime,m.url FROM order_media m JOIN orders o ON o.id=m.order_id WHERE m.id=? AND o.code=? AND m.public=1 AND (o.user_id=? OR ?=1)')
     .bind(Number(c.req.param('id')), c.req.param('code'), u.id, u.role === 'admin' ? 1 : 0).first<any>();
   if (!m) return c.notFound();
-  if (m.url) return c.redirect(m.url);
-  return new Response(new Uint8Array(m.data), { headers: { 'content-type': m.mime, 'cache-control': 'private, max-age=86400' } });
+  return (await mediaResponse(m, c.env.MEDIA)) ?? c.notFound();
 });
 store.get('/orders/:code', async (c) => {
   const u = c.get('user'); if (!u) return c.redirect('/login?next=' + encodeURIComponent(c.req.path));

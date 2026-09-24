@@ -17,7 +17,7 @@ import api1688Admin, { getClient, syncStock } from './routes/api1688-admin';
 import { loadSettings } from './lib/pricing';
 import { retranslatePending } from './lib/translate';
 import partnerApi from './routes/partner-api';
-import { retryDispatch } from './lib/partner';
+import { retryDispatch, moveMediaToR2 } from './lib/partner';
 import { Client1688, type Tokens } from './lib/api1688';
 import { runServerJobs } from './lib/crawl';
 import { settleLinkRequests } from './lib/link-requests';
@@ -111,6 +111,7 @@ export default {
         if (env.AI) try { const r = await retranslatePending(env.DB, env.AI, 40); console.log('cron translate', JSON.stringify(r)); } catch (e: any) { console.error('cron translate', e?.message ?? e); }
         // طلبات لم تصل API شركة الشحن (خادمها معطّل أو بطيء): تُعاد بمهلة متزايدة
         try { const n = await retryDispatch(env.DB, 'https://hudhude.com'); if (n) console.log('partner dispatch retried', n); } catch (e: any) { console.error('partner dispatch', e?.message ?? e); }
+        try { const n = await moveMediaToR2(env.DB, env.MEDIA); if (n) console.log('media moved to R2', n); } catch (e: any) { console.error('media to R2', e?.message ?? e); }
         // طلبات «اطلبي برابط» التي نُشر منتجها بعد ترجمته (كان مسودة لحظة الاستيراد)
         await settleLinkRequests(env.DB);
         if (!s.src_key) return;

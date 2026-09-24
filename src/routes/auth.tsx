@@ -2,11 +2,10 @@ import { Hono } from 'hono';
 import type { Env } from '../types';
 import { Layout, Flash } from '../views/layout';
 import { getCategories } from '../lib/db';
-import { hashPassword, verifyPassword, createSession, destroySession } from '../lib/auth';
+import { hashPassword, verifyPassword, createSession, destroySession, normPhone } from '../lib/auth';
 
 const auth = new Hono<Env>();
 
-const normPhone = (p: string) => p.replace(/\D/g, '').replace(/^(218|00218)/, '0').replace(/^(?!0)/, '0');
 
 auth.get('/login', async (c) => {
   const b = { user: c.get('user'), cartCount: 0, categories: await getCategories(c.env.DB) };
@@ -28,7 +27,9 @@ auth.get('/login', async (c) => {
 auth.post('/login', async (c) => {
   const f = await c.req.parseBody();
   const phone = normPhone(String(f.phone ?? ''));
-  const u = await c.env.DB.prepare('SELECT id,password_hash,active FROM users WHERE phone=?').bind(phone).first<{ id: number; password_hash: string; active: number }>();
+  // والرقم كما كُتب أيضًا: حسابات أُنشئت قبل توحيد الصيغة محفوظة بـ218… (ترحيل 0034 يوحّدها)
+  const raw = String(f.phone ?? '').replace(/\D/g, '');
+  const u = await c.env.DB.prepare('SELECT id,password_hash,active FROM users WHERE phone IN (?,?) ORDER BY phone=? DESC LIMIT 1').bind(phone, raw, phone).first<{ id: number; password_hash: string; active: number }>();
   if (!u || !u.active || !(await verifyPassword(String(f.password), u.password_hash))) return c.redirect(`/login?err=${u && !u.active ? 'disabled' : 1}&next=${encodeURIComponent(String(f.next ?? '/'))}`);
   await createSession(c, u.id);
   c.executionCtx.waitUntil(c.env.DB.prepare("UPDATE users SET last_login_at=datetime('now') WHERE id=?").bind(u.id).run());

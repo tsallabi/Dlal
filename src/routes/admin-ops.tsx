@@ -8,7 +8,7 @@ import { Flash } from '../views/layout';
 import { Stars } from '../views/account';
 import { getCategories, fmt, timeAgo, notify } from '../lib/db';
 import { liveState, agoAr, type LiveState } from '../lib/crawl-live';
-import { hashPassword, requireRole } from '../lib/auth';
+import { hashPassword, requireRole, normPhone } from '../lib/auth';
 import { requirePerm, STAFF_ROLES, ROLE_PERMS, PERM_LABELS, logActivity, permsOf } from '../lib/perm';
 import { loadSettings } from '../lib/pricing';
 import { mypayBase, loadMyPay, checkConnection } from '../lib/mypay';
@@ -383,9 +383,12 @@ ops.get('/staff', async (c) => {
         </div>
         <form method="post" action="/admin/staff/new" class="card-box"><h3>+ إضافة موظف</h3>
           <label>الاسم</label><input type="text" name="name" required /><label>الهاتف (اسم الدخول)</label><input type="tel" name="phone" required /><label>كلمة المرور</label><input type="text" name="password" required minlength={6} />
-          <label>الدور</label><select name="role"><option value="admin">موظف إدارة (اختر الصلاحية أدناه)</option><option value="partner">موظف شريك شحن</option></select>
-          <label>صلاحية الإدارة</label><select name="staff_role">{(Object.keys(STAFF_ROLES) as StaffRole[]).map(r => <option value={r}>{STAFF_ROLES[r].ar} — {STAFF_ROLES[r].desc}</option>)}</select>
-          <label>الشريك (لموظف الشريك)</label><select name="partner_id"><option value="">—</option>{partners.results.map(p => <option value={p.id}>{p.name}</option>)}</select>
+          {/* سأل صاحب المشروع «أي صلاحية أعطيها لشريك الشحن بحيث لا يرى عملي؟»: صلاحيات الإدارة لا تخصّه أصلًا.
+              دور «موظف شركة شحن» لا يدخل /admin إطلاقًا (403) ويرى طلبات شركته وحدها. الحقلان يتبدّلان بحسب الدور */}
+          <label>الدور</label><select name="role" onchange="var p=this.value==='partner';this.form.querySelector('.st-admin').hidden=p;this.form.querySelector('.st-partner').hidden=!p;this.form.partner_id.required=p"><option value="admin">موظف إدارة عندك (اختر صلاحيته أدناه)</option><option value="partner">موظف شركة شحن (يرى طلبات شركته فقط)</option></select>
+          <div class="st-admin"><label>صلاحية الإدارة</label><select name="staff_role">{(Object.keys(STAFF_ROLES) as StaffRole[]).map(r => <option value={r}>{STAFF_ROLES[r].ar} — {STAFF_ROLES[r].desc}</option>)}</select></div>
+          <div class="st-partner" hidden><label>الشركة</label><select name="partner_id"><option value="">— اختر الشركة —</option>{partners.results.map(p => <option value={p.id}>{p.name}</option>)}</select>
+            <p style="font-size:12px;color:#555;margin:6px 0 0">موظف الشركة لا يدخل لوحة الإدارة أبدًا، ولا يرى الأسعار ولا الأرباح ولا الزبائن الآخرين ولا طلبات الشركات الأخرى. يرى طلبات شركته فقط في <b>hudhude.com/partner</b>: يشتري ويغيّر الحالة ويرفع الصور والفواتير ويضع أسعاره.</p></div>
           <button class="btn" style="margin-top:10px">إضافة</button></form>
       </div>
     </>
@@ -394,8 +397,9 @@ ops.get('/staff', async (c) => {
 ops.post('/staff/new', async (c) => {
   const f = await c.req.parseBody(); const db = c.env.DB;
   const role = f.role === 'partner' ? 'partner' : 'admin';
+  if (role === 'partner' && !f.partner_id) return c.redirect('/admin/staff?err=1');   // موظف شريك بلا شركة لا يرى شيئًا
   try {
-    await db.prepare('INSERT INTO users(phone,name,password_hash,role,staff_role,partner_id) VALUES(?,?,?,?,?,?)').bind(String(f.phone).replace(/\D/g, ''), String(f.name), await hashPassword(String(f.password)), role, role === 'admin' ? String(f.staff_role) : null, f.partner_id ? Number(f.partner_id) : null).run();
+    await db.prepare('INSERT INTO users(phone,name,password_hash,role,staff_role,partner_id) VALUES(?,?,?,?,?,?)').bind(normPhone(String(f.phone)), String(f.name), await hashPassword(String(f.password)), role, role === 'admin' ? String(f.staff_role) : null, f.partner_id ? Number(f.partner_id) : null).run();
   } catch { return c.redirect('/admin/staff?err=1'); }
   await logActivity(db, c.get('user')!.id, 'staff.create', String(f.phone), `${role}/${f.staff_role}`);
   return c.redirect('/admin/staff?ok=1');

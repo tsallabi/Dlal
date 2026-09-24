@@ -14,10 +14,10 @@ binding = "DB"
 database_name = "dlal-db"
 database_id = "b45c2ed9-976b-4c4f-a9ae-162b8664fdaf"
 
-# R2 لتخزين الصور — فعّل R2 من لوحة Cloudflare ثم أزل التعليق وأنشئ الدلو: wrangler r2 bucket create dlal-images
-# [[r2_buckets]]
-# binding = "IMAGES"
-# bucket_name = "dlal-images"
+# R2 (فعّله صاحب المشروع ٢٤/٠٩/٢٦، والحاوية أُنشئت من موصّل Cloudflare): صور مراحل الطلب من لوحة الشريك
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "hudhude-media"
 
 [vars]
 SITE_NAME = "هدهدي"

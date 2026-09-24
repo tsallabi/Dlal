@@ -1,6 +1,6 @@
 export type Bindings = {
   DB: D1Database;
-  IMAGES?: R2Bucket;              // اختياري حتى يُفعَّل R2
+  MEDIA?: R2Bucket;               // R2 «hudhude-media» (فُعّل ٢٤/٠٩/٢٦): صور مراحل الطلب. اختياري: بدونه تُحفظ في D1
   ASSETS: Fetcher;
   SITE_NAME: string;
   SITE_URL: string;

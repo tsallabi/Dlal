@@ -16,7 +16,7 @@ import { requirePerm, logActivity } from '../lib/perm';
 import { settleLinkRequests, LINK_SOURCES, LINK_STATUS } from '../lib/link-requests';
 import { validPixel, validVerify, bustMetaCache } from '../lib/meta';
 import { setOrderStatus, markOrderPaid } from '../lib/orders';
-import { RATE_KEYS, RATE_AR, PP_KEY, syncPricingPartner, pricingPartnerId, attemptDispatch } from '../lib/partner';
+import { RATE_KEYS, RATE_AR, PP_KEY, syncPricingPartner, pricingPartnerId, attemptDispatch, moveMediaToR2 } from '../lib/partner';
 import { Translator, hasCJK, hasArabic, enTitle, goodTitle, retranslatePending, releaseHeldDrafts, BROKEN_SQL } from '../lib/translate';
 
 const admin = new Hono<Env>();
@@ -740,6 +740,7 @@ admin.get('/partners', async (c) => {
   const rows = await db.prepare(`SELECT p.*,(SELECT COUNT(*) FROM orders o WHERE o.partner_id=p.id AND o.status IN ('paid','purchasing','purchased','at_warehouse')) AS active_orders,(SELECT COUNT(*) FROM users u WHERE u.partner_id=p.id) AS staff,
       (SELECT status FROM partner_dispatch d WHERE d.partner_id=p.id ORDER BY d.id DESC LIMIT 1) AS last_dispatch FROM partners p ORDER BY p.id`).all<any>();
   const log = await db.prepare('SELECT d.id,d.status,d.http_status,d.attempts,d.error,d.created_at,d.sent_at,o.code,p.name FROM partner_dispatch d JOIN orders o ON o.id=d.order_id JOIN partners p ON p.id=d.partner_id ORDER BY d.id DESC LIMIT 30').all<any>();
+  const med = await db.prepare("SELECT SUM(r2_key IS NOT NULL) r2,SUM(data IS NOT NULL) d1,SUM(url IS NOT NULL) ext,COALESCE(SUM(bytes),0) b FROM order_media").first<any>();
   // المعاينة: ?preview=ID يحسب الأسعار كما لو اختير هذا الشريك، دون حفظ شيء
   const pv = Number(c.req.query('preview') ?? 0) || 0;
   const pvp = pv ? rows.results.find(p => p.id === pv) : null;
@@ -794,6 +795,12 @@ admin.get('/partners', async (c) => {
           <button class="btn dark" onclick="return confirm('تسعير الرف كله بأسعار هذا الشريك الآن؟')">اعتمد أسعار «{pvp.name}» للرف وأعد التسعير</button></form>}
       </div>}
 
+      <div class="card-box media-store"><h3>صور مراحل الطلبات</h3>
+        <p style="font-size:13px;margin:0">في R2 (<code>hudhude-media</code>): <b class="m-r2">{med?.r2 ?? 0}</b> · في قاعدة البيانات: <b class="m-d1">{med?.d1 ?? 0}</b> · روابط خارجية: {med?.ext ?? 0} · الحجم {Math.round((med?.b ?? 0) / 1024)} ك.ب
+          {!c.env.MEDIA && <b style="color:#8c2121"> — R2 غير مربوط بالموقع: الصور تُحفظ في القاعدة.</b>}</p>
+        {(med?.d1 ?? 0) > 0 && c.env.MEDIA && <form method="post" action="/admin/partners/media-to-r2" style="margin-top:8px"><button class="btn sm ghost">انقل {med.d1} صورة من القاعدة إلى R2 الآن</button> <small>(الكرون ينقلها أيضًا 20 كل ساعة)</small></form>}
+      </div>
+
       <div class="card-box"><h3>سجل إرسال الطلبات إلى الشركاء</h3>
         {log.results.length === 0 ? <p style="font-size:13px;color:#666">لم يُرسل أي طلب بعد — يبدأ حين يفعّل شريك ربط API من لوحته.</p> :
           <div class="tbl-wrap"><table class="tbl"><tr><th>الطلب</th><th>الشريك</th><th>الحالة</th><th>HTTP</th><th>المحاولات</th><th>الخطأ</th><th>الوقت</th><th></th></tr>
@@ -826,6 +833,11 @@ admin.post('/partners/pricing', async (c) => {
   if (id) await syncPricingPartner(db);
   await logActivity(db, c.get('user')!.id, 'partners.pricing', String(id), '');
   return c.redirect(`/admin/partners?ok=1&repriced=${await repriceAll(db)}`);
+});
+admin.post('/partners/media-to-r2', async (c) => {
+  let n = 0, k = 0;
+  do { k = await moveMediaToR2(c.env.DB, c.env.MEDIA, 20); n += k; } while (k === 20 && n < 400);
+  return c.redirect(`/admin/partners?ok=1&moved=${n}`);
 });
 admin.post('/partners/reprice', async (c) => { const db = c.env.DB; await syncPricingPartner(db); return c.redirect(`/admin/partners?ok=1&repriced=${await repriceAll(db)}`); });
 admin.post('/partners/dispatch/:id/retry', async (c) => {

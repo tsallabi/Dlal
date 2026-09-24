@@ -9,7 +9,7 @@ import { setOrderStatus } from '../lib/orders';
 import { requireRole } from '../lib/auth';
 import { PARTNER_FLOW } from '../types';
 import { loadSettings } from '../lib/pricing';
-import { saveMedia, createInvoice, newSecret, testDispatch, RATE_KEYS, RATE_AR, feeMargin, syncPricingPartner, pricingPartnerId } from '../lib/partner';
+import { saveMedia, mediaResponse, deleteMedia, createInvoice, newSecret, testDispatch, RATE_KEYS, RATE_AR, feeMargin, syncPricingPartner, pricingPartnerId } from '../lib/partner';
 
 const partner = new Hono<Env>();
 partner.use('*', requireRole('partner', 'admin'));
@@ -337,22 +337,21 @@ partner.post('/order/:code/photo', async (c) => {
   const file = f.photo as File | undefined;
   const stage = PARTNER_FLOW.includes(String(f.stage)) ? String(f.stage) : o.status;
   const bytes = file && typeof file !== 'string' ? await file.arrayBuffer() : null;
-  const r = await saveMedia(db, o.id, stage, { bytes, mime: file && typeof file !== 'string' ? file.type : undefined }, f.caption ? String(f.caption).slice(0, 200) : null, f.public === '1', c.get('user')!.id);
+  const r = await saveMedia(db, o.id, stage, { bytes, mime: file && typeof file !== 'string' ? file.type : undefined }, f.caption ? String(f.caption).slice(0, 200) : null, f.public === '1', c.get('user')!.id, c.env.MEDIA);
   return c.redirect(`/partner/order/${code}` + (r.ok ? '?ok=1' : `?err=${encodeURIComponent(r.error ?? 'تعذّر الرفع')}`));
 });
 
 partner.post('/order/:code/media/:id/delete', async (c) => {
   const code = c.req.param('code');
-  await c.env.DB.prepare('DELETE FROM order_media WHERE id=? AND order_id=(SELECT id FROM orders WHERE code=?)').bind(Number(c.req.param('id')), code).run();
+  await deleteMedia(c.env.DB, Number(c.req.param('id')), code, c.env.MEDIA);
   return c.redirect(`/partner/order/${code}?ok=1`);
 });
 
 // الصورة تُقدَّم لصاحبها فقط: شريك الطلب أو الأدمن
 partner.get('/media/:id', async (c) => {
-  const m = await c.env.DB.prepare('SELECT m.data,m.mime,m.url,o.code FROM order_media m JOIN orders o ON o.id=m.order_id WHERE m.id=?').bind(Number(c.req.param('id'))).first<any>();
+  const m = await c.env.DB.prepare('SELECT m.data,m.r2_key,m.mime,m.url,o.code FROM order_media m JOIN orders o ON o.id=m.order_id WHERE m.id=?').bind(Number(c.req.param('id'))).first<any>();
   if (!m || !(await owns(c, m.code))) return c.notFound();
-  if (m.url) return c.redirect(m.url);
-  return new Response(new Uint8Array(m.data), { headers: { 'content-type': m.mime, 'cache-control': 'private, max-age=86400' } });
+  return (await mediaResponse(m, c.env.MEDIA)) ?? c.notFound();
 });
 
 partner.post('/order/:code/invoice', async (c) => {
