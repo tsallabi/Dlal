@@ -152,10 +152,10 @@ if (shipSlug) {
     await pickShip('sea');
     const sea = await priceOf(page);
     expect(await page.locator('.pship label.on:has(input[value=sea])').count() > 0, 'اختيار البحري يبقى مُحدَّدًا بعد إعادة التحميل');
-    // ar-LY: «61,5 د.ل» الفاصلة عشرية والنقطة فاصل آلاف — و«د.ل» نفسها تحوي نقطة فنقطعها أولًا
+    // en-US: «1,234.5 د.ل» الفاصلة للآلاف والنقطة عشرية — و«د.ل» نفسها تحوي نقطة فنقطعها أولًا
     const num = t => {
       const head = String(t).split('د.ل')[0].replace(/[\s٬]/g, '');
-      return parseFloat(head.replace(/\./g, '').replace(/[,٫]/g, '.').replace(/[^\d.]/g, '')) || 0;
+      return parseFloat(head.replace(/,/g, '').replace(/[^\d.]/g, '')) || 0;
     };
     if (shipSaves) expect(num(sea) > 0 && num(sea) < num(air), `البحري أرخص من الجوي على ${shipSlug} (${num(sea)} < ${num(air)})`);
     else expect(num(sea) > 0 && num(sea) <= num(air), `البحري ليس أغلى من الجوي على ${shipSlug} (${num(sea)} ≤ ${num(air)} — قطعة خفيفة يتساوى سعرها بعد التقريب)`);
@@ -189,7 +189,7 @@ if (DEEP) {
     return page.locator('a.card .p').evaluateAll(els => els.map(e => {
       const c = e.cloneNode(true); c.querySelectorAll('s').forEach(x => x.remove());
       const head = (c.textContent || '').split('د.ل')[0].replace(/[\s\u066C]/g, '');
-      return parseFloat(head.replace(/\./g, '').replace(/[,\u066B]/g, '.').replace(/[^\d.]/g, '')) || 0;
+      return parseFloat(head.replace(/,/g, '').replace(/[^\d.]/g, '')) || 0;
     }));
   };
   const asc = await priceList('price_asc');

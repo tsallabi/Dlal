@@ -6,7 +6,7 @@ import { hasCJK } from './translate';
 const ts = (s?: string | null) => (s ? new Date(/[TZ]/.test(s) ? s : s.replace(' ', 'T') + 'Z').getTime() : NaN);
 const secsAgo = (s?: string | null, now = Date.now()) => { const t = ts(s); return Number.isFinite(t) ? Math.max(0, Math.round((now - t) / 1000)) : null; };
 
-// نبضة كل ١٥–٢٥ ثانية أثناء الدفعة (إيقاع بشري بين الصفحات). ثلاث دقائق بلا نبضة = توقفت.
+// نبضة كل 15–25 ثانية أثناء الدفعة (إيقاع بشري بين الصفحات). ثلاث دقائق بلا نبضة = توقفت.
 export const STALL_S = 180;
 
 export type LiveState = {
@@ -34,7 +34,7 @@ export async function liveState(db: D1Database): Promise<LiveState> {
   const total = l?.total ?? 0, done = l?.done ?? 0;
   const lastAgoS = secsAgo(l?.last_at, now), startedAgoS = secsAgo(l?.started_at, now), finishedAgoS = secsAgo(l?.finished_at, now);
   const seenAgoS = secsAgo(seen?.value, now);
-  // الإضافة تسأل الخادم كل ١٥ دقيقة؛ وأثناء الدفعة لا تسأل عن المهام بل تمرّ بالطابور والاستيراد
+  // الإضافة تسأل الخادم كل 15 دقيقة؛ وأثناء الدفعة لا تسأل عن المهام بل تمرّ بالطابور والاستيراد
   const online = (seenAgoS !== null && seenAgoS < 40 * 60) || (lastAgoS !== null && lastAgoS < STALL_S);
   let state: LiveState['state'] = 'idle';
   if (l?.status === 'running') state = lastAgoS !== null && lastAgoS < STALL_S ? 'running' : 'stalled';
@@ -57,11 +57,11 @@ export async function liveState(db: D1Database): Promise<LiveState> {
   if (!job) next = 'لا توجد مهمة «فحص المخزون والأسعار» للإضافة.';
   else if (!job.active) next = 'مهمة «فحص المخزون والأسعار» موقوفة — اضغط «تفعيل» في جدول المهام.';
   else if (job.cooldown_until && ts(job.cooldown_until) > now) next = `موقوفة بعد كابتشا — تُستأنف بعد ~${Math.ceil((ts(job.cooldown_until) - now) / 60000)} دقيقة.`;
-  else if (job.run_now) next = 'مطلوبة الآن — تبدأ خلال ١٥ دقيقة على الأكثر (الإضافة تسأل الخادم كل ١٥ دقيقة).';
+  else if (job.run_now) next = 'مطلوبة الآن — تبدأ خلال 15 دقيقة على الأكثر (الإضافة تسأل الخادم كل 15 دقيقة).';
   else {
     const due = ts(job.last_run_at) + (job.interval_hours || 1) * 3600000;
     const m = Number.isFinite(due) ? Math.ceil((due - now) / 60000) : 0;
-    next = m > 0 ? `الدفعة التالية بعد ~${m} دقيقة، ثم تبدأها الإضافة في أول فحص لها (كل ١٥ دقيقة).` : 'مستحقة الآن — تبدأ خلال ١٥ دقيقة على الأكثر.';
+    next = m > 0 ? `الدفعة التالية بعد ~${m} دقيقة، ثم تبدأها الإضافة في أول فحص لها (كل 15 دقيقة).` : 'مستحقة الآن — تبدأ خلال 15 دقيقة على الأكثر.';
   }
   return {
     state, status: l?.status ?? 'idle', total, done, pct: total ? Math.min(100, Math.round((done / total) * 100)) : 0,
@@ -71,7 +71,7 @@ export async function liveState(db: D1Database): Promise<LiveState> {
   };
 }
 
-// «قبل ٤٠ ثانية» / «قبل ٧ دقائق» — عربية بسيطة بلا مكتبة
+// «قبل 40 ثانية» / «قبل 7 دقائق» — عربية بسيطة بلا مكتبة
 export function agoAr(s: number | null) {
   if (s === null) return '—';
   if (s < 60) return `قبل ${s} ثانية`;

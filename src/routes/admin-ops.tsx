@@ -418,7 +418,7 @@ ops.use('/crawler*', requirePerm('catalog.manage'));
 export const EXT_VERSION = '1.7.0';
 
 // شريط تقدّم الإضافة. طلب صاحب المشروع: «ضع شريطًا يظهر التقدّم حتى أعرف أن الإضافة تعمل
-// وتجلب وتثري المنتجات». يُرسم هنا ويُعاد رسمه كل ٥ ثوانٍ من /admin/crawler/live بلا إعادة تحميل.
+// وتجلب وتثري المنتجات». يُرسم هنا ويُعاد رسمه كل 5 ثوانٍ من /admin/crawler/live بلا إعادة تحميل.
 const LiveCard = ({ l }: { l: LiveState }) => {
   const head = l.state === 'running' ? 'الإضافة تعمل الآن — تقرأ صفحات المنتجات وتُثريها'
     : l.state === 'stalled' ? 'توقفت الإضافة في منتصف الدفعة'
@@ -431,7 +431,7 @@ const LiveCard = ({ l }: { l: LiveState }) => {
     : l.state === 'finished' ? agoAr(l.finishedAgoS) : '';
   return (
     <div id="live" class={`card-box live live-${l.state} st-${l.status}`} data-state={l.state}>
-      {/* نسخة قديمة متصلة = نسخة ثانية مثبّتة تزحف بالتوازي. داخل البطاقة المتجدّدة كل ٥ ثوانٍ:
+      {/* نسخة قديمة متصلة = نسخة ثانية مثبّتة تزحف بالتوازي. داخل البطاقة المتجدّدة كل 5 ثوانٍ:
           كان تحذيرًا ثابتًا فبقي أحمر بعد أن حدّث صاحب المشروع الإضافة حتى يعيد تحميل الصفحة */}
       {l.version && l.version !== EXT_VERSION && (
         <p class="live-old" style="font-size:13px;margin:0 0 10px;padding:10px 12px;border-radius:8px;background:#fdecec;border:1px solid #f0b4b4;color:#8c2121">
@@ -442,11 +442,11 @@ const LiveCard = ({ l }: { l: LiveState }) => {
         </p>
       )}
       <div class="live-head"><span class="live-dot"></span><b>{head}</b>{sub && <small> · {sub}</small>}{l.version && <small class="live-ver"> · الإضافة v{l.version}</small>}</div>
-      {/* حجم الدفعة مجهول إن بدأت قبل أن يسجّل الخادم بدايتها (أول دفعة بعد النشر): نعدّ ما قُرئ بلا «من ٠» */}
+      {/* حجم الدفعة مجهول إن بدأت قبل أن يسجّل الخادم بدايتها (أول دفعة بعد النشر): نعدّ ما قُرئ بلا «من 0» */}
       <div class="live-bar" role="progressbar" aria-valuemin={0} aria-valuemax={l.total || undefined} aria-valuenow={l.done}><i style={`width:${l.total ? l.pct : l.done ? 100 : 0}%`}></i></div>
       <div class="live-nums">{l.total
-        ? <><b class="live-count">{l.done.toLocaleString('ar-LY')} من {l.total.toLocaleString('ar-LY')}</b> منتجًا في هذه الدفعة · {l.pct}%{l.etaMin !== null && <> · يتبقّى ~{l.etaMin} دقيقة</>}</>
-        : <><b class="live-count">{l.done.toLocaleString('ar-LY')}</b> منتجًا قُرئ في هذه الدفعة{l.done ? ' (بدأت قبل تحديث الموقع فحجمها غير معروف — يظهر من الدفعة التالية)' : ''}</>}</div>
+        ? <><b class="live-count">{l.done.toLocaleString('en-US')} من {l.total.toLocaleString('en-US')}</b> منتجًا في هذه الدفعة · {l.pct}%{l.etaMin !== null && <> · يتبقّى ~{l.etaMin} دقيقة</>}</>
+        : <><b class="live-count">{l.done.toLocaleString('en-US')}</b> منتجًا قُرئ في هذه الدفعة{l.done ? ' (بدأت قبل تحديث الموقع فحجمها غير معروف — يظهر من الدفعة التالية)' : ''}</>}</div>
       <div class="live-gains">
         <span title="منتجات كانت بصورة واحدة فصار لها معرض صور">🖼 صور <b>+{l.gain.img}</b></span>
         <span title="منتجات لم يكن لها مقاسات ولا ألوان">📏 مقاسات وألوان <b>+{l.gain.vars}</b></span>
@@ -454,7 +454,7 @@ const LiveCard = ({ l }: { l: LiveState }) => {
         <span title="الصفحة لم تُظهر سعرًا: نزل المنتج من 1688 أو لم تُحمَّل">⛔ لم يُقرأ <b>{l.gone}</b></span>
         {l.disc.pages > 0 && <span class="live-new" title="منتجات جديدة استوردتها الإضافة من روابط وجدتها في صفحات 1688 — بلا حساب ولا كريدت">🆕 منتجات جديدة <b>+{l.disc.added}</b></span>}
       </div>
-      {l.disc.pages > 0 && <div class="live-disc">🔗 اكتشاف مجاني: <b>{l.disc.links.toLocaleString('ar-LY')}</b> رابط منتج جديد في <b>{l.disc.linked}</b> من {l.disc.pages} صفحة قرأتها هذه الدفعة{l.disc.linked === 0 ? ' — الصفحات لم تحمل روابط منتجات أخرى' : ''}</div>}
+      {l.disc.pages > 0 && <div class="live-disc">🔗 اكتشاف مجاني: <b>{l.disc.links.toLocaleString('en-US')}</b> رابط منتج جديد في <b>{l.disc.linked}</b> من {l.disc.pages} صفحة قرأتها هذه الدفعة{l.disc.linked === 0 ? ' — الصفحات لم تحمل روابط منتجات أخرى' : ''}</div>}
       {l.last && <div class="live-last">آخر منتج: {l.last.slug ? <a href={`/p/${l.last.slug}`} target="_blank">{l.last.title.slice(0, 70)}</a> : l.last.title} · {agoAr(l.lastAgoS)}</div>}
       {l.state !== 'running' && <div class="live-next">{l.next}</div>}
       {!l.online && l.state !== 'running' && <div class="live-off">الإضافة لم تتصل بالموقع {l.seenAgoS === null ? 'بعد' : `منذ ${agoAr(l.seenAgoS).replace('قبل ', '')}`} — تعمل فقط وكروم مفتوح على هذا الحاسوب.</div>}
@@ -464,7 +464,7 @@ const LiveCard = ({ l }: { l: LiveState }) => {
 const Meter = ({ label, n, total, note }: { label: string; n: number; total: number; note?: string }) => {
   const pct = total ? Math.round((n / total) * 100) : 0;
   return (
-    <div class="meter"><div class="meter-top"><span>{label}</span><b>{n.toLocaleString('ar-LY')} من {total.toLocaleString('ar-LY')} · {pct}%</b></div>
+    <div class="meter"><div class="meter-top"><span>{label}</span><b>{n.toLocaleString('en-US')} من {total.toLocaleString('en-US')} · {pct}%</b></div>
       <div class="live-bar"><i style={`width:${pct}%`}></i></div>{note && <small>{note}</small>}</div>
   );
 };
@@ -491,9 +491,9 @@ ops.get('/crawler', async (c) => {
   const disc = await db.prepare(`SELECT COUNT(*) total, COALESCE(SUM(status='new'),0) pending, COALESCE(SUM(status='imported'),0) imported,
        COALESCE(SUM(status='skipped'),0) skipped, COALESCE(SUM(status='failed'),0) failed FROM discovered_offers`).first<{ total: number; pending: number; imported: number; skipped: number; failed: number }>();
   const perBatch = Math.max(0, parseInt(s.discover_per_batch ?? '') || 0);
-  // معدّل آخر ٢٤ ساعة: ما **فحصته مهمة الإثراء وحدها**. كان يجمع `updated` من كل التشغيلات،
-  // فدخلت فيه مهام البحث الـ١٥٥ على الخادم (كل منها «يحدّث» عشرات المنتجات) فظهر «١٠٬٦٦٠
-  // في ٢٤ ساعة · يكتمل خلال يومين» والإضافة لم تكمل ساعتها الأولى. رقم مطمئن كاذب.
+  // معدّل آخر 24 ساعة: ما **فحصته مهمة الإثراء وحدها**. كان يجمع `updated` من كل التشغيلات،
+  // فدخلت فيه مهام البحث الـ155 على الخادم (كل منها «يحدّث» عشرات المنتجات) فظهر «10٬660
+  // في 24 ساعة · يكتمل خلال يومين» والإضافة لم تكمل ساعتها الأولى. رقم مطمئن كاذب.
   const day = await db.prepare(`SELECT COALESCE(SUM(r.checked),0) n FROM crawl_runs r JOIN crawl_jobs j ON j.id=r.job_id
      WHERE j.type='stock' AND r.started_at >= datetime('now','-24 hours')`).first<{ n: number }>();
   const left = thin?.n ?? 0; const rate = day?.n ?? 0;
@@ -508,7 +508,7 @@ ops.get('/crawler', async (c) => {
       <LiveCard l={live} />
       <script dangerouslySetInnerHTML={{ __html: `(function(){var busy=0;setInterval(function(){if(document.hidden||busy)return;busy=1;fetch('/admin/crawler/live',{credentials:'same-origin'}).then(function(r){return r.ok?r.text():''}).then(function(h){var el=document.getElementById('live');if(h&&el)el.outerHTML=h}).catch(function(){}).then(function(){busy=0})},5000)})()` }} />
       <div class="card-box meters"><h3>اكتمال بيانات الكتالوج</h3>
-        <p class="gains24">أضافته الإضافة فعلًا في ٢٤ ساعة: 🖼 صور لـ<b>{(gains?.img ?? 0).toLocaleString('ar-LY')}</b> منتج · 📏 مقاسات وألوان لـ<b>{(gains?.vars ?? 0).toLocaleString('ar-LY')}</b> · ⚖️ وزن لـ<b>{(gains?.wt ?? 0).toLocaleString('ar-LY')}</b></p>
+        <p class="gains24">أضافته الإضافة فعلًا في 24 ساعة: 🖼 صور لـ<b>{(gains?.img ?? 0).toLocaleString('en-US')}</b> منتج · 📏 مقاسات وألوان لـ<b>{(gains?.vars ?? 0).toLocaleString('en-US')}</b> · ⚖️ وزن لـ<b>{(gains?.wt ?? 0).toLocaleString('en-US')}</b></p>
         <Meter label="🖼 معرض صور (أكثر من صورة)" n={have?.img ?? 0} total={have?.total ?? 0} />
         <Meter label="📏 مقاسات أو ألوان" n={have?.vars ?? 0} total={have?.total ?? 0} note="منتج بلا مقاسات قد يكون فعلًا بمقاس واحد (كوب، حقيبة)." />
         <Meter label="⚖️ وزن حقيقي من المورّد" n={have?.wt ?? 0} total={have?.total ?? 0} note="صفحة 1688 بلا تسجيل دخول لا تذكر الوزن في أغلب المنتجات، فهذا الشريط يتقدّم ببطء مهما عملت الإضافة. حتى يصل الوزن الحقيقي يُسعَّر المنتج بالوزن التقديري لقسمه." />
@@ -518,21 +518,21 @@ ops.get('/crawler', async (c) => {
         <p style="font-size:12.5px;color:#555;margin:0 0 8px">صفحة البحث في 1688 تطلب حسابًا، لكن <b>صفحة المنتج</b> تفتح بلا حساب وقد تحمل روابط منتجات أخرى (توصيات، منتجات المتجر نفسه).
           الإضافة تقرأ هذه الروابط في كل صفحة تزورها للإثراء، ثم تفتح بعضها في الدفعة التالية وتستورده في قسم الصفحة التي وُجد فيها — <b>بلا حساب ولا كريدت</b>.
           المنتج الجديد يمرّ بنفس القواعد: الجملة (أقل طلب قطعتان فأكثر) وإعلانات التغليف تدخل مخفية، والمكرّر الأغلى يُتجاهل، والعنوان الصيني يبقى مسودة حتى يُترجم.</p>
-        <p class="disc-24" style="font-size:13px;margin:0 0 8px">آخر ٢٤ ساعة: قرأت الإضافة <b>{(gains?.pages ?? 0).toLocaleString('ar-LY')}</b> صفحة · وجدت <b>{(gains?.links ?? 0).toLocaleString('ar-LY')}</b> رابط منتج جديد · أضافت <b>{(gains?.neu ?? 0).toLocaleString('ar-LY')}</b> منتجًا جديدًا للمتجر</p>
+        <p class="disc-24" style="font-size:13px;margin:0 0 8px">آخر 24 ساعة: قرأت الإضافة <b>{(gains?.pages ?? 0).toLocaleString('en-US')}</b> صفحة · وجدت <b>{(gains?.links ?? 0).toLocaleString('en-US')}</b> رابط منتج جديد · أضافت <b>{(gains?.neu ?? 0).toLocaleString('en-US')}</b> منتجًا جديدًا للمتجر</p>
         {(gains?.pages ?? 0) >= 20 && (gains?.links ?? 0) === 0 && <p class="disc-none" style="font-size:12.5px;margin:0 0 8px;padding:8px 10px;border-radius:8px;background:#fff6e5;border:1px solid #f0d49b;color:#7a5200">
           قرأت الإضافة {gains?.pages} صفحة ولم تجد فيها رابط منتج آخر واحدًا: صفحة المنتج في 1688 لا تعرض التوصيات لزائر غير مسجّل. الاكتشاف المجاني لا يعمل بهذا الطريق — جلب منتجات جديدة يبقى عبر مزوّد API أو زر الاستيراد يدويًا.</p>}
-        <p class="disc-q" style="font-size:13px;margin:0 0 8px">في الطابور: <b>{(disc?.pending ?? 0).toLocaleString('ar-LY')}</b> ينتظر · أُضيف {(disc?.imported ?? 0).toLocaleString('ar-LY')} · مكرّر أو مرفوض {(disc?.skipped ?? 0).toLocaleString('ar-LY')} · تعذّرت قراءته {(disc?.failed ?? 0).toLocaleString('ar-LY')}</p>
+        <p class="disc-q" style="font-size:13px;margin:0 0 8px">في الطابور: <b>{(disc?.pending ?? 0).toLocaleString('en-US')}</b> ينتظر · أُضيف {(disc?.imported ?? 0).toLocaleString('en-US')} · مكرّر أو مرفوض {(disc?.skipped ?? 0).toLocaleString('en-US')} · تعذّرت قراءته {(disc?.failed ?? 0).toLocaleString('en-US')}</p>
         <form method="post" action="/admin/crawler/discover" class="inline" style="gap:8px;align-items:center"><label style="margin:0">منتجات جديدة في كل دفعة</label>
           <input type="number" name="per" value={String(perBatch)} min="0" max="100" style="width:80px" /><button class="btn sm">حفظ</button>
-          <small style="color:#666">٠ = إيقاف الاستيراد (تبقى الروابط تُجمع). كل منتج صفحة إضافية بإيقاع بشري ≈ ١٥ ثانية؛ يتطلب الإضافة 1.7.0.</small></form>
+          <small style="color:#666">0 = إيقاف الاستيراد (تبقى الروابط تُجمع). كل منتج صفحة إضافية بإيقاع بشري ≈ 15 ثانية؛ يتطلب الإضافة 1.7.0.</small></form>
       </div>
       <div class="kpis">
         <div class="kpi"><b class={online ? 'ok' : ''} style={online ? 'color:#1a9c5b' : 'color:#d3262b'}>{online ? 'متصلة' : 'غير متصلة'}</b><span>آخر اتصال: {seen} {s.crawler_version ? `· v${s.crawler_version}` : ''}</span></div>
         <div class="kpi"><b>{jobs.results.filter(j => j.active).length}</b><span>مهمة نشطة</span></div>
         <div class="kpi"><b>{runs.results.reduce((a, r) => a + r.imported, 0)}</b><span>منتج جديد في آخر 30 تشغيلًا</span></div>
         <div class="kpi"><b>{runs.results.filter(r => r.status === 'blocked').length}</b><span>حجب/كابتشا مؤخرًا</span></div>
-        <div class="kpi"><b style={left > 0 ? 'color:#d68b00' : 'color:#1a9c5b'}>{left.toLocaleString('ar-LY')}</b><span>متبقٍ للإثراء (ينقصه صور أو مقاسات أو وزن)</span></div>
-        <div class="kpi"><b>{rate.toLocaleString('ar-LY')}</b><span>فحصتها الإضافة في ٢٤ ساعة{eta !== null ? ` · يكتمل خلال ~${eta} يومًا بهذا المعدل` : ''}</span></div>
+        <div class="kpi"><b style={left > 0 ? 'color:#d68b00' : 'color:#1a9c5b'}>{left.toLocaleString('en-US')}</b><span>متبقٍ للإثراء (ينقصه صور أو مقاسات أو وزن)</span></div>
+        <div class="kpi"><b>{rate.toLocaleString('en-US')}</b><span>فحصتها الإضافة في 24 ساعة{eta !== null ? ` · يكتمل خلال ~${eta} يومًا بهذا المعدل` : ''}</span></div>
       </div>
       <div class="two" style="grid-template-columns:1fr 360px">
         <div>
@@ -582,7 +582,7 @@ ops.get('/crawler', async (c) => {
     </>
   ));
 });
-// جزء الصفحة الذي يتجدّد كل ٥ ثوانٍ: شريط التقدّم وحده (استعلام خفيف بلا إحصاءات الكتالوج)
+// جزء الصفحة الذي يتجدّد كل 5 ثوانٍ: شريط التقدّم وحده (استعلام خفيف بلا إحصاءات الكتالوج)
 ops.get('/crawler/live', async (c) => c.html(<LiveCard l={await liveState(c.env.DB)} />));
 
 ops.post('/crawler/discover', async (c) => {
@@ -606,7 +606,7 @@ ops.post('/crawler/:id', async (c) => {
   else if (f.action === 'toggle') await db.prepare('UPDATE crawl_jobs SET active=1-active WHERE id=?').bind(id).run();
   else if (f.action === 'run') await db.prepare('UPDATE crawl_jobs SET run_now=1,cooldown_until=NULL,active=1 WHERE id=?').bind(id).run();
   else if (f.action === 'runner') {
-    // البحث وروابط القوائم تتطلب حساب 1688، والإضافة تعمل بلا حساب: تُحوَّل إلى صفحة الدخول فتعود «ok — ٠».
+    // البحث وروابط القوائم تتطلب حساب 1688، والإضافة تعمل بلا حساب: تُحوَّل إلى صفحة الدخول فتعود «ok — 0».
     // الإضافة لفحص المخزون والإثراء وحده (صفحة المنتج تفتح بلا حساب).
     const job = await db.prepare('SELECT type FROM crawl_jobs WHERE id=?').bind(id).first<{ type: string }>();
     const want = ['any', 'server', 'extension'].includes(String(f.runner)) ? String(f.runner) : 'any';
@@ -623,7 +623,7 @@ ops.post('/crawler/:id', async (c) => {
 // ---------- مزوّد API لبيانات 1688 (طرف ثالث) ----------
 ops.use('/source*', requirePerm('catalog.manage'));
 // أرقام صحة الكتالوج: ما يراه الزبون فعلًا، وما ينقصه، وما هو محجوز — وكلها أزرار تشتغل من هنا
-// سعر الاستدعاء عند TMAPI: ٢٠ كريدت للاستدعاء الأساسي (مكتوب في تلميح لوحتهم، وقد يختلف
+// سعر الاستدعاء عند TMAPI: 20 كريدت للاستدعاء الأساسي (مكتوب في تلميح لوحتهم، وقد يختلف
 // باختلاف الـendpoint). كل عرض للتكلفة هنا تقدير مبنيّ عليه لا فاتورة.
 export const CREDIT_PER_CALL = 20;
 
@@ -646,7 +646,7 @@ async function health(db: D1Database) {
        OR (SELECT COUNT(*) FROM variants v WHERE v.product_id=p.id) = 0 OR p.weight_g IS NULL)`).first<{ n: number }>();
   const stockJob = await db.prepare("SELECT id FROM crawl_jobs WHERE type='stock' ORDER BY id LIMIT 1").first<{ id: number }>();
   const s = await loadSettings(db);
-  // سعر الاستدعاء ٢٠ كريدت (مقيس من لوحة TMAPI ٢٢/٠٩/٢٦)؛ الباقة ٢٠٠٠٠٠ كريدت = ١٠٠٠٠ استدعاء
+  // سعر الاستدعاء 20 كريدت (مقيس من لوحة TMAPI 22/09/26)؛ الباقة 200000 كريدت = 10000 استدعاء
   const cap = parseInt(s.src_month_limit ?? '0') || 0;
   const budget = cap || 9000;
   const left = Math.max(0, budget - (month?.n ?? 0));
@@ -687,20 +687,20 @@ ops.get('/source', async (c) => {
               <div class="kpi"><b style={h.cn_live ? 'color:#d3262b' : 'color:#1a9c5b'}>{h.cn_live}</b><span>عنوان صيني ظاهر (يجب أن يكون صفرًا)</span></div>
               <div class="kpi"><b>{h.draft}</b><span>محجوز حتى تكتمل ترجمته</span></div>
               <div class="kpi"><b>{h.thin}</b><span>ينقصه صور/مقاسات/وزن</span></div>
-              <div class="kpi"><b style={h.stuck ? 'color:#c77700' : ''}>{h.stuck}</b><span>تعذّر إثراؤه (٣ محاولات) — <a href="/admin/products?stuck=1">اعرضيها</a></span></div>
+              <div class="kpi"><b style={h.stuck ? 'color:#c77700' : ''}>{h.stuck}</b><span>تعذّر إثراؤه (3 محاولات) — <a href="/admin/products?stuck=1">اعرضيها</a></span></div>
               <div class="kpi"><b>{h.oos}</b><span>نفد عند المورد</span></div>
               <div class="kpi"><b>{h.calls}</b><span>استدعاء للمزوّد (الكل)</span></div>
-              <div class="kpi"><b style={h.left <= 0 ? 'color:#d3262b' : ''}>{h.month} / {h.budget}</b><span>هذا الشهر{h.left <= 0 ? ' — انتهت الميزانية' : ` (${(h.left * h.credits).toLocaleString('ar-LY')} كريدت متبقٍ)`}</span></div>
+              <div class="kpi"><b style={h.left <= 0 ? 'color:#d3262b' : ''}>{h.month} / {h.budget}</b><span>هذا الشهر{h.left <= 0 ? ' — انتهت الميزانية' : ` (${(h.left * h.credits).toLocaleString('en-US')} كريدت متبقٍ)`}</span></div>
             </div>
-            {!h.cap && <Flash msg={`لا يوجد سقف شهري مضبوط، فنعمل على ميزانية افتراضية ${h.budget} استدعاء. اكتبي السقف في الحقل أعلاه ليطابق باقتك: الباقة ٢٠٠٠٠٠ كريدت ÷ ٢٠ كريدت للاستدعاء = ١٠٠٠٠ استدعاء.`} />}
+            {!h.cap && <Flash msg={`لا يوجد سقف شهري مضبوط، فنعمل على ميزانية افتراضية ${h.budget} استدعاء. اكتبي السقف في الحقل أعلاه ليطابق باقتك: الباقة 200000 كريدت ÷ 20 كريدت للاستدعاء = 10000 استدعاء.`} />}
             <p style="font-size:12px;color:#666;margin-top:8px">
               التكلفة: <b>{h.credits} كريدت لكل استدعاء</b> (استدعاء واحد لكل منتج). الإثراء التلقائي يأخذ <b>{h.perHour}</b> منتجًا كل ساعة
-              ليوزّع الميزانية على الشهر — المتبقي يكفي نحو <b>{h.days}</b> يومًا. ضغطة «أثرِ ١٠ منتجات» تكلّف <b>{10 * h.credits}</b> كريدت.
-              {h.thin > 1000 && ' ما دام الناقص فوق ١٠٠٠ منتج، الميزانية تذهب لإكماله ولا تُنفق على جلب بضاعة جديدة تلقائيًا (البحث اليدوي من صفحة الزاحف يبقى متاحًا).'}
+              ليوزّع الميزانية على الشهر — المتبقي يكفي نحو <b>{h.days}</b> يومًا. ضغطة «أثرِ 10 منتجات» تكلّف <b>{10 * h.credits}</b> كريدت.
+              {h.thin > 1000 && ' ما دام الناقص فوق 1000 منتج، الميزانية تذهب لإكماله ولا تُنفق على جلب بضاعة جديدة تلقائيًا (البحث اليدوي من صفحة الزاحف يبقى متاحًا).'}
             </p>
             <div class="inline" style="margin-top:10px;flex-wrap:wrap">
-              <form method="post" action="/admin/source/enrich" class="inline"><button class="btn sm ok" disabled={!prov || !h.stockJob}>أثرِ ١٠ منتجات الآن</button></form>
-              <form method="post" action="/admin/source/translate" class="inline"><button class="btn sm ghost" disabled={!c.env.AI}>ترجم ٢٠ عنوانًا الآن</button></form>
+              <form method="post" action="/admin/source/enrich" class="inline"><button class="btn sm ok" disabled={!prov || !h.stockJob}>أثرِ 10 منتجات الآن</button></form>
+              <form method="post" action="/admin/source/translate" class="inline"><button class="btn sm ghost" disabled={!c.env.AI}>ترجم 20 عنوانًا الآن</button></form>
             </div>
             <p style="font-size:12px;color:#666;margin-top:8px">كل ضغطة تأخذ دفعة واحدة وتعود بالنتيجة، فاضغطي مرة بعد مرة. الإثراء يبدأ بالمحجوزات: يجلب الصور والمقاسات والوزن ويُخرجها للمتجر. الوزن هو ما يُحسب عليه الشحن، فإثراؤه يصحّح السعر.</p>
           </div>

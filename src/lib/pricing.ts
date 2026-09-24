@@ -30,8 +30,8 @@ export type ShipMode = 'air' | 'sea';
 // معدّلات الشحن حسب الطريقة: الجوي أسرع وأغلى، والبحري أرخص وأبطأ
 export function shipRates(s: Settings, mode: ShipMode) {
   return mode === 'sea'
-    ? { perKg: parseFloat(s.ship_usd_per_kg_sea || '2.3'), perCbm: parseFloat(s.ship_usd_per_cbm_sea || '120'), days: s.sea_days || '٣٠ — ٤٥ يومًا', ar: 'بحري' as const }
-    : { perKg: parseFloat(s.ship_usd_per_kg || '9'), perCbm: parseFloat(s.ship_usd_per_cbm || '260'), days: s.air_days || '١٢ — ١٨ يومًا', ar: 'جوي' as const };
+    ? { perKg: parseFloat(s.ship_usd_per_kg_sea || '2.3'), perCbm: parseFloat(s.ship_usd_per_cbm_sea || '120'), days: s.sea_days || '30 — 45 يومًا', ar: 'بحري' as const }
+    : { perKg: parseFloat(s.ship_usd_per_kg || '9'), perCbm: parseFloat(s.ship_usd_per_cbm || '260'), days: s.air_days || '12 — 18 يومًا', ar: 'جوي' as const };
 }
 export const seaOn = (s: Settings) => (s.sea_enabled ?? '1') === '1';
 
@@ -74,8 +74,8 @@ export function computePrice(
 
   const goods = sourcePriceCny * fx;
   // الشحن الداخلي في الصين يُدفع **مرة واحدة للطرد** لا لكل قطعة.
-  // قطعة أقلّ طلبها ١٠٠ تصل في طرد واحد، فتحميل كل قطعة ٦ يوان كان يضاعف سعر اللوط ٧٠ ضعفًا:
-  // كيس بـ0.05 يوان ظهر بـ٨ د.ل للقطعة و٨٠٠ د.ل للّوط، و٩٩٪ منها شحن داخلي مكرَّر (٢٢/٠٩/٢٦).
+  // قطعة أقلّ طلبها 100 تصل في طرد واحد، فتحميل كل قطعة 6 يوان كان يضاعف سعر اللوط 70 ضعفًا:
+  // كيس بـ0.05 يوان ظهر بـ8 د.ل للقطعة و800 د.ل للّوط، و99% منها شحن داخلي مكرَّر (22/09/26).
   const domesticShip = (domestic * fx) / Math.max(1, minQty || 1);
   const intlShip = ch.kg * usdPerKg * usd;
   const customsFee = goods * customs;
@@ -101,5 +101,5 @@ export function roundPrice(v: number) {
 const r2 = (v: number) => Math.round(v * 100) / 100;
 
 export function fmtLyd(v: number) {
-  return new Intl.NumberFormat('ar-LY', { maximumFractionDigits: v % 1 ? 2 : 0 }).format(v) + ' د.ل';
+  return new Intl.NumberFormat('en-US', { maximumFractionDigits: v % 1 ? 2 : 0 }).format(v) + ' د.ل';
 }

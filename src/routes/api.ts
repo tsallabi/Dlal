@@ -44,7 +44,7 @@ api.post('/import', async (c) => {
 });
 
 // ---------- شريط تقدّم الإضافة ----------
-// الإضافة (حتى 1.5.0) لا تكلّم الخادم إلا في آخر الدفعة — ١٠٠ منتج ≈ نصف ساعة من الصمت.
+// الإضافة (حتى 1.5.0) لا تكلّم الخادم إلا في آخر الدفعة — 100 منتج ≈ نصف ساعة من الصمت.
 // لكنها تمرّ على الخادم عند كل منتج أصلًا: الطابور في البداية، ثم /import (ext:stock) أو
 // /import/check لكل منتج، ثم /crawl/report في النهاية. نسجّل هذه المرور فيصير للصمت شريط.
 export async function liveStep(db: D1Database, n: number, g: { img: number; vars: number; wt: number } | null, gone: number, offer: string, neu = 0) {
@@ -69,7 +69,7 @@ api.get('/import/queue', async (c) => {
   // بداية دفعة: الإضافة تأخذ من الطابور بقدر حدّ مهمة الإثراء (max_new)
   const job = await c.env.DB.prepare("SELECT id,max_new FROM crawl_jobs WHERE type='stock' AND runner IN ('any','extension') ORDER BY active DESC,id LIMIT 1").first<{ id: number; max_new: number | null }>();
   // دفعة سابقة لم ترسل تقريرها (مات عامل الخلفية في كروم): نسجّلها في سجل التشغيل بما أضافته،
-  // وإلا ضاع ما أُضيف من «أضافته في ٢٤ ساعة» ولم يعرف صاحب المشروع أن الدفعات تنقطع.
+  // وإلا ضاع ما أُضيف من «أضافته في 24 ساعة» ولم يعرف صاحب المشروع أن الدفعات تنقطع.
   const prev = await c.env.DB.prepare('SELECT * FROM crawler_live WHERE id=1').first<any>();
   if (job && prev?.status === 'running' && prev.done > 0) {
     await c.env.DB.prepare(`INSERT INTO crawl_runs(job_id,started_at,status,pages,found,imported,updated,enriched,checked,note,gain_img,gain_var,gain_wt,gain_new,links_new) VALUES(?,?,'partial',?,0,?,?,?,?,?,?,?,?,?,?)`)
@@ -155,7 +155,7 @@ const touch = (db: D1Database, ver: string | undefined) => db.batch([
 ]);
 
 // المهام المستحقة الآن (الخادم يقرر الاستحقاق). للإضافة مهمة فحص المخزون وحدها: صفحة المنتج تفتح بلا حساب
-// 1688، أما البحث فيحوّلها إلى صفحة الدخول فتعود «ok — ٠» (حدث ٢٤/٠٩/٢٦ لثماني مهام بحث)
+// 1688، أما البحث فيحوّلها إلى صفحة الدخول فتعود «ok — 0» (حدث 24/09/26 لثماني مهام بحث)
 api.get('/crawl/jobs', async (c) => {
   if (!tokenOk(c)) return c.json({ error: 'رمز غير صحيح' }, 401);
   await touch(c.env.DB, c.req.query('v'));
@@ -177,7 +177,7 @@ api.post('/crawl/report', async (c) => {
   const db = c.env.DB;
   const status = ['ok', 'blocked', 'error', 'partial'].includes(b.status) ? b.status : 'ok';
   // دفعة الإثراء: ما أُضيف فعلًا يأتي من سجلّ الخادم الحي لا من عدّاد الإضافة
-  // (الإضافة 1.5.0 تعدّ كل مرور «مُثرى» فتكتب ١٠٠ من ١٠٠ دائمًا)
+  // (الإضافة 1.5.0 تعدّ كل مرور «مُثرى» فتكتب 100 من 100 دائمًا)
   const job = await db.prepare('SELECT type FROM crawl_jobs WHERE id=?').bind(b.job_id ?? 0).first<{ type: string }>();
   const live = job?.type === 'stock' ? await db.prepare('SELECT * FROM crawler_live WHERE id=1').first<any>() : null;
   const g = { img: live?.gain_img ?? 0, vars: live?.gain_var ?? 0, wt: live?.gain_wt ?? 0 };
@@ -246,7 +246,7 @@ api.get('/logic-check', async (c) => {
   ];
   // قيم متغيّرات حقيقية بقيت صينية على الموقع الحي: يجب أن يترجمها القاموس بلا استدعاء نموذج
   const attrs = ['8号', '9号', '10号', '2号色', '黑色 M', '均码', '藏青色'];
-  // كلمات عربية ملتصقة ببقية لاتينية — أمثلة حقيقية من الموقع الحي (٢٢/٠٩/٢٦)
+  // كلمات عربية ملتصقة ببقية لاتينية — أمثلة حقيقية من الموقع الحي (22/09/26)
   const mashed = [
     'كيس شفاف للهاتف والسماعات مع زippers',
     'حذاء صيفي أنثوي بheel عريض ومستقر',
@@ -279,13 +279,13 @@ api.get('/logic-check', async (c) => {
     kinds: { rack: kindOf('蓝牙耳机展示架 手机壳挂件架'), fake: kindOf('仿真向日葵假花家居装饰'), sauna: kindOf('加厚面料男女款汗蒸服桑拿服'), prop: kindOf('木质蝴蝶墙贴摄影道具'), mannequin: kindOf('服装店模特展示'), none: kindOf('新款女士单肩包时尚百搭'), empty: kindOf(null) },
     // رأس عمود جدول المواصفات بدل القيمة: «المقاس» كمقاس و«اللون» كلون
     attrs2: { cjkSize: attrValue('尺码'), cjkColor: attrValue('颜色：'), arSize: attrValue('المقاس'), arColor: attrValue('اللون'), realColor: attrValue('أحمر'), realSize: attrValue('XL'), empty: attrValue('  ') },
-    // وزن المورّد: كيلو أم غرام؟ قيم حقيقية من TMAPI أنتجت رفّ حمام بـ٦٥٠ كغ
+    // وزن المورّد: كيلو أم غرام؟ قيم حقيقية من TMAPI أنتجت رفّ حمام بـ650 كغ
     weights: { kg: normWeightG(0.65) ?? null, gramsInKgField: normWeightG(650) ?? null, absurd: normWeightG(650000) ?? null, zero: normWeightG(0) ?? null, specKg: normWeightG(0.3, 'raw') ?? null, specG: normWeightG(800, 'raw') ?? null },
     pricing: {
       light: computePrice(s, 25, 800, null, 1500),                       // صغيرة وثقيلة
       bulky: computePrice(s, 25, 300, null, 40000),                      // كبيرة وخفيفة
       byKg: computePrice({ ...s, ship_mode: 'kg' }, 25, 300, null, 40000),
-      // الشحن الداخلي في الصين للطرد الواحد: قطعة أقلّها ١٠٠ لا تحمل ١٠٠ ضعفه
+      // الشحن الداخلي في الصين للطرد الواحد: قطعة أقلّها 100 لا تحمل 100 ضعفه
       lot1: computePrice(s, 0.05, 1, null, null, 'air', 1),
       lot100: computePrice(s, 0.05, 1, null, null, 'air', 100),
       lot100Sea: computePrice(s, 0.05, 1, null, null, 'sea', 100),
@@ -343,9 +343,9 @@ api.post('/source/audit', async (c) => {
     if (why) add(`مكسور: ${why}`, r.id, t);
     if (/(\S{2,})\s+\1(\s|$)/.test(t)) add('كلمة مكرّرة مرتين متتاليتين', r.id, t);
     if (words.length <= 1) add('عنوان من كلمة واحدة', r.id, t);
-    if (words.length === 2 && t.length < 12) add('عنوان قصير جدًا (كلمتان تحت ١٢ حرفًا)', r.id, t);
-    if (t.length > 120) add('عنوان أطول من ١٢٠ حرفًا', r.id, t);
-    if ((t.match(/\d+/g) ?? []).length >= 4) add('أرقام كثيرة في العنوان (٤ فأكثر)', r.id, t);
+    if (words.length === 2 && t.length < 12) add('عنوان قصير جدًا (كلمتان تحت 12 حرفًا)', r.id, t);
+    if (t.length > 120) add('عنوان أطول من 120 حرفًا', r.id, t);
+    if ((t.match(/\d+/g) ?? []).length >= 4) add('أرقام كثيرة في العنوان (4 فأكثر)', r.id, t);
     // الصيني له عدّاده المستقل فلا يُحسب هنا مرتين؛ نبحث عن رموز لا لغة لها
     if (!/[\u4e00-\u9fff]/.test(t) && /[^\u0600-\u06FF\s\d(),.\/\-x×+%A-Za-z،؛:'"«»&]/.test(t)) add('رموز غريبة في العنوان', r.id, t);
     if (/\b(الوسوم|العلامات|الكلمات المفتاحية|نص|عنوان المنتج)\b/.test(t)) add('كلمة من تعليمات النموذج تسرّبت', r.id, t);
@@ -365,7 +365,7 @@ api.post('/source/audit', async (c) => {
   const body = await c.req.json<{ fix?: boolean }>().catch(() => ({} as any));
   let flagged = 0;
   if (body.fix && flag.length) {
-    // D1 يرفض ما يزيد على ١٠٠ متغيّر مربوط في الجملة الواحدة («too many SQL variables»)،
+    // D1 يرفض ما يزيد على 100 متغيّر مربوط في الجملة الواحدة («too many SQL variables»)،
     // والمعرّفات أرقام صحيحة من القاعدة نفسها فنكتبها حرفيًا بعد التحقق من أنها أعداد.
     const ids = flag.filter(Number.isInteger);
     for (let i = 0; i < ids.length; i += 500) {

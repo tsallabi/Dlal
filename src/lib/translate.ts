@@ -22,7 +22,7 @@ export function dictTranslate(s: string): string | null {
   if (m) { const a = dictTranslate(m[1]); const b = dictTranslate(m[2]); if (a !== null && b !== null) return `${a} ${b}`.trim(); }
   const sz = k.match(/^(XXS|XS|S|M|L|XL|XXL|XXXL|2XL|3XL|4XL|5XL|\d{2,3})码?$/i);
   if (sz) return sz[1].toUpperCase();
-  // مقاس برقم: «8号» في الخواتم والأحذية = المقاس ٨، و«2号色» = اللون رقم ٢
+  // مقاس برقم: «8号» في الخواتم والأحذية = المقاس 8، و«2号色» = اللون رقم 2
   const no = k.match(/^(\d{1,3}(?:\.\d)?)\s*号(色)?$/);
   if (no) return no[2] ? `اللون رقم ${no[1]}` : `مقاس ${no[1]}`;
   // مركّب بلا فاصل: "白色豹纹" = 白色 + 豹纹 → "أبيض نمري"
@@ -38,7 +38,7 @@ const tidyJoin = (t: string) => t
   .replace(/\s+([,،])/g, '$1').replace(/\s{2,}/g, ' ').trim();
 
 // النموذج يخلط أبجديات أخرى لا لاتينية فقط: «بال스타يل» كورية، «تنورةチュチュ» يابانية،
-// «розية» سيريلية، «đế مسطح» فيتنامية. ١٤٣ عنوانًا حيًا في ٢٢/٠٩/٢٦.
+// «розية» سيريلية، «đế مسطح» فيتنامية. 143 عنوانًا حيًا في 22/09/26.
 // اللاتينية مسموحة (XL، USB)، وكل ما عداها في عنوان عربي خطأ نموذج لا محالة.
 const FOREIGN_SCRIPT = /[\u1100-\u11FF\u3040-\u30FF\u3130-\u318F\uAC00-\uD7AF\u0400-\u04FF\u0E00-\u0E7F\u0370-\u03FF\u0102\u0103\u0110\u0111\u01A0\u01A1\u01AF\u01B0\u1EA0-\u1EF9]/;
 // النموذج يلصق أحيانًا بقية كلمة لاتينية بكلمة عربية: «زippers»، «الكitchen»، «كاردigan»،
@@ -58,7 +58,7 @@ export function dropMixedWords(t: string): string | null {
 // تكرار بلا مسافة واحدة: «الوسومالوسومالوسوم…» ملأ خمسة عناوين حية (شُعيرات، أقراط،
 // دمبل، أحمرا شفاه) ومرّ من الحارس القديم لأنه يقسّم على المسافات ولا مسافة هنا إطلاقًا.
 const REPEAT_NOSPACE = /(.{2,12}?)\1{3,}/;
-// عنوان عربي طبيعي لا يتجاوز ٢٥ حرفًا بكلمة واحدة: غيابُ المسافات علامة نصٍّ ملتصق
+// عنوان عربي طبيعي لا يتجاوز 25 حرفًا بكلمة واحدة: غيابُ المسافات علامة نصٍّ ملتصق
 const GLUED = (t: string) => t.length > 25 && (t.match(/\s/g)?.length ?? 0) < 2;
 const degenerate = (t: string) => {
   const w = t.split(/\s+/).filter(Boolean);
@@ -73,7 +73,7 @@ export const goodArabic = (t: string | null | undefined) => !!t && /[\u0600-\u06
 // الكلمة المشبوهة لا تكفي وحدها: خيمة إغاثة أصلها 抗震救灾 فيها «زلازل» صحيحة.
 // نطالب بوجود أثرها في العنوان الصيني، فإن غاب فهي هلوسة نموذج.
 // كلمة مكرّرة مرتين متتاليتين: «سلة طويلة طويلة»، «للسيارات للسيارات»، «منصة منصة».
-// حارس التكرار القديم يشترط ثلاث مرات فلم يرَ ٢٧ عنوانًا حيًا.
+// حارس التكرار القديم يشترط ثلاث مرات فلم يرَ 27 عنوانًا حيًا.
 const DUP_ADJACENT = /(\S{2,})\s+\1(\s|$)/;
 const LEAD_ADJ = /^(حمراء|زرقاء|بيضاء|سوداء|خضراء|صفراء|وردية|ذهبية|فضية|بنفسجية|رمادية|كبيرة|صغيرة|جميلة|أنيقة|ناعمة|سميكة|خفيفة|مزيفة|صناعية|جديدة|فاخرة|مريحة|شفافة|طويلة|قصيرة)\s/;
 // السوابق العربية تلتصق بالكلمة: «للزلازل» = لِ + الزلازل. بدونها لا يُمسك شيء.
@@ -113,7 +113,7 @@ export function brokenTitle(titleAr: string | null | undefined, titleSrc: string
   if (REPEAT_NOSPACE.test(t)) return 'كلمة مكرّرة بلا مسافات';
   if (FOREIGN_SCRIPT.test(t)) return 'حروف من أبجدية أخرى (كورية أو يابانية أو سيريلية)';
   if (DUP_ADJACENT.test(t)) return 'كلمة مكرّرة مرتين متتاليتين';
-  if (t.length > 120) return 'عنوان أطول من ١٢٠ حرفًا — حشو كلمات مفتاحية';
+  if (t.length > 120) return 'عنوان أطول من 120 حرفًا — حشو كلمات مفتاحية';
   if (GLUED(t)) return 'نص ملتصق بلا مسافات';
   if (LEAD_ADJ.test(t)) return 'يبدأ بصفة ولا اسم منتج فيه';
   for (const w of SUSPECT) if (w.re.test(t) && !w.src.some(x => src.includes(x))) return `كلمة «${w.why}» لا أصل لها في العنوان الصيني`;
@@ -141,7 +141,7 @@ export function cleanTitle(t: string): string {
 }
 
 // m2m100 يُنتج تكرارًا فارغًا («سباحة سباحة سباحة…») على عناوين 1688 — مقيس على الموقع الحي، فلم يعد في السلسلة.
-// النماذج أدناه مرتبة بنتيجة قياس فعلي على عنوان عباية حقيقي (سبتمبر ٢٠٢٦):
+// النماذج أدناه مرتبة بنتيجة قياس فعلي على عنوان عباية حقيقي (سبتمبر 2026):
 //   llama-4-scout 645ms أدقها · llama-3.3-70b 876ms · mistral-small 263ms أسرعها · llama-3.1-8b-fp8 738ms
 // المحذوفة: llama-3.1-8b (5028 مُلغى) · qwen1.5-14b (مُلغى) · qwen2.5-14b (غير موجود) · gemma-3 (ممنوع للحساب)
 const TITLE_MODELS = ['@cf/meta/llama-4-scout-17b-16e-instruct', '@cf/meta/llama-3.3-70b-instruct-fp8-fast', '@cf/mistralai/mistral-small-3.1-24b-instruct', '@cf/meta/llama-3.1-8b-instruct-fp8'];
@@ -254,13 +254,19 @@ export async function releaseHeldDrafts(db: D1Database): Promise<number> {
 // نتركه للنموذج أولًا لأن الحذف يُفقد معنى («كاردigan» ⟵ تختفي الكاردigan)، وهذا آخر ما نلجأ إليه
 // حتى لا يبقى نص مكسور أمام الزبونة إلى الأبد.
 export async function sweepMashedTitles(db: D1Database, minTries = 2): Promise<number> {
-  const { results } = await db.prepare(`SELECT id,title_ar FROM products
-     WHERE tr_tries >= ? AND (title_ar GLOB '*[\u0621-\u064A][a-zA-Z]*' OR title_ar GLOB '*[a-zA-Z][\u0621-\u064A]*'
-        OR title_ar GLOB '*[\uAC00-\uD7AF]*' OR title_ar GLOB '*[\u3040-\u30FF]*' OR title_ar GLOB '*[\u0400-\u04FF]*') LIMIT 200`).bind(minTries).all<{ id: number; title_ar: string }>();
-  let n = 0;
-  for (const p of results) {
-    const fixed = dropMixedWords(p.title_ar);
-    if (fixed && goodTitle(fixed)) { await db.prepare('UPDATE products SET title_ar=?,updated_at=datetime(\'now\') WHERE id=?').bind(fixed, p.id).run(); n++; }
+  // صفحات متتالية بالمعرّف لا «أول ٢٠٠» بلا ترتيب: العنوان الذي لا يُصلحه الحذف (يبقى أقصر من
+  // عنوان سليم) لا يتغيّر فيبقى في الدفعة إلى الأبد، فتسدّ ٢٠٠ منها الكنس عمّا بعدها (٢٤/٠٩/٢٦)
+  let n = 0, before = Number.MAX_SAFE_INTEGER;
+  for (let page = 0; page < 10; page++) {
+    const { results } = await db.prepare(`SELECT id,title_ar FROM products
+       WHERE tr_tries >= ? AND id < ? AND (title_ar GLOB '*[\u0621-\u064A][a-zA-Z]*' OR title_ar GLOB '*[a-zA-Z][\u0621-\u064A]*'
+          OR title_ar GLOB '*[\uAC00-\uD7AF]*' OR title_ar GLOB '*[\u3040-\u30FF]*' OR title_ar GLOB '*[\u0400-\u04FF]*') ORDER BY id DESC LIMIT 200`).bind(minTries, before).all<{ id: number; title_ar: string }>();
+    for (const p of results) {
+      const fixed = dropMixedWords(p.title_ar);
+      if (fixed && goodTitle(fixed)) { await db.prepare('UPDATE products SET title_ar=?,updated_at=datetime(\'now\') WHERE id=?').bind(fixed, p.id).run(); n++; }
+    }
+    if (results.length < 200) break;
+    before = results[results.length - 1].id;
   }
   return n;
 }
@@ -272,7 +278,7 @@ export async function retranslatePending(db: D1Database, ai: any, limit = 40): P
   // العنوان المكسور («زippers»، «الكitchen») يدخل الطابور كما يدخله الصيني: كلاهما نص لا يُقرأ.
   const MASHED = `(title_ar GLOB '*[\u0621-\u064A][a-zA-Z]*' OR title_ar GLOB '*[a-zA-Z][\u0621-\u064A]*')`;
   // عنوان بلا حرف عربي واحد: ترجمة المزوّد الإنجليزية حُفظت كما هي حين فشلت العربية.
-  // ٢٧ منتجًا حيًا أصلها الصيني محفوظ ومحاولاتها صفر: هي في الطابور ولا يصلها الدور أبدًا
+  // 27 منتجًا حيًا أصلها الصيني محفوظ ومحاولاتها صفر: هي في الطابور ولا يصلها الدور أبدًا
   // لأن الترتيب يدفنها تحت آلاف الصفوف. ترتفع هنا إلى المرتبة الثانية بعد الصيني.
   const NO_AR = `(title_ar NOT GLOB '*[\u0621-\u064A]*')`;
   const DUP_SQL = `(tr_tries < 12 AND lower(title_ar) IN (SELECT lower(title_ar) FROM products
@@ -332,7 +338,7 @@ export async function retranslatePending(db: D1Database, ai: any, limit = 40): P
     }
     tried++;
   }
-  // ١٢٠ قيمة لكل دفعة: ٣٠٠ كانت تُطيل الاستدعاء إلى دقائق فتتأخر كل دفعة ويقترب الكرون من حدّه
+  // 120 قيمة لكل دفعة: 300 كانت تُطيل الاستدعاء إلى دقائق فتتأخر كل دفعة ويقترب الكرون من حدّه
   // قيم المتغيّرات المكسورة تُعرض للزبونة في منتقي اللون والمقاس مثل «الرetro الأسود» و«خaki»
   const vs = await db.prepare(`SELECT id,color,size FROM variants
      WHERE color GLOB '*[一-龥]*' OR size GLOB '*[一-龥]*'

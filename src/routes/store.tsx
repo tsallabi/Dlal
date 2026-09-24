@@ -29,7 +29,7 @@ const base = async (c: Context<Env>) => {
   const st = await loadSettings(c.env.DB);
   const mode = shipMode(c);
   // سياق الشحن يمرّ مع كل صفحة: البطاقة تعرض سعر الطريقة المختارة ومدّتها من الإعدادات لا من نص ثابت
-  const ship = { mode, air: st.air_days || '١٢ — ١٨ يومًا', sea: st.sea_days || '٣٠ — ٤٥ يومًا', seaOn: seaOn(st) };
+  const ship = { mode, air: st.air_days || '12 — 18 يومًا', sea: st.sea_days || '30 — 45 يومًا', seaOn: seaOn(st) };
   return { user: u, cartCount: c.get('cartCount'), wishCount: w?.n ?? 0, categories: await getCategories(c.env.DB), ship };
 };
 
@@ -123,7 +123,7 @@ store.get('/', async (c) => {
 
       {/* شريط الثقة */}
       <section class="trust">
-        <div><b>🚚 الشحن مشمول</b><span>جوي {s.air_days || '١٢ — ١٨ يومًا'}{seaOn(s) ? ` · بحري ${s.sea_days || '٣٠ — ٤٥ يومًا'} وأرخص` : ''}</span></div>
+        <div><b>🚚 الشحن مشمول</b><span>جوي {s.air_days || '12 — 18 يومًا'}{seaOn(s) ? ` · بحري ${s.sea_days || '30 — 45 يومًا'} وأرخص` : ''}</span></div>
         <div><b>🔍 فحص قبل الشحن</b><span>نفتح كل طرد ونصوّره لك</span></div>
         <div><b>↩️ تعويض كامل</b><span>لأي تالف أو مختلف عن الوصف</span></div>
         <div><b>💳 ادفعي بالدينار</b><span>بطاقة · سداد · إدفعلي · كاش في الفرع</span></div>
@@ -222,7 +222,7 @@ async function listPage(c: Context<Env>, opts: { title: string; where: string; b
     db.prepare(`SELECT ${PRODUCT_SELECT} FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE ${where} ORDER BY ${order} LIMIT ? OFFSET ?`).bind(...binds, per, (page - 1) * per).all<ProductRow>(),
     db.prepare(`SELECT COUNT(*) n FROM products p WHERE ${where}`).bind(...binds).first<{ n: number }>(),
     // قيمة مقاس أو لون لم تُترجم بعد لا تُعرض للزبونة (القاعدة الأولى) — المترجَمة تكفي للتصفية.
-    // مرتّبة بعدد المنتجات التي تحملها: كانت أبجدية بلا حدّ فظهر في «حجاب وشالات» ٣٠٠ مقاس
+    // مرتّبة بعدد المنتجات التي تحملها: كانت أبجدية بلا حدّ فظهر في «حجاب وشالات» 300 مقاس
     // أغلبها لمنتج واحد («35cm*2*10»، «180*90») والزبونة تبحث عن M وL.
     db.prepare(`SELECT v.size, COUNT(DISTINCT v.product_id) n FROM variants v JOIN products p ON p.id=v.product_id WHERE ${opts.where} AND v.size IS NOT NULL AND v.size<>'' AND v.size NOT GLOB '*[一-龥]*' AND length(v.size)<=12 GROUP BY v.size ORDER BY n DESC LIMIT 80`).bind(...opts.binds).all<{ size: string; n: number }>(),
     db.prepare(`SELECT v.color, COUNT(DISTINCT v.product_id) n FROM variants v JOIN products p ON p.id=v.product_id WHERE ${opts.where} AND v.color IS NOT NULL AND v.color<>'' AND v.color NOT GLOB '*[一-龥]*' AND length(v.color)<=24 GROUP BY v.color ORDER BY n DESC LIMIT 30`).bind(...opts.binds).all<{ color: string; n: number }>(),
@@ -237,10 +237,10 @@ async function listPage(c: Context<Env>, opts: { title: string; where: string; b
   const tiles = await catTiles(db);
   const total = cnt?.n ?? 0;
   const pages = Math.ceil(total / per);
-  // رابط فلتر: تغيير الفلتر يُعيد إلى الصفحة الأولى عمدًا — وإلا وقعت الزبونة في صفحة ٩ فارغة
+  // رابط فلتر: تغيير الفلتر يُعيد إلى الصفحة الأولى عمدًا — وإلا وقعت الزبونة في صفحة 9 فارغة
   const link = (k: string, v: string | null) => { const u = new URL(c.req.url); if (v) u.searchParams.set(k, v); else u.searchParams.delete(k); u.searchParams.delete('page'); return u.pathname + u.search; };
   // رابط ترقيم: يجب ألا يحذف `page`. كانت أرقام الصفحات تستعمل `link` نفسها فتضع الرقم
-  // ثم تحذفه في السطر التالي، فكل نقرة على ٣ أو ٦ أو ٩ تعيد إلى الأولى في كل الأقسام.
+  // ثم تحذفه في السطر التالي، فكل نقرة على 3 أو 6 أو 9 تعيد إلى الأولى في كل الأقسام.
   const pageLink = (n: number) => { const u = new URL(c.req.url); u.searchParams.set('page', String(n)); return u.pathname + u.search; };
   const clearAll = () => { const u = new URL(c.req.url); ['min', 'max', 'size', 'color', 'deal', 'page'].forEach(k => u.searchParams.delete(k)); return u.pathname + u.search; };
   const bb = await base(c);
@@ -354,7 +354,7 @@ async function listPage(c: Context<Env>, opts: { title: string; where: string; b
               <button type="button" data-sheet="price">السعر <i>▾</i></button>
             </div>
           </div>
-          <div class="m-count">{total.toLocaleString('ar-LY')} منتج{pages > 1 ? ` · الصفحة ${page} من ${pages}` : ''}</div>
+          <div class="m-count">{total.toLocaleString('en-US')} منتج{pages > 1 ? ` · الصفحة ${page} من ${pages}` : ''}</div>
           <h2 class="desk-title" style="margin:0 0 12px;font-size:21px">{opts.title} <small style="color:var(--mut);font-weight:400;font-size:14px">({total} منتج)</small></h2>
           <div class="sortbar desk">
             <span class="lbl">ترتيب حسب</span>
@@ -564,11 +564,11 @@ store.get('/p/:slug', async (c) => {
               <input type="hidden" name="back" value={`/p/${p.slug}`} />
               <label class={mode === 'air' ? 'on' : ''}>
                 <input type="radio" name="mode" value="air" checked={mode === 'air'} onchange="this.form.submit()" />
-                <span class="t">✈️ جوي {fmt(p.price_lyd)}</span><span class="d">{s.air_days || '١٢ — ١٨ يومًا'}</span>
+                <span class="t">✈️ جوي {fmt(p.price_lyd)}</span><span class="d">{s.air_days || '12 — 18 يومًا'}</span>
               </label>
               <label class={mode === 'sea' ? 'on' : ''}>
                 <input type="radio" name="mode" value="sea" checked={mode === 'sea'} onchange="this.form.submit()" />
-                <span class="t">🚢 بحري {fmt(p.price_sea_lyd)}{seaSave > 0 && <b> وفّري {fmt(seaSave)}</b>}</span><span class="d">{s.sea_days || '٣٠ — ٤٥ يومًا'}</span>
+                <span class="t">🚢 بحري {fmt(p.price_sea_lyd)}{seaSave > 0 && <b> وفّري {fmt(seaSave)}</b>}</span><span class="d">{s.sea_days || '30 — 45 يومًا'}</span>
               </label>
               <noscript><button class="btn sm" type="submit">تطبيق</button></noscript>
             </form>
@@ -701,7 +701,7 @@ store.post('/cart/update', async (c) => {
   if (f.action === 'remove' || qty <= 0) await c.env.DB.prepare('DELETE FROM cart_items WHERE id=? AND user_id=?').bind(id, u.id).run();
   else {
     // الحد الأدنى للمورّد يُفرض هنا أيضًا: كان يُفرض عند الإضافة فقط، فتستطيع الزبونة
-    // إنزال الكمية إلى ١ داخل السلة لقطعة أقلّها ١٠٠ — فنشتري ١٠٠ ونبيع واحدة.
+    // إنزال الكمية إلى 1 داخل السلة لقطعة أقلّها 100 — فنشتري 100 ونبيع واحدة.
     const mq = await c.env.DB.prepare('SELECT p.min_qty FROM cart_items ci JOIN products p ON p.id=ci.product_id WHERE ci.id=? AND ci.user_id=?').bind(id, u.id).first<{ min_qty: number }>();
     await c.env.DB.prepare('UPDATE cart_items SET qty=? WHERE id=? AND user_id=?').bind(Math.max(qty, mq?.min_qty ?? 1), id, u.id).run();
   }
@@ -781,7 +781,7 @@ async function cartTotals(c: Context<Env>, rows: any[], usePoints: boolean) {
   const airSum = rows.reduce((a, r) => a + (r.air_unit ?? r.unit) * r.qty, 0);
   const seaSum = rows.reduce((a, r) => a + (r.sea_unit ?? r.unit) * r.qty, 0);
   const seaSaving = Math.round((airSum - seaSum) * 100) / 100;
-  const shipDays = mode === 'sea' ? (s.sea_days || '٣٠ — ٤٥ يومًا') : (s.air_days || '١٢ — ١٨ يومًا');
+  const shipDays = mode === 'sea' ? (s.sea_days || '30 — 45 يومًا') : (s.air_days || '12 — 18 يومًا');
   return { s, subtotal, discount, freeShip, coupon, couponErr, pointsUsed, pointsLyd, maxPts, ptsValue, delivery, cityFee, city, total, mode, airSum, seaSum, seaSaving, shipDays };
 }
 
@@ -802,8 +802,8 @@ function autoDesc(p: any, s: any, rates: { days: string; ar: string }, colors: s
 // اختيار طريقة الشحن من الصين: جوي سريع أو بحري أرخص
 const ShipPicker = ({ t, back }: any) => {
   if (!seaOn(t.s)) return null;
-  const air = t.s.air_days || '١٢ — ١٨ يومًا';
-  const sea = t.s.sea_days || '٣٠ — ٤٥ يومًا';
+  const air = t.s.air_days || '12 — 18 يومًا';
+  const sea = t.s.sea_days || '30 — 45 يومًا';
   return (
     <form method="post" action="/cart/ship" class="card-box" style="margin-bottom:14px">
       <input type="hidden" name="back" value={back} />
@@ -1049,7 +1049,7 @@ store.get('/orders/:code', async (c) => {
       <div class="crumbs"><a href="/account">حسابي</a> › <a href="/account/orders">طلباتي</a> › {o.code}</div>
       <div class="sec-h"><h2>الطلب {o.code}</h2><span class={`status ${ORDER_STATUS[o.status]?.color}`}>{ORDER_STATUS[o.status]?.ar}</span></div>
       <p style="margin:-6px 0 14px;font-size:13.5px;color:var(--ink-2)">
-        {o.ship_method === 'sea' ? '🚢 شحن بحري' : '✈️ شحن جوي'} · مدة الوصول المتوقعة <b>{o.ship_method === 'sea' ? (s.sea_days || '٣٠ — ٤٥ يومًا') : (s.air_days || '١٢ — ١٨ يومًا')}</b>
+        {o.ship_method === 'sea' ? '🚢 شحن بحري' : '✈️ شحن جوي'} · مدة الوصول المتوقعة <b>{o.ship_method === 'sea' ? (s.sea_days || '30 — 45 يومًا') : (s.air_days || '12 — 18 يومًا')}</b>
       </p>
       <div class="two">
         <div>

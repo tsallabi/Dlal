@@ -33,8 +33,15 @@ export function orderCode(id: number) {
   return `DL-${new Date().getFullYear()}-${String(id).padStart(6, '0')}`;
 }
 
+// «١٢ — ١٨» ⟵ «12 — 18»: لوحة المفاتيح العربية تكتب أرقامًا عربية، والموقع يعرض 0-9 وحدها،
+// و parseFloat('٣٫٥') = NaN فيفسد أي إعداد رقمي كُتب بها
+export function latinDigits(v: string) {
+  return v.replace(/[\u0660-\u0669]/g, d => String(d.charCodeAt(0) - 0x0660)).replace(/[\u06F0-\u06F9]/g, d => String(d.charCodeAt(0) - 0x06F0))
+    .replace(/\u066B/g, '.').replace(/\u066C/g, ',').replace(/\u066A/g, '%');
+}
+
 export function fmt(v: number) {
-  return new Intl.NumberFormat('ar-LY', { maximumFractionDigits: v % 1 ? 2 : 0 }).format(v) + ' د.ل';
+  return new Intl.NumberFormat('en-US', { maximumFractionDigits: v % 1 ? 2 : 0 }).format(v) + ' د.ل';
 }
 
 export function timeAgo(iso: string) {

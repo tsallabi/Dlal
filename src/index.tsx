@@ -28,6 +28,24 @@ app.use('*', async (c, next) => {
   await next();
 });
 
+// أرقام إنجليزية في كل الموقع (طلب صاحب المشروع ٢٤/٠٩/٢٦: «اجعل كل الأرقام 1 2 3 لا ١ ٢ ٣»).
+// الكود صار يكتب 0-9، لكن نصوصًا تأتي من القاعدة قد تحمل أرقامًا عربية: مدة الشحن المحفوظة
+// في الإعدادات، وعناوين ترجمها النموذج، وما يكتبه الأدمن بلوحة مفاتيح عربية. نحوّلها عند الإرسال.
+const AR_DIGITS = /[\u0660-\u0669\u06F0-\u06F9\u066A-\u066C]/g;
+const toLatin = (ch: string) => {
+  const c = ch.charCodeAt(0);
+  if (c >= 0x0660 && c <= 0x0669) return String(c - 0x0660);
+  if (c >= 0x06F0 && c <= 0x06F9) return String(c - 0x06F0);
+  return c === 0x066A ? '%' : c === 0x066B ? '.' : ',';   // ٪ ٫ ٬
+};
+app.use('*', async (c, next) => {
+  await next();
+  if (!(c.res.headers.get('content-type') ?? '').includes('text/html')) return;
+  const html = await c.res.text();
+  AR_DIGITS.lastIndex = 0;
+  c.res = new Response(AR_DIGITS.test(html) ? html.replace(AR_DIGITS, toLatin) : html, { status: c.res.status, headers: c.res.headers });
+});
+
 app.use('*', async (c, next) => {
   const user = await loadUser(c);
   c.set('user', user);
@@ -57,8 +75,8 @@ export default {
   fetch: app.fetch,
   async scheduled(_ev: ScheduledEvent, env: Env['Bindings'], ctx: ExecutionContext) {
     const s = await loadSettings(env.DB);
-    // ميزانية الشهر مقسومة على ساعاته: الحصة ١٠٠٠٠ استدعاء (٢٠٠ ألف كريدت ÷ ٢٠) وكان الكرون
-    // ينفق حتى ٥٨ في الساعة أي ٤١ ألفًا شهريًا، فتنتهي الحصة في ستة أيام. الآن يوزّعها على الشهر.
+    // ميزانية الشهر مقسومة على ساعاته: الحصة 10000 استدعاء (200 ألف كريدت ÷ 20) وكان الكرون
+    // ينفق حتى 58 في الساعة أي 41 ألفًا شهريًا، فتنتهي الحصة في ستة أيام. الآن يوزّعها على الشهر.
     const budget = parseInt(s.src_month_limit ?? '') || 9000;
     const perHour = Math.max(1, Math.min(25, Math.floor(budget / (30 * 24))));
     // المتبقي من الميزانية هذا الشهر: نتوقف عند بلوغها بدل تجاوزها
@@ -70,7 +88,7 @@ export default {
        AND ((SELECT COUNT(*) FROM product_images i WHERE i.product_id=p.id) <= 1 OR (SELECT COUNT(*) FROM variants v WHERE v.product_id=p.id) = 0 OR p.weight_g IS NULL)`).first<{ n: number }>())?.n ?? 0;
     if (s.src_key && left > perHour && backlog <= 1000) ctx.waitUntil(runServerJobs(env, { limit: 4 }));   // مزوّد API من طرف ثالث
     // صيانة الكتالوج كل ساعة بلا تدخل: ترجمة ما بقي صينيًا (بلا استدعاءات مدفوعة)،
-    // ثم إثراء دفعتين من الناقص (٥٠ منتجًا) بادئًا بالمحجوزات فتخرج للمتجر بعنوان عربي.
+    // ثم إثراء دفعتين من الناقص (50 منتجًا) بادئًا بالمحجوزات فتخرج للمتجر بعنوان عربي.
     ctx.waitUntil((async () => {
       try {
         if (env.AI) { const r = await retranslatePending(env.DB, env.AI, 40); console.log('cron translate', JSON.stringify(r)); }

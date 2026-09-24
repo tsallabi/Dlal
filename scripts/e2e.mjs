@@ -15,11 +15,11 @@ const shot = async (page, name) => { await page.screenshot({ path: `${OUT}/${Str
 let passed = 0;
 const expect = (cond, msg) => { if (!cond) { problems.push(msg); console.log('❌', msg); } else { passed++; console.log('✅', msg); } };
 const has = async (page, t) => (await page.content()).includes(t);
-// ar-LY يكتب العشور بفاصلة، و«د.ل» فيها نقطة تُربك أي تنظيف أعمى: نأخذ أول رقم فقط
+// الأرقام إنجليزية (en-US): الفاصلة للآلاف والنقطة للعشور «1,234.5 د.ل». و«د.ل» فيها نقطة تُربك أي تنظيف أعمى: نأخذ أول رقم فقط
 const num = (t) => {
-  const m = String(t).match(/[\d.,٫،]*\d/);            // أول رقم فقط — «د.ل» فيها نقطة تُربك التنظيف الأعمى
+  const m = String(t).match(/\d[\d,]*(\.\d+)?/);
   if (!m) return NaN;
-  return parseFloat(m[0].replace(/\.(?=\d{3}(\D|$))/g, '').replace(/[,٫،]/g, '.'));   // ar-LY: النقطة للآلاف والفاصلة للعشور
+  return parseFloat(m[0].replace(/,/g, ''));
 };
 const login = async (page, phone, pw) => { await page.goto(BASE + '/logout'); await page.goto(BASE + '/login'); await page.fill('input[name=phone]', phone); await page.fill('input[name=password]', pw); await page.click('button:has-text("دخول")'); await page.waitForLoadState('networkidle'); };
 
@@ -41,14 +41,16 @@ page.on('pageerror', e => problems.push('JS error: ' + e.message));
 page.on('response', r => { if (r.status() >= 500) problems.push(`HTTP ${r.status()} ${r.url()}`); });
 
 // ---------- الحد الأدنى للمورّد: يُفرض في السلة أيضًا لا عند الإضافة فقط ----------
-// وجده صاحب المشروع على الموقع الحي: قطعة أقلّها ١٠٠ عند المورّد، والسلة قبلت ١.
-// أثره مال حقيقي: نشتري ١٠٠ من 1688 ونبيع واحدة.
+// وجده صاحب المشروع على الموقع الحي: قطعة أقلّها 100 عند المورّد، والسلة قبلت 1.
+// أثره مال حقيقي: نشتري 100 من 1688 ونبيع واحدة.
 await login(page, '0910000000', 'admin123');
 await page.goto(BASE + '/admin/import');
 // sameProduct يرفض أي عنوان أقل من أربع كلمات، فنُبقي كل عيّنة عند ثلاث كلمات أو أقل:
 // تشغيلة سابقة تترك عيّنتها في القاعدة، وعنوان مطابق في ثلاث كلمات من أربع يُعدّ «توأمًا»
 // فيُتجاهل الاستيراد بصمت ويسقط الفحص لسبب لا علاقة له به.
-const uniqTag = () => 'ت' + Math.random().toString(36).slice(2, 7);
+// أرقام لا حروف لاتينية: «تku498» حرف عربي ملتصق بلاتيني = عنوان «مكسور» في نظر mixedScript،
+// فكانت كل تشغيلة تترك ٧ عناوين مكسورة حتى بلغت ٢١١ وأزاحت عيّنة فحص الكنس خارج دفعته (٢٤/٠٩/٢٦)
+const uniqTag = () => 'ت' + String(Math.floor(Math.random() * 1e6)).padStart(6, '0');
 const moqOffer = '65' + String(Date.now()).slice(-10);
 const moqTag = uniqTag();
 await page.fill('form[action$="/import/json"] textarea[name=json]', JSON.stringify([{
@@ -58,7 +60,7 @@ await page.fill('form[action$="/import/json"] textarea[name=json]', JSON.stringi
 await page.click('form[action$="/import/json"] button:has-text("استيراد")');
 await page.waitForLoadState('networkidle');
 await page.goto(BASE + '/admin/products?q=' + moqOffer);
-// اللوط يدخل مخفيًا الآن (أقل طلب ١٠٠ ≥ الحد الفاصل): هذا هو السلوك المقصود.
+// اللوط يدخل مخفيًا الآن (أقل طلب 100 ≥ الحد الفاصل): هذا هو السلوك المقصود.
 // صاحب المشروع يراجع المخفي ويُعيد ما يريد بيعه لوطًا — وهذا ما نفعله هنا قبل فحص العرض.
 const moqAdmin = await page.locator(`tr:has-text("${moqOffer}") a[href^="/admin/products/"]`).first().getAttribute('href');
 expect((await page.locator(`tr:has-text("${moqOffer}")`).first().textContent()).includes('hidden'), 'اللوط يدخل مخفيًا لا نشطًا');
@@ -76,8 +78,8 @@ const moqTotal = (await page.locator('.moq-note').textContent()).replace(/\s+/g,
 expect(/100 قطعة/.test(moqTotal), `تنبيه الحد الأدنى يذكر العدد (${moqTotal.slice(0, 70)})`);
 await page.click('#addForm button[type=submit]'); await page.waitForLoadState('networkidle');
 const moqRow = page.locator('.cart-row', { hasText: moqTag }).first();
-expect((await moqRow.locator('input[name=qty]').first().inputValue()) === '100', 'السلة تبدأ بالحد الأدنى ١٠٠');
-// الزبونة تحاول إنزالها إلى ١ — يجب أن تعود إلى ١٠٠
+expect((await moqRow.locator('input[name=qty]').first().inputValue()) === '100', 'السلة تبدأ بالحد الأدنى 100');
+// الزبونة تحاول إنزالها إلى 1 — يجب أن تعود إلى 100
 // لا يوجد زر «تحديث»: الحقل يُرسل النموذج عند تغيّره (onchange) — نفعل ما تفعله الزبونة
 const moqInput = moqRow.locator('input[name=qty]').first();
 await moqInput.fill('1');
@@ -90,11 +92,11 @@ await page.locator('.cart-row', { hasText: moqTag }).first().locator('button:has
 await page.waitForLoadState('networkidle');
 
 // ---------- أداة الجملة: إخفاء وإظهار دفعةً واحدة، عكسيّة تمامًا ----------
-// ٣٠٣ قطع نشطة حدّها الأدنى ١٠ فأكثر على الموقع الحي. القرار تجاري لصاحب المشروع،
+// 303 قطع نشطة حدّها الأدنى 10 فأكثر على الموقع الحي. القرار تجاري لصاحب المشروع،
 // فالأداة تُعطى له ولا يُقرَّر عنه — لكن يجب أن تعمل ذهابًا وإيابًا بلا خسارة.
 await login(page, '0910000000', 'admin123');
 await page.goto(BASE + '/admin/products?moq=10');
-expect(await has(page, moqOffer), 'فلتر «أقل طلب ≥ ١٠» يُظهر قطعة الجملة');
+expect(await has(page, moqOffer), 'فلتر «أقل طلب ≥ 10» يُظهر قطعة الجملة');
 await page.fill('form[action$="/products/wholesale"] input[name=min]', '100');
 await page.uncheck('form[action$="/products/wholesale"] input[name=pack]');
 await page.locator('form[action$="/products/wholesale"] button:has-text("أخفِها")').click();
@@ -112,7 +114,7 @@ await page.uncheck('form[action$="/products/wholesale"] input[name=pack]');
 await page.locator('form[action$="/products/wholesale"] button:has-text("أعِدها")').click();
 await page.waitForLoadState('networkidle');
 expect(await has(page, 'أُعيدت للمتجر'), 'اللوحة تقول كم قطعة عادت');
-// «أعِدها» بحدّ ١٠٠ يشمل أيضًا عيّنة مصنع التغليف (٢٠٠ قطعة) التي تركتها تشغيلة سابقة،
+// «أعِدها» بحدّ 100 يشمل أيضًا عيّنة مصنع التغليف (200 قطعة) التي تركتها تشغيلة سابقة،
 // فتعود بعنوانها الصيني إلى الرف ويسقط فحص «لا عنوان صيني ظاهر». نُعيد إخفاء التغليف وحده:
 // حدّ مستحيل + صندوق التغليف مؤشّر ⟵ الشرط يطابق إعلانات التغليف فقط ولا يمسّ غيرها.
 await page.fill('form[action$="/products/wholesale"] input[name=min]', '999999');
@@ -125,7 +127,7 @@ expect(back.status() === 200, `القطعة عادت للمتجر بعد الإ�
 
 // ---------- رأس عمود جدول المواصفات لا يصير زرّ مقاس على الرف ----------
 // صاحب المشروع فتح كيسًا فوجد «اللون: سمك مزدوج» و«المقاس: المقاس» — الثاني اسم العمود
-// نفسه التقطه القارئ من رأس الجدول. ١٣ منتجًا حيًا في ٢٢/٠٩/٢٦.
+// نفسه التقطه القارئ من رأس الجدول. 13 منتجًا حيًا في 22/09/26.
 await login(page, '0910000000', 'admin123');
 await page.goto(BASE + '/admin/import');
 const attrOffer = '66' + String(Date.now()).slice(-10); const attrTag = uniqTag();
@@ -149,8 +151,8 @@ expect(!sizeChips.includes('尺码') && !colorChips.includes('颜色'), 'ولا 
 await shot(page, 'variant-headers-clean');
 
 // ---------- إعلان مصنع تغليف لا يصل الرف أصلًا ----------
-// «صندوق هدايا للهواتف والسماعات» بأقل طلب ٢٠٠: المورّد مصنع علب (包装/印刷) يبيع العلبة
-// الفارغة والسماعات في الصورة محتوى توضيحي. ٩٦ إعلانًا كهذا دخل المتجر كأنه منتج.
+// «صندوق هدايا للهواتف والسماعات» بأقل طلب 200: المورّد مصنع علب (包装/印刷) يبيع العلبة
+// الفارغة والسماعات في الصورة محتوى توضيحي. 96 إعلانًا كهذا دخل المتجر كأنه منتج.
 await login(page, '0910000000', 'admin123');
 await page.goto(BASE + '/admin/import');
 const packOffer = '67' + String(Date.now()).slice(-10); const packTag = uniqTag();
@@ -174,7 +176,7 @@ await page.goto(BASE + '/admin/products?pack=1');
 expect(await has(page, packOffer), 'فلتر «إعلانات التغليف» يجمعها للمراجعة');
 
 // ---------- «ماذا أستلم بالضبط؟» — توضيح لا إخفاء ----------
-// صاحب المشروع رفض إخفاء الآلات وحوامل العرض والقماش وطلب شرحها (٢٢/٠٩/٢٦).
+// صاحب المشروع رفض إخفاء الآلات وحوامل العرض والقماش وطلب شرحها (22/09/26).
 // حامل العرض يصل فارغًا والبضاعة في صورته للتوضيح — يجب أن تقرأ الزبونة ذلك قبل الشراء.
 await page.goto(BASE + '/admin/import');
 const rackOffer = '68' + String(Date.now()).slice(-10); const rackTag = uniqTag();
@@ -253,7 +255,7 @@ expect(auditFix.flaggedForRetranslation === auditFix.wouldFlag, `يسم كل م�
 
 // ---------- شروط البداية: الفحص يضبطها ولا يرثها ----------
 // تشغيلة سابقة قد تنهار وهي في وضع «حقيقي» مشيرة إلى خادم وهمي مغلق، فتسقط فحوص الدفع
-// في التشغيلة التالية لسبب لا علاقة له بها. حدث هذا ثلاث مرات في ٢٢/٠٩/٢٦.
+// في التشغيلة التالية لسبب لا علاقة له بها. حدث هذا ثلاث مرات في 22/09/26.
 await login(page, '0910000000', 'admin123');
 await page.goto(BASE + '/admin/payments');
 await page.selectOption('select[name=mypay_mode]', 'mock');
@@ -521,7 +523,7 @@ expect((await page.inputValue('input[name=fx_cny_lyd]')) === '1.05', 'حفظ س�
 await page.goto(BASE + '/admin/import');
 await page.fill('textarea[name=json]', JSON.stringify([{ offerId: '999000111', url: 'https://detail.1688.com/offer/999000111.html', title: '测试连衣裙', titleAr: 'فستان تجريبي مستورد', priceCny: 39.9, images: [], variants: [{ color: 'أحمر', size: 'M' }], minQty: 1, inStock: true }]));
 await page.click('button:has-text("استيراد")'); await page.waitForLoadState('networkidle');
-// القائمة تعرض ٢٠٠ الأحدث فقط، وعيّنات التشغيلات المتراكمة تدفع هذه خارجها: نبحث بالرقم
+// القائمة تعرض 200 الأحدث فقط، وعيّنات التشغيلات المتراكمة تدفع هذه خارجها: نبحث بالرقم
 await page.goto(BASE + '/admin/products?q=999000111');
 expect(await has(page, 'فستان تجريبي مستورد'), 'استيراد JSON أضاف المنتج');
 const r = await ctx.request.post(BASE + '/api/import', { headers: { 'x-import-token': 'dev-import-token' }, data: { category_id: 1, page_url: 'test', items: [{ offerId: '999000111', priceCny: 45, inStock: true }] } });
@@ -706,7 +708,7 @@ const before = await page.locator('.card').count();
 // فلتر السعر بالنطاقات الجاهزة
 await page.click('.filters .fgroup a:has-text("أقل من")'); await page.waitForLoadState('networkidle');
 expect(page.url().includes('max='), 'النقر على نطاق سعري يطبّقه في الرابط');
-const capped = await page.$$eval('.card .p', els => els.map(e => parseFloat(e.textContent.replace(/[^\d٫.]/g, '').replace('٫', '.'))));
+const capped = await page.$$eval('.card .p', els => els.map(e => parseFloat(e.textContent.split('د.ل')[0].replace(/[^\d.]/g, ''))));
 expect(capped.length === 0 || capped.every(v => v <= 50), `كل النتائج ضمن النطاق السعري (${capped.length} منتج)`);
 expect(await has(page, 'السعر:'), 'رقاقة الفلتر المطبّق تظهر فوق النتائج');
 await page.click('.filters a:has-text("مسح كل الفلاتر")'); await page.waitForLoadState('networkidle');
@@ -829,7 +831,7 @@ await page.check('.shipsel input[value=sea]'); await page.waitForLoadState('netw
 expect(await page.locator('.shipsel label.on').textContent().then(t => t.includes('بحري')), 'اختيار البحري يُحفظ ويظهر محدّدًا');
 const totalSea = num(await page.locator('.summary .row.tot span').last().textContent());
 expect(totalSea < totalAir, `إجمالي السلة بالبحري أقل (${totalSea} < ${totalAir})`);
-expect(await has(page, '٣٠ — ٤٥'), 'مدة الوصول البحرية معروضة في الملخص');
+expect(await has(page, '30 — 45'), 'مدة الوصول البحرية معروضة في الملخص');
 await shot(page, 'cart-ship-sea');
 // الطلب يحفظ الطريقة ويعرضها في التتبع
 await page.goto(BASE + '/checkout');
@@ -839,7 +841,7 @@ await page.click('button:has-text("تأكيد الطلب")'); await page.waitFor
 const seaOrder = page.url().match(/DL-\d{4}-\d{6}/);
 if (page.url().includes('/pay/mock/')) { await page.click('button:has-text("تأكيد الدفع")'); await page.waitForLoadState('networkidle'); }
 expect(await has(page, 'شحن بحري'), 'صفحة الطلب تعرض أنه شحن بحري');
-expect(await has(page, '٣٠ — ٤٥'), 'صفحة الطلب تعرض مدة الوصول البحرية');
+expect(await has(page, '30 — 45'), 'صفحة الطلب تعرض مدة الوصول البحرية');
 await shot(page, 'order-sea');
 // لوحة الإدارة: إعدادات البحري تعمل
 await login(page, '0910000000', 'admin123');
@@ -952,10 +954,10 @@ await page.locator('form[action="/admin/source"] button:has-text("حفظ")').cli
 walletSrv.close();
 
 // ---------- المنتج المحذوف من 1688 لا يُسأل عنه مرتين: هنا كان يضيع رصيد المزوّد ----------
-// مقيس على الموقع الحي: ٣٤٥٩ استدعاء تفصيل لـ ٦١٨ منتجًا فقط، منتج واحد ١٩٠ مرة، و١٣ ألف منتج
+// مقيس على الموقع الحي: 3459 استدعاء تفصيل لـ 618 منتجًا فقط، منتج واحد 190 مرة، و13 ألف منتج
 // لم يُسأل عنه قط. السبب سببان: نص خطأ «Item not found» لم يطابق الشرط، واستعلام الإثراء بلا ذاكرة.
 // الاختبار يصنع عيّنته بنفسه: منتجات طازجة ناقصة الوزن و`last_checked_at` فارغ، فتكون مؤهَّلة
-// للإثراء مهما كانت حالة القاعدة. (بلا هذا كانت مهلة الـ٧٢ ساعة تستبعد كل ما فحصته تشغيلة سابقة.)
+// للإثراء مهما كانت حالة القاعدة. (بلا هذا كانت مهلة الـ72 ساعة تستبعد كل ما فحصته تشغيلة سابقة.)
 const goneIds = [0, 1, 2].map(i => '66' + String(Date.now() + i).slice(-10));
 await page.evaluate(async ([b, ids]) => {
   await fetch(b + '/api/import', { method: 'POST', headers: { 'content-type': 'application/json', 'x-import-token': 'dev-import-token' },
@@ -977,15 +979,15 @@ const realBase = await page.locator('input[name=src_base_url]').inputValue();
 const realProv = await page.locator('select[name=src_provider]').inputValue();
 const realKey = await page.locator('input[name=src_key]').inputValue();
 // الاختبار يضبط كل ما يحتاجه صراحةً ولا يتّكل على إعداد تركه فحص سابق:
-// السقف الشهري تحديدًا يتركه فحص لاحق على ١ فيوقف الإثراء قبل أن يبدأ
+// السقف الشهري تحديدًا يتركه فحص لاحق على 1 فيوقف الإثراء قبل أن يبدأ
 await page.selectOption('select[name=src_provider]', 'tmapi');
 await page.fill('input[name=src_base_url]', 'http://127.0.0.1:8802');
 await page.fill('input[name=src_key]', 'e2e-fake-key');
 await page.fill('input[name=src_month_limit]', '0');
 await page.locator('form[action="/admin/source"] button:has-text("حفظ")').click(); await page.waitForLoadState('networkidle');
-expect(!(await page.locator('button:has-text("أثرِ ١٠ منتجات الآن")').isDisabled()), 'زر الإثراء يعمل حين يكون المزوّد مضبوطًا');
+expect(!(await page.locator('button:has-text("أثرِ 10 منتجات الآن")').isDisabled()), 'زر الإثراء يعمل حين يكون المزوّد مضبوطًا');
 // قبل الضغط: نحفظ ما كان مسودةً. الإثراء يبدأ بالمسودات، والإعادة أدناه كانت تجعل كل ما لمسه «نشطًا» —
-// فنشرت مسودتين بعنوان صيني (عدّاد «عنوان صيني ظاهر» = ٢) وصار كل منتج مشابه بعدهما «توأمًا» يُتجاهل.
+// فنشرت مسودتين بعنوان صيني (عدّاد «عنوان صيني ظاهر» = 2) وصار كل منتج مشابه بعدهما «توأمًا» يُتجاهل.
 const draftsBefore = new Set();
 for (let pg = 1; pg <= 10; pg++) {
   await page.goto(BASE + `/admin/products?status=draft&page=${pg}`);
@@ -994,7 +996,7 @@ for (let pg = 1; pg <= 10; pg++) {
   if (ids.length < 100) break;
 }
 await page.goto(BASE + '/admin/source');
-await page.click('button:has-text("أثرِ ١٠ منتجات الآن")'); await page.waitForLoadState('networkidle');
+await page.click('button:has-text("أثرِ 10 منتجات الآن")'); await page.waitForLoadState('networkidle');
 const firstRound = [...asked];
 expect(firstRound.length > 0, `الإثراء سأل المزوّد عن ${firstRound.length} منتجًا`);
 // كل ما ردّ عليه المزوّد «غير موجود» يخرج من المتجر ومن دورة الإثراء
@@ -1005,11 +1007,11 @@ await shot(page, 'admin-gone-product');
 // الضغطة الثانية يجب أن تنتقل إلى منتجات أخرى، لا أن تعيد سؤال نفس المنتجات وتدفع ثمنها مرتين
 asked.length = 0;
 await page.goto(BASE + '/admin/source');
-await page.click('button:has-text("أثرِ ١٠ منتجات الآن")'); await page.waitForLoadState('networkidle');
+await page.click('button:has-text("أثرِ 10 منتجات الآن")'); await page.waitForLoadState('networkidle');
 const repeats = asked.filter(id => firstRound.includes(id));
 expect(repeats.length === 0, `الدفعة الثانية لا تعيد سؤال المزوّد عن نفس المنتجات (تكرار: ${repeats.length})`);
 // الفحص يُقاعد منتجات حقيقية بردّ مزوّد وهمي، فيجب أن يُعيدها كما وجدها وإلا أفرغ الكتالوج
-// تشغيلةً بعد تشغيلة (حدث فعلًا: ١٠٠ «غير متوفر» مقابل ٣٣ نشطًا، فعاد البحث بلا نتائج).
+// تشغيلةً بعد تشغيلة (حدث فعلًا: 100 «غير متوفر» مقابل 33 نشطًا، فعاد البحث بلا نتائج).
 const retired = [...new Set([...firstRound, ...asked])];
 for (const id of retired) {
   await page.goto(BASE + '/admin/products?q=' + id);
@@ -1216,17 +1218,17 @@ expect((await hk.count()) === 8, `لوحة صحة الكتالوج تعرض ثم
 const cnLive = num(await hk.nth(1).locator('b').textContent());
 expect(cnLive === 0, `لا عنوان صيني ظاهر للزبونة (${cnLive})`);
 expect(num(await hk.nth(0).locator('b').textContent()) > 0, 'عدد المنتجات المعروضة يظهر في اللوحة');
-expect((await page.locator('button:has-text("أثرِ ١٠ منتجات الآن")').count()) === 1, 'زر الإثراء موجود في اللوحة');
-expect((await page.locator('button:has-text("ترجم ٢٠ عنوانًا الآن")').count()) === 1, 'زر الترجمة موجود في اللوحة');
+expect((await page.locator('button:has-text("أثرِ 10 منتجات الآن")').count()) === 1, 'زر الإثراء موجود في اللوحة');
+expect((await page.locator('button:has-text("ترجم 20 عنوانًا الآن")').count()) === 1, 'زر الترجمة موجود في اللوحة');
 expect(await has(page, 'سقف استدعاءات المزوّد في الشهر'), 'حقل السقف الشهري لاستدعاءات المزوّد موجود');
 // الميزانية بالكريدت: المالك يجب أن يرى ثمن الضغطة قبل أن يضغط، لا عدد استدعاءات مجرّدًا
 expect(await has(page, '20 كريدت لكل استدعاء'), 'اللوحة تقول سعر الاستدعاء صراحةً');
-expect(await has(page, 'ضغطة «أثرِ ١٠ منتجات» تكلّف'), 'اللوحة تقول كم تكلّف ضغطة الإثراء');
+expect(await has(page, 'ضغطة «أثرِ 10 منتجات» تكلّف'), 'اللوحة تقول كم تكلّف ضغطة الإثراء');
 expect(await has(page, 'كريدت متبقٍ') || await has(page, 'انتهت الميزانية'), 'اللوحة تعرض المتبقي من ميزانية الشهر');
 // اللوحة فيها أكثر من فقرة: ننتقي فقرة الوتيرة بنصّها لا بموضعها
 const pace = (await page.locator('.card-box:has(h3:text("صحة الكتالوج")) p', { hasText: 'كل ساعة' }).first().textContent()).replace(/\s+/g, ' ');
 const perHour = parseInt((pace.match(/يأخذ (\d+) منتجًا كل ساعة/) || [])[1] || '0');
-// الحصة ١٠٠٠٠ استدعاء شهريًا: أي وتيرة تتجاوز ١٤ في الساعة تلتهمها قبل نهاية الشهر
+// الحصة 10000 استدعاء شهريًا: أي وتيرة تتجاوز 14 في الساعة تلتهمها قبل نهاية الشهر
 expect(perHour >= 1 && perHour <= 14, `وتيرة الإثراء التلقائي توزّع الميزانية على الشهر (${perHour}/ساعة)`);
 await shot(page, 'admin-catalog-health');
 // السقف يوقف الاستيراد فعلًا: نضبطه على 1 ونحاول تشغيل مهمة
@@ -1355,7 +1357,7 @@ const iThin = qids.indexOf(arOffer), iFull = qids.indexOf(fullOffer);
 expect(iThin >= 0, 'المنتج الناقص موجود في طابور الإضافة');
 expect(iFull < 0 || iThin < iFull, `الناقص يسبق المكتمل في الطابور (ناقص ${iThin} · مكتمل ${iFull})`);
 // ---------- الاستئناف: منتج تعذّر إثراؤه يُترك ويُنتقل لما بعده، ولا يُعاد إلى رأس الطابور ----------
-// بلا هذا يبقى المنتج الذي لا تعطي صفحته وزنًا على الرأس أبدًا، فتدور الإضافة عليه ٤٠ ساعة
+// بلا هذا يبقى المنتج الذي لا تعطي صفحته وزنًا على الرأس أبدًا، فتدور الإضافة عليه 40 ساعة
 // ولا تصل إلى بقية الكتالوج — نفس الفخّ الذي أحرق حصة المزوّد.
 const tryEnrich = async (off) => page.evaluate(async ([b, o]) => {
   const r = await fetch(b + '/api/import', { method: 'POST', headers: { 'content-type': 'application/json', 'x-import-token': 'dev-import-token' },
@@ -1408,20 +1410,20 @@ if (draftSlug) {
 await shot(page, 'home-no-chinese');
 
 // ---------- مسودة صار عنوانها عربيًا بطريق آخر: يجب أن تُنشر لا أن تبقى محجوزة للأبد ----------
-// (على الموقع الحي بقي منتج جاهز تمامًا — عنوان عربي، ٦ صور، وزن، سعران — محجوزًا مسودةً
+// (على الموقع الحي بقي منتج جاهز تمامًا — عنوان عربي، 6 صور، وزن، سعران — محجوزًا مسودةً
 //  لأن النشر كان معلّقًا على أن تُغيّر دفعة الترجمة شيئًا في نفس التمريرة.)
 await login(page, '0910000000', 'admin123');
 await page.goto(BASE + '/admin/products?status=draft&q=' + cnOffer);
 const heldHref = await page.locator(`tr:has-text("${cnOffer}") a[href^="/admin/products/"]`).first().getAttribute('href');
 await page.goto(BASE + heldHref);
-// ١) نعطيها عنوانًا عربيًا من لوحة الأدمن: نموذج التحرير يحفظ الحالة كما هي، فتبقى مسودةً
+// 1) نعطيها عنوانًا عربيًا من لوحة الأدمن: نموذج التحرير يحفظ الحالة كما هي، فتبقى مسودةً
 //    وإن صار عنوانها سليمًا — وهذه هي الحالة العالقة بالضبط
 await page.fill('input[name=title_ar]', `حامل اختبار عربي ${cnOffer}`);
 await page.click('form:has(input[name=title_ar]) button:has-text("حفظ")');
 await page.waitForLoadState('networkidle');
 expect(await page.locator('select[name=status]').inputValue() === 'draft', 'المسودة تبقى محجوزة رغم أن عنوانها صار عربيًا');
 await shot(page, 'admin-stuck-draft');
-// ٢) زر الترجمة يُطلقها بلا أي استدعاء نموذج (النسخة المحلية بلا Workers AI)
+// 2) زر الترجمة يُطلقها بلا أي استدعاء نموذج (النسخة المحلية بلا Workers AI)
 await page.goto(BASE + '/admin/products');
 await page.click('button:has-text("ترجمة العناوين الصينية")');
 await page.waitForLoadState('networkidle');
@@ -1433,7 +1435,7 @@ const fr = await page.goto(BASE + freedSlug);
 expect(fr.status() === 200, 'صفحة المنتج المُطلَق تُفتح للزبونة');
 expect(await has(page, `حامل اختبار عربي ${cnOffer}`), 'الزبونة ترى عنوانه العربي في صفحته');
 // ---------- عنوان مكسور: كلمة عربية ملتصقة ببقية لاتينية («زippers») ----------
-// ١٣٧ منتجًا حيًا كانت تحمل هذا النص المكسور أمام الزبونة (٢٢/٠٩/٢٦). الكنس بلا نموذج.
+// 137 منتجًا حيًا كانت تحمل هذا النص المكسور أمام الزبونة (22/09/26). الكنس بلا نموذج.
 await login(page, '0910000000', 'admin123');
 await page.goto(BASE + heldHref);
 await page.fill('input[name=title_ar]', `${cnOffer} كيس شفاف للهاتف والسماعات مع زippers`);
@@ -1465,8 +1467,8 @@ await page.waitForLoadState('networkidle');
 expect(await page.locator('select[name=status]').inputValue() === 'hidden', 'الأدمن يخفي القطعة فتخرج من المتجر');
 await page.goto(BASE + '/logout');
 
-// ---------- الترقيم: نقرة على «٣» يجب أن تفتح الصفحة الثالثة لا الأولى ----------
-// صاحب المشروع: «مهما نقرت صفحة ٣ أو ٦ أو ٩ ترجع إلى صفحة رقم واحد». السبب كان أن
+// ---------- الترقيم: نقرة على «3» يجب أن تفتح الصفحة الثالثة لا الأولى ----------
+// صاحب المشروع: «مهما نقرت صفحة 3 أو 6 أو 9 ترجع إلى صفحة رقم واحد». السبب كان أن
 // أرقام الصفحات تستعمل دالة روابط الفلاتر، وهي تحذف `page` عمدًا بعد أن تضعه.
 // المسار واحد لكل الأقسام (/c/… و/search و/new و/sale) فالفحص يغطيها جميعًا.
 await page.goto(BASE + '/logout');
@@ -1477,12 +1479,12 @@ for (const path of ['/c/all', '/new']) {
   if (!(await p3.count())) continue;                       // القسم أقصر من ثلاث صفحات
   const firstOnP1 = await page.locator('.card .t').first().textContent();
   const href3 = await p3.getAttribute('href');
-  expect(/[?&]page=3(&|$)/.test(href3 ?? ''), `${path}: رابط الصفحة ٣ يحمل page=3 (${href3})`);
+  expect(/[?&]page=3(&|$)/.test(href3 ?? ''), `${path}: رابط الصفحة 3 يحمل page=3 (${href3})`);
   await p3.click(); await page.waitForLoadState('networkidle');
   expect(/[?&]page=3(&|$)/.test(page.url()), `${path}: المتصفح وصل فعلًا إلى page=3 (${page.url()})`);
   expect(await has(page, 'الصفحة 3'), `${path}: الصفحة تقول إنها الثالثة`);
   const firstOnP3 = await page.locator('.card .t').first().textContent();
-  expect(firstOnP1 !== firstOnP3, `${path}: بضاعة الصفحة ٣ غير بضاعة الأولى`);
+  expect(firstOnP1 !== firstOnP3, `${path}: بضاعة الصفحة 3 غير بضاعة الأولى`);
   // «عرض المزيد» من الثالثة يذهب للرابعة لا للأولى
   const more = page.locator('a.more-btn').first();
   if (await more.count()) expect(/[?&]page=4(&|$)/.test((await more.getAttribute('href')) ?? ''), `${path}: «عرض المزيد» من الثالثة يذهب للرابعة`);
@@ -1510,7 +1512,7 @@ await page.goto(BASE + '/admin/products?q=' + moq2Offer);
 expect((await page.locator(`tr:has-text("${moq2Offer}")`).first().textContent()).includes('hidden'),
   'حتى الحد الأدنى «قطعتان» يدخل مخفيًا — المتجر بالقطعة');
 // والثغرة الثانية: الإثراء يكتشف الحد الأدنى بعد أن يصير المنتج على الرف. نستورد قطعة
-// حدّها الأدنى ١ (فتكون نشطة) ثم يأتي الإثراء برقم ٣ — يجب أن تُخفى لا أن تبقى تُجبر.
+// حدّها الأدنى 1 (فتكون نشطة) ثم يأتي الإثراء برقم 3 — يجب أن تُخفى لا أن تبقى تُجبر.
 const leakOffer = '72' + String(Date.now()).slice(-10); const leakTag = uniqTag();
 const imp = async (body) => page.evaluate(async ([b, d]) => {
   const r = await fetch(b + '/api/import', { method: 'POST', headers: { 'content-type': 'application/json', 'x-import-token': 'dev-import-token' }, body: JSON.stringify(d) });
@@ -1518,11 +1520,11 @@ const imp = async (body) => page.evaluate(async ([b, d]) => {
 }, [BASE, body]);
 await imp({ category_id: 1, page_url: 'e2e:moq', items: [{ offerId: leakOffer, url: `https://detail.1688.com/offer/${leakOffer}.html`, title: `قطعة ${leakTag}`, priceCny: 6, images: ['https://cbu01.alicdn.com/img/ibank/l.jpg'], minQty: 1, inStock: true, weightG: 100 }] });
 await page.goto(BASE + '/admin/products?q=' + leakOffer);
-expect((await page.locator(`tr:has-text("${leakOffer}")`).first().textContent()).includes('active'), 'قطعة حدّها الأدنى ١ تدخل نشطة');
+expect((await page.locator(`tr:has-text("${leakOffer}")`).first().textContent()).includes('active'), 'قطعة حدّها الأدنى 1 تدخل نشطة');
 await imp({ category_id: 1, page_url: 'e2e:moq2', items: [{ offerId: leakOffer, url: `https://detail.1688.com/offer/${leakOffer}.html`, title: `قطعة ${leakTag}`, priceCny: 6, images: [], variants: [], minQty: 3, inStock: true }] });
 await page.goto(BASE + '/admin/products?q=' + leakOffer);
 expect((await page.locator(`tr:has-text("${leakOffer}")`).first().textContent()).includes('hidden'),
-  'الإثراء الذي يرفع الحد الأدنى إلى ٣ يُخفي القطعة فورًا');
+  'الإثراء الذي يرفع الحد الأدنى إلى 3 يُخفي القطعة فورًا');
 // ولا يبقى على الرف منتج واحد يُجبر الزبونة
 const forced = await page.evaluate(async (b) => {
   const r = await fetch(b + '/api/source/stats', { method: 'POST', headers: { 'content-type': 'application/json', 'x-import-token': 'dev-import-token' }, body: '{}' });
@@ -1530,15 +1532,15 @@ const forced = await page.evaluate(async (b) => {
 }, BASE);
 expect(typeof forced.active === 'number', `الإحصاءات تعمل (${forced.active} نشط)`);
 
-// ---------- ترقيم اللوحة: القوائم كانت تقف عند ٢٠٠ صفّ بلا رقم صفحة ----------
+// ---------- ترقيم اللوحة: القوائم كانت تقف عند 200 صفّ بلا رقم صفحة ----------
 await page.goto(BASE + '/admin/products');
 const admTotal = await page.locator('.pager span').first().textContent().catch(() => '');
 if (/من \d+/.test(admTotal)) {
   const adm3 = page.locator('.pager a', { hasText: /^2$/ }).first();
   const h = await adm3.getAttribute('href');
-  expect(/[?&]page=2(&|$)/.test(h ?? ''), `لوحة المنتجات: رابط الصفحة ٢ يحمل page=2 (${h})`);
+  expect(/[?&]page=2(&|$)/.test(h ?? ''), `لوحة المنتجات: رابط الصفحة 2 يحمل page=2 (${h})`);
   await adm3.click(); await page.waitForLoadState('networkidle');
-  expect(/[?&]page=2(&|$)/.test(page.url()), `لوحة المنتجات: وصلنا فعلًا للصفحة ٢ (${page.url()})`);
+  expect(/[?&]page=2(&|$)/.test(page.url()), `لوحة المنتجات: وصلنا فعلًا للصفحة 2 (${page.url()})`);
   expect(await has(page, 'الصفحة 2'), 'لوحة المنتجات تقول إنها الصفحة الثانية');
 }
 // ---------- الإضافة المجانية: الطابور والكرون لا يتنازعان ----------
@@ -1547,7 +1549,7 @@ if (/من \d+/.test(admTotal)) {
 await login(page, '0910000000', 'admin123');
 await page.goto(BASE + '/admin/crawler');
 expect(await has(page, 'متبقٍ للإثراء'), 'صفحة الزاحف تعرض كم بقي للإثراء');
-expect(await has(page, 'فحصتها الإضافة في ٢٤ ساعة'), 'وتعرض معدّل الإضافة وحدها لا مجموع كل المهام');
+expect(await has(page, 'فحصتها الإضافة في 24 ساعة'), 'وتعرض معدّل الإضافة وحدها لا مجموع كل المهام');
 // زرّ الزاحف مثبّت في شريط اللوحة: نقرة واحدة من أي صفحة
 await page.goto(BASE + '/admin/orders');
 const pin = page.locator('.hdr-links a.pin').first();
@@ -1580,8 +1582,8 @@ expect(!(await has(page, 'نسخة إضافة قديمة متصلة')), 'الت�
 // وصفحة الكوبونات لم تعد تنكسر (وضعتُ التحذير فيها خطأً فسقطت بـ500)
 const cp = await page.goto(BASE + '/admin/coupons');
 expect(cp.status() === 200, `صفحة الكوبونات تعمل (${cp.status()})`);
-// ---------- مهام البحث للخادم وحده: الإضافة بلا حساب 1688 تُحوَّل إلى صفحة الدخول فتعود «ok — ٠» ----------
-// (٢٤/٠٩/٢٦: حوّل صاحب المشروع ثماني مهام بحث إلى الإضافة لأن الواجهة سمحت، فعادت كلها صفرًا)
+// ---------- مهام البحث للخادم وحده: الإضافة بلا حساب 1688 تُحوَّل إلى صفحة الدخول فتعود «ok — 0» ----------
+// (24/09/26: حوّل صاحب المشروع ثماني مهام بحث إلى الإضافة لأن الواجهة سمحت، فعادت كلها صفرًا)
 await page.goto(BASE + '/admin/crawler');
 await page.fill('form[action="/admin/crawler/new"] input[name=name]', 'بحث فحص');
 await page.selectOption('form[action="/admin/crawler/new"] select[name=type]', 'search');
@@ -1604,7 +1606,7 @@ await page.locator('tr', { hasText: 'بحث فحص' }).first().locator('button[v
 expect(await page.locator('tr', { hasText: 'بحث فحص' }).count() === 0, 'مهمة الفحص حُذفت بعد التجربة');
 // ---------- شريط تقدّم الإضافة: يتحرّك على الشاشة مع كل منتج، بلا إعادة تحميل ----------
 // طلب صاحب المشروع: «ضع شريطًا يظهر التقدّم حتى أعرف أن الإضافة تعمل وتجلب وتثري المنتجات».
-// الإضافة كانت صامتة ٣٠ دقيقة لكل دفعة. نلعب دورها خطوةً خطوة ونراقب الصفحة المفتوحة تتغيّر وحدها.
+// الإضافة كانت صامتة 30 دقيقة لكل دفعة. نلعب دورها خطوةً خطوة ونراقب الصفحة المفتوحة تتغيّر وحدها.
 const liveOffer = '73' + String(Date.now()).slice(-10), liveOffer2 = '74' + String(Date.now()).slice(-10); const liveTag = uniqTag();
 const extCall = (path, body) => page.evaluate(async ([b, p, d]) => {
   const r = await fetch(b + p, d ? { method: 'POST', headers: { 'content-type': 'application/json', 'x-import-token': 'dev-import-token' }, body: JSON.stringify(d) } : { headers: { 'x-import-token': 'dev-import-token' } });
@@ -1623,46 +1625,46 @@ const waitLive = async (re, what) => {
   const ok = await page.waitForFunction((src) => new RegExp(src).test(document.getElementById('live')?.textContent || ''), re.source, { timeout: 15000 }).then(() => true, () => false);
   expect(ok, `${what} (${(await liveText()).replace(/\s+/g, ' ').trim().slice(0, 110)})`);
 };
-// ١) الإضافة تأخذ الطابور = بداية دفعة
+// 1) الإضافة تأخذ الطابور = بداية دفعة
 const lq = await extCall('/api/import/queue');
 // حجم الدفعة = الأصغر من طول الطابور وحدّ مهمة الإثراء (max_new) — نأخذه من الخادم نفسه
 const lTotal = (await extCall('/api/crawl/live')).total;
 expect(lTotal > 0 && lTotal <= (lq.ids || []).length, `بداية الدفعة سُجّلت بحجمها (${lTotal} من طابور ${(lq.ids || []).length})`);
-await waitLive(new RegExp(`0 من ${lTotal.toLocaleString('ar-LY')}`), `الشريط يبدأ من الصفر بحجم الدفعة وحده بلا إعادة تحميل`);
+await waitLive(new RegExp(`0 من ${lTotal.toLocaleString('en-US')}`), `الشريط يبدأ من الصفر بحجم الدفعة وحده بلا إعادة تحميل`);
 expect((await page.locator('#live').getAttribute('data-state')) === 'running', 'وحالته «تعمل الآن»');
 expect(await has(page, 'الإضافة تعمل الآن'), 'والعنوان يقولها بالعربية');
-// ٢) منتج قرأته الإضافة: صفحته أعطت ثلاث صور ومقاسين ووزنًا
+// 2) منتج قرأته الإضافة: صفحته أعطت ثلاث صور ومقاسين ووزنًا
 const r1 = await extCall('/api/import', { category_id: null, page_url: 'ext:stock', items: [{ offerId: liveOffer, url: `https://detail.1688.com/offer/${liveOffer}.html`, title: `عيّنة ${liveTag}`, priceCny: 30,
   images: ['https://cbu01.alicdn.com/img/ibank/l1.jpg', 'https://cbu01.alicdn.com/img/ibank/l2.jpg', 'https://cbu01.alicdn.com/img/ibank/l3.jpg'],
   variants: [{ color: 'أحمر', size: 'M', inStock: true }, { color: 'أحمر', size: 'L', inStock: true }], weightG: 250, minQty: 1, inStock: true }] });
 expect(r1.enriched === 1 && r1.gain?.img === 1 && r1.gain?.vars === 1 && r1.gain?.wt === 1, `الخادم يعدّ ما أُضيف فعلًا (${JSON.stringify(r1.gain)})`);
-await waitLive(new RegExp(`1 من ${lTotal.toLocaleString('ar-LY')}`), 'الشريط يتقدّم إلى ١ وحده والصفحة مفتوحة');
+await waitLive(new RegExp(`1 من ${lTotal.toLocaleString('en-US')}`), 'الشريط يتقدّم إلى 1 وحده والصفحة مفتوحة');
 const gainsTxt = (await page.locator('#live .live-gains').textContent()) || '';
 expect(/صور\s*\+1/.test(gainsTxt) && /مقاسات وألوان\s*\+1/.test(gainsTxt) && /وزن\s*\+1/.test(gainsTxt), `ويعرض ما أُضيف: صور ومقاسات ووزن (${gainsTxt.replace(/\s+/g, ' ').trim()})`);
 expect((await page.locator('#live .live-last a').getAttribute('href') || '').startsWith('/p/'), 'آخر منتج قرأته الإضافة رابطٌ يفتح صفحته في المتجر');
-// ٣) المرور الثاني على منتج مكتمل لا يُحسب «إثراءً» — كان كل مرور يُعدّ فظهر «مُثرى ١٠٠ من ١٠٠»
+// 3) المرور الثاني على منتج مكتمل لا يُحسب «إثراءً» — كان كل مرور يُعدّ فظهر «مُثرى 100 من 100»
 const r1b = await extCall('/api/import', { category_id: null, page_url: 'ext:test', items: [{ offerId: liveOffer, title: `عيّنة ${liveTag}`, priceCny: 30, images: ['https://cbu01.alicdn.com/img/ibank/l1.jpg', 'https://cbu01.alicdn.com/img/ibank/l2.jpg'], weightG: 300, inStock: true }] });
 expect(r1b.enriched === 0 && r1b.gain.img === 0 && r1b.gain.wt === 0, `مرور بلا إضافة لا يُعدّ إثراءً (enriched=${r1b.enriched})`);
-// ٤) صفحة لم تُظهر سعرًا (نزل المنتج أو لم تُحمَّل) — خطوة في الشريط بلا إضافة
+// 4) صفحة لم تُظهر سعرًا (نزل المنتج أو لم تُحمَّل) — خطوة في الشريط بلا إضافة
 await extCall('/api/import/check', { offerId: liveOffer2, inStock: false, priceCny: null });
-await waitLive(new RegExp(`2 من ${lTotal.toLocaleString('ar-LY')}`), 'الشريط يتقدّم إلى ٢ مع الصفحة التي لم تُقرأ');
+await waitLive(new RegExp(`2 من ${lTotal.toLocaleString('en-US')}`), 'الشريط يتقدّم إلى 2 مع الصفحة التي لم تُقرأ');
 expect(/لم يُقرأ\s*1/.test((await page.locator('#live .live-gains').textContent()) || ''), 'ويعدّها «لم يُقرأ» لا إثراءً');
 await shot(page, 'crawler-live-running');
-// ٥) تقرير آخر الدفعة: الشريط يقول «اكتملت» وسجلّ التشغيل يحمل ما أُضيف فعلًا لا عدّاد الإضافة
+// 5) تقرير آخر الدفعة: الشريط يقول «اكتملت» وسجلّ التشغيل يحمل ما أُضيف فعلًا لا عدّاد الإضافة
 if (stockJob) {
   await extCall('/api/crawl/report', { job_id: stockJob.id, started_at: new Date().toISOString(), status: 'ok', pages: 0, found: 0, imported: 0, updated: 1, enriched: 2, checked: 2 });
   await waitLive(/اكتملت الدفعة الأخيرة/, 'بعد تقرير الإضافة يقول الشريط «اكتملت الدفعة الأخيرة»');
   await page.reload();
   const row = (await page.locator('.tbl tr', { hasText: 'فحص' }).filter({ hasText: '🖼1' }).first().textContent().catch(() => '')) || '';
   expect(/🖼1\s*📏1\s*⚖️1/.test(row), `سجلّ التشغيل يحمل ما أُضيف فعلًا (${row.replace(/\s+/g, ' ').trim().slice(0, 90)})`);
-  expect(await has(page, 'أضافته الإضافة فعلًا في ٢٤ ساعة'), 'وبطاقة «أضافته فعلًا في ٢٤ ساعة» ظاهرة');
+  expect(await has(page, 'أضافته الإضافة فعلًا في 24 ساعة'), 'وبطاقة «أضافته فعلًا في 24 ساعة» ظاهرة');
   await shot(page, 'crawler-live-done');
 } else expect(false, 'لا توجد مهمة فحص مخزون محليًا لتجربة التقرير');
 // نقطة الحالة للإضافة محمية بالرمز
 // (من خارج المتصفح: جلسة الأدمن في الصفحة تفتحها كما يجب)
 const liveNoTok = (await fetch(BASE + '/api/crawl/live')).status;
 expect(liveNoTok === 401, `حالة الإضافة لا تُقرأ بلا رمز (${liveNoTok})`);
-// ٦) صفحة لم تُحمَّل أو لم تُجب (الإضافة 1.5.3+): «لم يُقرأ» لا «غير متوفر».
+// 6) صفحة لم تُحمَّل أو لم تُجب (الإضافة 1.5.3+): «لم يُقرأ» لا «غير متوفر».
 // قبلها كانت القراءة الناقصة تعطي «بلا سعر» فيُعلَّم منتج متوفر غير متوفر.
 await extCall('/api/import/queue');
 const sk = await extCall('/api/import/check', { offerId: liveOffer, skipped: true });
@@ -1672,7 +1674,7 @@ if (lvSk.last?.slug) {
   await page.goto(BASE + '/p/' + lvSk.last.slug);
   expect(!(await has(page, 'غير متوفر حاليًا عند المورد')), 'والمنتج بقي متوفرًا في المتجر');
 }
-// ٧) دفعة ماتت بلا تقرير (أُغلق كروم أو توقف عامل الإضافة): الدفعة التالية تسجّلها بما أضافته
+// 7) دفعة ماتت بلا تقرير (أُغلق كروم أو توقف عامل الإضافة): الدفعة التالية تسجّلها بما أضافته
 await extCall('/api/import/queue');
 await page.goto(BASE + '/admin/crawler');
 expect(await has(page, 'انقطعت الدفعة بعد 1'), 'الدفعة المنقطعة تظهر في سجل التشغيل بدل أن تختفي');
@@ -1719,9 +1721,9 @@ expect(/أُضيف [1-9]/.test(discTxt) && /تعذّرت قراءته [1-9]/.tes
 expect(/اكتشاف مجاني/.test((await page.locator('#live .live-disc').textContent().catch(() => '')) || ''), 'وشريط التقدّم يذكر الروابط المكتشفة في الدفعة');
 const perBefore = await page.locator('#discover input[name=per]').inputValue();
 await page.fill('#discover input[name=per]', '0'); await page.click('#discover button'); await page.waitForLoadState('networkidle');
-expect((await page.locator('#discover input[name=per]').inputValue()) === '0', 'زر الحفظ يضبط العدد في كل دفعة (٠ = إيقاف)');
+expect((await page.locator('#discover input[name=per]').inputValue()) === '0', 'زر الحفظ يضبط العدد في كل دفعة (0 = إيقاف)');
 const qOff = await extCall('/api/import/queue?v=' + extManifest.version);
-expect(!(qOff.fresh || []).length, 'وبـ٠ لا تستلم الإضافة منتجات جديدة');
+expect(!(qOff.fresh || []).length, 'وبـ0 لا تستلم الإضافة منتجات جديدة');
 await page.fill('#discover input[name=per]', perBefore); await page.click('#discover button'); await page.waitForLoadState('networkidle');
 expect((await page.locator('#discover input[name=per]').inputValue()) === perBefore, `أُعيد العدد كما كان (${perBefore})`);
 await extCall('/api/crawl/discover/fail', { offerId: d2.replace(/^82/, '83') }); await extCall('/api/crawl/discover/fail', { offerId: d2.replace(/^82/, '83') });
@@ -1729,13 +1731,45 @@ await shot(page, 'crawler-discover');
 if (stockJob) await extCall('/api/crawl/report', { job_id: stockJob.id, started_at: new Date().toISOString(), status: 'ok', checked: 0 });
 await page.goto(BASE + '/logout');
 
+// ---------- أرقام إنجليزية في كل الموقع ----------
+// طلب صاحب المشروع (٢٤/٠٩/٢٦): «اجعل كل الأرقام في الموقع إنجليزية 1 2 3 لا ١ ٢ ٣، كالتي تظهر في مدة أيام الشحن».
+// نكتب مدة الشحن في لوحة التسعير بلوحة مفاتيح عربية كما يفعل صاحب المشروع، ثم نمرّ على الصفحات كالزبونة.
+const AR_D = /[\u0660-\u0669\u06F0-\u06F9\u066B\u066C]/;
+await login(page, '0910000000', 'admin123');
+await page.goto(BASE + '/admin/pricing');
+const airBefore = await page.locator('input[name=air_days]').inputValue();
+expect(!AR_D.test(airBefore), `خانة مدة الشحن الجوي بأرقام إنجليزية (${airBefore})`);
+try {
+  await page.fill('input[name=air_days]', '١٠ — ١٥ يومًا');
+  await page.locator('form:has(input[name=air_days]) button', { hasText: 'حفظ' }).first().click(); await page.waitForLoadState('networkidle');
+  expect((await page.locator('input[name=air_days]').inputValue()) === '10 — 15 يومًا', `ما يُكتب بأرقام عربية يُحفظ بأرقام إنجليزية (${await page.locator('input[name=air_days]').inputValue()})`);
+  await page.goto(BASE + '/p/' + productSlug);
+  expect(await has(page, '10 — 15 يومًا'), 'صفحة المنتج تعرض مدة الشحن الجديدة بأرقام إنجليزية');
+  for (const pth of ['/', '/c/all', '/search?q=' + encodeURIComponent('فستان'), '/p/' + productSlug, '/cart', '/pages/shipping', '/pages/returns', '/pages/points', '/pages/sizes', '/pages/faq', '/pages/terms', '/admin/crawler']) {
+    await page.goto(BASE + pth); await page.waitForLoadState('domcontentloaded');
+    const txt = await page.evaluate(() => document.body.innerText + ' ' + [...document.querySelectorAll('input,textarea')].map(e => e.value).join(' '));
+    const bad = (txt.match(new RegExp('.{0,12}' + AR_D.source + '.{0,12}')) || [''])[0];
+    expect(!bad, `${pth}: لا رقم عربي واحد على الشاشة${bad ? ` («${bad}»)` : ''}`);
+  }
+  await page.goto(BASE + '/c/dresses');
+  const pTxt = ((await page.locator('.grid .card .p').first().textContent()) || '').trim();
+  expect(/^[\d,]+(\.\d\d)?\s*د\.ل/.test(pTxt.replace(/\s+/g, ' ')), `سعر البطاقة بأرقام إنجليزية وفاصلة آلاف إنجليزية (${pTxt})`);
+} finally {
+  // قاعدة المشروع: أعد ما غيّرته ولو سقط فحص في المنتصف
+  await page.goto(BASE + '/admin/pricing');
+  await page.fill('input[name=air_days]', airBefore);
+  await page.locator('form:has(input[name=air_days]) button', { hasText: 'حفظ' }).first().click(); await page.waitForLoadState('networkidle');
+  expect((await page.locator('input[name=air_days]').inputValue()) === airBefore, `أُعيدت مدة الشحن كما كانت (${airBefore})`);
+}
+await page.goto(BASE + '/logout');
+
 // ---------- جوال ----------
 const m = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, locale: 'ar' });
 const mp = await m.newPage();
 // ---------- صفحة القسم في الجوال كما في شي إن: البضاعة أولًا، والفلاتر في لوحة تُفتح بالنقر ----------
 // صاحب المشروع: «يعرض كل الفلاتر فوق ثم بعدها تأتي البضاعة وهذا خطأ». نلمس الشاشة كما تلمسها الزبونة.
-// عرض التخطيط الحقيقي يُقارن بـ٣٩٠: في وضع الجوال يتّسع innerWidth مع المحتوى فلا يكشف فيضًا
-// (هكذا مرّ صف ترويسة أعرض من الشاشة وسّع الصفحة إلى ٤٣٦ ودفع ☰ خارجها).
+// عرض التخطيط الحقيقي يُقارن بـ390: في وضع الجوال يتّسع innerWidth مع المحتوى فلا يكشف فيضًا
+// (هكذا مرّ صف ترويسة أعرض من الشاشة وسّع الصفحة إلى 436 ودفع ☰ خارجها).
 for (const pth of ['/', '/c/dresses', '/search?q=' + encodeURIComponent('فستان'), '/p/' + productSlug]) {
   await mp.goto(BASE + pth); await mp.waitForLoadState('networkidle');
   const lw = await mp.evaluate(() => document.documentElement.scrollWidth);
@@ -1752,7 +1786,7 @@ await mp.click('.ms-rec summary');
 expect(await mp.locator('.ms-menu a', { hasText: 'الأحدث' }).isVisible(), 'الجوال: «موصى به» تفتح قائمة الفرز');
 await mp.locator('.ms-menu a', { hasText: 'الأحدث' }).click(); await mp.waitForLoadState('networkidle');
 expect(/[?&]sort=new/.test(mp.url()) && (await mp.locator('.ms-rec summary').textContent()).includes('الأحدث'), `الجوال: الفرز بالأحدث طُبّق (${mp.url().split('?')[1]})`);
-// السعر الحالي وحده: بلا السعر المشطوب ولا الكسر الصغير، و«1.234» بفاصل آلاف ar-LY
+// السعر الحالي وحده: بلا السعر المشطوب ولا الكسر الصغير، و«1,234» بفاصل آلاف en-US
 const mPrices = async () => mp.$$eval('.grid .card .p', els => els.slice(0, 6).map(e => { const c = e.cloneNode(true); c.querySelectorAll('s,em').forEach(x => x.remove()); return parseInt(c.textContent.replace(/[^\d]/g, ''), 10) || 0; }));
 await mp.click('.m-sort .ms-price'); await mp.waitForLoadState('networkidle');
 const up = await mPrices();
@@ -1771,7 +1805,7 @@ await mp.click('.fs-done'); await mp.waitForLoadState('networkidle');
 const fu = new URL(mp.url());
 expect(fu.searchParams.get('size') === mSize && !/[?&](color|min|max|cat)=(&|$)/.test(mp.url()), `الجوال: «عرض النتائج» طبّق المقاس ${mSize} برابط نظيف (${fu.search})`);
 expect(await mp.locator('#fsheet').isHidden(), 'الجوال: اللوحة أُغلقت بعد التطبيق');
-expect((await mp.locator('.m-chips a.on').first().textContent()).includes(mSize) && (await mp.locator('.ms-filter b').textContent()) === '1', 'الجوال: شريحة «المقاس» ظاهرة وعدّاد «تصفية» = ١');
+expect((await mp.locator('.m-chips a.on').first().textContent()).includes(mSize) && (await mp.locator('.ms-filter b').textContent()) === '1', 'الجوال: شريحة «المقاس» ظاهرة وعدّاد «تصفية» = 1');
 // القسم من داخل اللوحة: يحوّل الخادم إلى مسار القسم ويُبقي باقي الفلاتر
 await mp.click('.ms-filter');
 await mp.locator('[data-pane=cat] label', { hasText: 'أحذية' }).click();

@@ -7,11 +7,11 @@ import { KIND_NOTE, type ListingKind } from '../lib/source';
 const Price: FC<{ v: number; deal?: boolean }> = ({ v, deal }) => {
   const int = Math.floor(v);
   const frac = Math.round((v - int) * 100);
-  return <>{int.toLocaleString('ar-LY')}{frac ? <em>٫{String(frac).padStart(2, '0')}</em> : null}<em> د.ل</em></>;
+  return <>{int.toLocaleString('en-US')}{frac ? <em>.{String(frac).padStart(2, '0')}</em> : null}<em> د.ل</em></>;
 };
 
 export type ShipCtx = { mode: 'air' | 'sea'; air: string; sea: string; seaOn: boolean };
-const DEF_SHIP: ShipCtx = { mode: 'air', air: '١٢ — ١٨ يومًا', sea: '٣٠ — ٤٥ يومًا', seaOn: true };
+const DEF_SHIP: ShipCtx = { mode: 'air', air: '12 — 18 يومًا', sea: '30 — 45 يومًا', seaOn: true };
 
 export const ProductCard: FC<{ p: ProductRow; fav?: boolean; ship?: ShipCtx; best?: boolean }> = ({ p, fav, ship, best }) => {
   const sh = ship ?? DEF_SHIP;

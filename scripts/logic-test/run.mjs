@@ -66,9 +66,9 @@ for (const [t, v] of Object.entries(ol)) {
 // --- الشحن الداخلي في الصين يُقسَّم على اللوط لا يُضرب فيه
 const { lot1, lot100, lot100Sea } = d.pricing;
 expect(lot100.domestic_ship_lyd < lot1.domestic_ship_lyd / 50,
-  `لوط ١٠٠ قطعة يحمل جزءًا من الشحن الداخلي (${lot100.domestic_ship_lyd} مقابل ${lot1.domestic_ship_lyd} للقطعة الواحدة)`);
+  `لوط 100 قطعة يحمل جزءًا من الشحن الداخلي (${lot100.domestic_ship_lyd} مقابل ${lot1.domestic_ship_lyd} للقطعة الواحدة)`);
 expect(lot100.total_lyd < lot1.total_lyd,
-  `سعر القطعة داخل لوط ١٠٠ أقل من سعرها مفردة (${lot100.total_lyd} < ${lot1.total_lyd} د.ل)`);
+  `سعر القطعة داخل لوط 100 أقل من سعرها مفردة (${lot100.total_lyd} < ${lot1.total_lyd} د.ل)`);
 expect(lot1.total_lyd - lot100.total_lyd >= (lot1.domestic_ship_lyd - lot100.domestic_ship_lyd),
   `الفرق كله من الشحن الداخلي المقسَّم (${(lot1.total_lyd - lot100.total_lyd).toFixed(2)} ≥ ${(lot1.domestic_ship_lyd - lot100.domestic_ship_lyd).toFixed(2)})`);
 expect(lot100Sea.total_lyd <= lot100.total_lyd,
@@ -77,12 +77,12 @@ expect(lot100Sea.total_lyd <= lot100.total_lyd,
 
 // --- وزن المورّد: بعضهم يكتب الغرامات في حقل الكيلو فينفجر سعر الشحن
 const wt = d.weights;
-expect(wt.kg === 650, `٠٫٦٥ كغ ⟵ ${wt.kg} غ`);
-expect(wt.gramsInKgField === 650, `٦٥٠ في حقل الكيلو تُقرأ غرامات لا ٦٥٠ كغ (${wt.gramsInKgField})`);
-expect(wt.absurd === null, `٦٥٠٫٠٠٠ وزن مستحيل يُهمل فيُستعمل تقدير القسم (${wt.absurd})`);
+expect(wt.kg === 650, `0٫65 كغ ⟵ ${wt.kg} غ`);
+expect(wt.gramsInKgField === 650, `650 في حقل الكيلو تُقرأ غرامات لا 650 كغ (${wt.gramsInKgField})`);
+expect(wt.absurd === null, `650٫000 وزن مستحيل يُهمل فيُستعمل تقدير القسم (${wt.absurd})`);
 expect(wt.zero === null, 'الوزن صفر أو مفقود يُهمل');
-expect(wt.specKg === 300, `٠٫٣ في جدول المواصفات كيلوغرامات (${wt.specKg} غ)`);
-expect(wt.specG === 800, `٨٠٠ في جدول المواصفات غرامات (${wt.specG} غ)`);
+expect(wt.specKg === 300, `0٫3 في جدول المواصفات كيلوغرامات (${wt.specKg} غ)`);
+expect(wt.specG === 800, `800 في جدول المواصفات غرامات (${wt.specG} غ)`);
 
 
 // --- رأس عمود جدول المواصفات ليس قيمة خاصية
@@ -120,7 +120,7 @@ expect(/أبجدية أخرى/.test(bt.cyrillic ?? ''), `«розية» سيري
 expect(/مرتين متتاليتين/.test(bt.dupWord ?? ''), `«للسيارات للسيارات» تكرار متجاور (${bt.dupWord})`);
 expect(bt.swept === 'إبريق شاي حراري مزدوج الطبقات من الستانلس ستيل 316',
   `الكنس المجاني يحذف الكلمة الكورية «용» وحدها (${bt.swept})`);
-expect(/١٢٠ حرفًا/.test(bt.tooLong ?? ''), `عنوان فوق ١٢٠ حرفًا حشو كلمات (${(bt.tooLong ?? '').slice(0,40)})`);
+expect(/120 حرفًا/.test(bt.tooLong ?? ''), `عنوان فوق 120 حرفًا حشو كلمات (${(bt.tooLong ?? '').slice(0,40)})`);
 
 console.log(`\nنجح: ${passed} · فشل: ${problems.length}`);
 process.exit(problems.length ? 1 : 0);

@@ -4,7 +4,7 @@ import type { Env } from '../types';
 import { ORDER_STATUS, PAYMENT_METHODS } from '../types';
 import { AdminShell } from '../views/dash';
 import { Flash } from '../views/layout';
-import { getCategories, PRODUCT_SELECT, fmt, imgUrl, timeAgo } from '../lib/db';
+import { getCategories, PRODUCT_SELECT, fmt, imgUrl, timeAgo, latinDigits } from '../lib/db';
 import type { ProductRow } from '../lib/db';
 import { classifyModesty } from '../lib/modesty';
 import { fingerprint, sameProduct } from '../lib/dedupe';
@@ -254,7 +254,7 @@ export async function importProducts(db: D1Database, arr: any[], categoryId: num
     : [];
   let imported = 0, updated = 0, skipped = 0, enriched = 0, dupes = 0; const newIds: string[] = [];
   // ما أُضيف فعلًا لمنتجات موجودة: يغذّي شريط تقدّم الإضافة. `enriched` كان يُعدّ مع كل مرور
-  // ولو لم يُضف شيئًا (١٠٠ من ١٠٠ دائمًا) فلا يقول لصاحب المشروع شيئًا.
+  // ولو لم يُضف شيئًا (100 من 100 دائمًا) فلا يقول لصاحب المشروع شيئًا.
   const gain = { img: 0, vars: 0, wt: 0 };
   const seen = new Set<string>();   // نتائج البحث قد تكرر المنتج نفسه في الدفعة الواحدة
   for (const it of arr) {
@@ -365,9 +365,9 @@ function asVariant(v: any) {
   return color || size ? { ...v, color, size } : null;
 }
 
-// ترقيم صفحات اللوحة. القوائم كانت تقف عند ٢٠٠ صفّ بلا رقم صفحة واحد: ما بعدها
+// ترقيم صفحات اللوحة. القوائم كانت تقف عند 200 صفّ بلا رقم صفحة واحد: ما بعدها
 // موجود في القاعدة ولا يصل إليه أحد — نفس عطل ترقيم المتجر بوجه آخر.
-// الرابط يضع `page` ولا يحذفه (الخطأ الذي أخفى ٩٠٪ من بضاعة المتجر).
+// الرابط يضع `page` ولا يحذفه (الخطأ الذي أخفى 90% من بضاعة المتجر).
 const PER = 100;
 const pageOf = (c: Context<Env>) => Math.max(1, parseInt(new URL(c.req.url).searchParams.get('page') ?? '1'));
 const Pager = ({ c, total }: { c: Context<Env>; total: number }) => {
@@ -390,7 +390,7 @@ admin.get('/products', async (c) => {
   if (st) { where += ' AND p.status=?'; binds.push(st); }
   // ?stuck=1 — ما تعذّر إثراؤه بعد ثلاث محاولات من الإضافة المجانية: هؤلاء من يستحق الكريدت
   // ?moq=N — قطع الجملة: حدّها الأدنى N فأكثر. الزبونة لا تستطيع شراء أقل منه،
-  // فقطعة أقلّ طلبها ٨٠٠٠ ليست بيعًا بالتجزئة مهما بدت في الرف.
+  // فقطعة أقلّ طلبها 8000 ليست بيعًا بالتجزئة مهما بدت في الرف.
   const moq = parseInt(c.req.query('moq') ?? '') || 0;
   if (moq > 1) { where += ' AND p.min_qty >= ?'; binds.push(moq); }
   // ?pack=1 — إعلانات مصانع التغليف والطباعة وOEM: تبيع العلبة الفارغة لا ما في الصورة
@@ -623,8 +623,8 @@ admin.get('/pricing', async (c) => {
         {S('sea_enabled', 'إظهار خيار الشحن البحري', [['1', 'مفعّل'], ['0', 'مخفي']])}
         {F('ship_usd_per_kg_sea', 'سعر الكيلو بحرًا ($)')}
         {F('ship_usd_per_cbm_sea', 'سعر المتر المكعب بحرًا ($)')}
-        <label>مدة الوصول جوًّا</label><input type="text" name="air_days" value={s.air_days ?? '١٢ — ١٨ يومًا'} />
-        <label>مدة الوصول بحرًا</label><input type="text" name="sea_days" value={s.sea_days ?? '٣٠ — ٤٥ يومًا'} />
+        <label>مدة الوصول جوًّا</label><input type="text" name="air_days" value={s.air_days ?? '12 — 18 يومًا'} />
+        <label>مدة الوصول بحرًا</label><input type="text" name="sea_days" value={s.sea_days ?? '30 — 45 يومًا'} />
         <h3 style="margin-top:16px">التوصيل داخل ليبيا</h3>
         {F('delivery_lyd', 'رسوم التوصيل (د.ل)')}{F('free_ship_over_lyd', 'توصيل مجاني فوق (د.ل)')}
         <label>أجرة التوصيل لكل مدينة (اختياري)</label>
@@ -667,7 +667,7 @@ admin.get('/pricing', async (c) => {
 admin.post('/pricing', async (c) => {
   const f = await c.req.parseBody();
   const keys = ['fx_cny_lyd', 'fx_usd_lyd', 'markup_percent', 'safety_percent', 'ship_usd_per_kg', 'customs_percent', 'domestic_cn_ship_cny', 'delivery_lyd', 'free_ship_over_lyd', 'ship_mode', 'ship_usd_per_cbm', 'volumetric_divisor', 'default_volume_cm3', 'sea_enabled', 'ship_usd_per_kg_sea', 'ship_usd_per_cbm_sea', 'air_days', 'sea_days', 'delivery_city_rates', 'retail_max_moq'];
-  await c.env.DB.batch(keys.filter(k => f[k] !== undefined).map(k => c.env.DB.prepare("INSERT INTO settings(key,value,updated_at) VALUES(?,?,datetime('now')) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at").bind(k, String(f[k]))));
+  await c.env.DB.batch(keys.filter(k => f[k] !== undefined).map(k => c.env.DB.prepare("INSERT INTO settings(key,value,updated_at) VALUES(?,?,datetime('now')) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at").bind(k, latinDigits(String(f[k])))));
   return c.redirect('/admin/pricing?ok=1');
 });
 // الطلبات التي سبقت تفعيل لقطة التكلفة تظهر بربح 100% لأن تكلفتها فارغة — نحسبها من بيانات المنتج
