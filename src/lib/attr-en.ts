@@ -86,7 +86,7 @@ export function enAttr(raw: string): string | null {
   if (/^(normal|standard|regular) size$/.test(low)) return add('مقاس عادي');
   const sz = t.match(SIZE_TOKEN);
   // «L size»، «Size L»، «M [recommendation 40-50kg]»، «Female XL»، «4xl (recommended 80-90kg )»
-  if (sz && /^(size\s+)?\S+(\s+size)?(\s*[\[(（【].*(recommend|kg|weight).*)?$/i.test(t)) return add(sz[1].toUpperCase() + kgRange(t));
+  if (sz && /^(size\s+)?\S+(\s+size)?(\s*[\[(（【].*(recommend|kg|weight).*|\s+(is\s+)?recommend(ed|ation|s)?\b[^A-Za-z]*(kg|jin)?\s*\)?)?$/i.test(t)) return add(sz[1].toUpperCase() + kgRange(t));
   // مقاس رقمي بحاشية: «40 [Standard Size]» بعد حذفها صار «40»
   if (/^\d{2,3}(\.\d)?$/.test(t) || /^\d{2}-\d{2}$/.test(t)) return add(t);
   const szn = t.match(/^size\s*(\d{2,3}(?:\.\d)?)$/i); if (szn) return add(`مقاس ${szn[1]}`);   // «Size 36»
@@ -113,6 +113,8 @@ const GUARD: Record<string, string[]> = {
 const FEM: Record<string, string> = { سوداء: 'أسود', بيضاء: 'أبيض', حمراء: 'أحمر', خضراء: 'أخضر', زرقاء: 'أزرق', صفراء: 'أصفر' };
 const base = (w: string) => { const x = w.replace(/^(و?ب?ال|ال)(?=..)/, ''); return FEM[x] ?? x.replace(/ة$/, ''); };
 export function colorsKept(src: string, out: string): boolean {
-  const low = src.toLowerCase(), have = new Set(out.split(/[\s\-–/+،,()]+/).map(base));
+  // «أسود وأبيض»: واو العطف ملتصقة — نضيف الكلمة بدونها أيضًا (لا نحذفها وحدها: «وردي» تبدأ بواو)
+  const words = out.split(/[\s\-–/+،,()]+/);
+  const low = src.toLowerCase(), have = new Set([...words.map(base), ...words.filter(w => /^و../.test(w)).map(w => base(w.slice(1)))]);
   return Object.entries(GUARD).filter(([c]) => new RegExp(`(^|[^a-z])${c}([^a-z]|$)`).test(low)).every(([, ok]) => ok.some(w => have.has(w)));
 }

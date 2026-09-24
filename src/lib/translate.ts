@@ -411,6 +411,14 @@ const EN_SQL = (f: string) => `${f} GLOB '*[A-Za-z][A-Za-z][A-Za-z]*' AND ${f} N
 export async function fixEnglishVariants(db: D1Database, tr: Translator, limit = 100): Promise<{ fixed: number; dropped: number }> {
   let fixed = 0, dropped = 0;
   await revertBadEnglish(db);
+  // ما يئس منه النموذج قد يغطيه القاموس بعد توسيعه — مجانًا
+  const { results: gaveUp } = await db.prepare('SELECT src FROM attr_seen WHERE tries BETWEEN 3 AND 98 LIMIT 300').all<{ src: string }>();
+  for (const { src } of gaveUp) {
+    const d = enAttr(src);
+    if (!d || d === src || needsEnTr(d)) continue;
+    for (const f of ['color', 'size'] as const) fixed += (await db.prepare(`UPDATE variants SET ${f}=? WHERE ${f}=?`).bind(d.slice(0, 60), src).run()).meta?.changes ? 1 : 0;
+    await db.prepare('DELETE FROM attr_seen WHERE src=?').bind(src).run();
+  }
   // شظايا عربية قديمة من الترجمة: «جميع المقاسات متوفرة»، «حجم المادة: حرير الحليب 230 جرام…»
   for (const f of ['color', 'size'] as const) {
     const r = await db.prepare(`UPDATE variants SET ${f}=NULL WHERE ${f} IN ('جميع المقاسات متوفرة','جميع المقاسات','المقاسات متوفرة') OR (${f} LIKE '%:%' AND length(${f}) > 20) OR ${f} LIKE 'المواصفات%' OR ${f} LIKE 'مواصفات%'`).run();
@@ -424,6 +432,10 @@ export async function fixEnglishVariants(db: D1Database, tr: Translator, limit =
       const up = sizeCase(v);   // «Xxl» ⟵ «XXL»
       if (up) { await db.prepare(`UPDATE variants SET ${f}=? WHERE ${f}=?`).bind(up, v).run(); fixed++; continue; }
       if (!needsEnTr(v)) { await db.prepare("INSERT INTO attr_seen(src,tries) VALUES(?,99) ON CONFLICT(src) DO UPDATE SET tries=99").bind(v).run(); continue; }
+      // القاموس موثوق ولا يحتاج حرفًا عربيًا: «40-41 [positive code]» ⟵ «40-41»، «XL【European size in stock】» ⟵ «XL».
+      // كان يُرفض بحارس النموذج فيبقى على رأس كل دفعة إلى الأبد
+      const d = enAttr(v);
+      if (d && d !== v && !needsEnTr(d)) { await db.prepare(`UPDATE variants SET ${f}=? WHERE ${f}=?`).bind(d.slice(0, 60), v).run(); fixed++; continue; }
       const calls = tr.aiCalls;
       const out = await tr.t(v, 'attr');
       if (out && out !== v && enOk(v, out) && !needsEnTr(out)) { await db.prepare(`UPDATE variants SET ${f}=? WHERE ${f}=?`).bind(out.slice(0, 60), v).run(); fixed++; }
