@@ -1,0 +1,54 @@
+# دراسة موقع منافس بمتصفح حقيقي من خوادم GitHub (بيئة المساعد محجوبة عن الخارج).
+# **قراءة فقط**: تفتح الصفحات وتقرأها وتصوّرها، ولا تسجّل ولا تملأ نموذجًا ولا تطلب شيئًا.
+# النتائج: سجل التشغيل (النصوص والأسعار والأزرار) + الصور في artifact وفي الفرع `competitor-shots`.
+name: Competitor study
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: رابط موقع المنافس
+        default: https://bizznass-co.com/
+        required: true
+      max:
+        description: أقصى عدد من الصفحات الداخلية
+        default: "25"
+      extra:
+        description: روابط خارجية تُقرأ أيضًا (متجر التطبيقات، فيسبوك) مفصولة بمسافة
+        default: "https://play.google.com/store/apps/details?id=com.bizznass.app&hl=ar https://play.google.com/store/apps/details?id=com.brandy.bizznass&hl=ar"
+permissions:
+  contents: write
+jobs:
+  study:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Playwright chromium
+        run: npm i -D playwright@1 && npx playwright install --with-deps chromium
+      - name: Tour the competitor
+        env:
+          URL: ${{ github.event.inputs.url }}
+          MAX: ${{ github.event.inputs.max }}
+          EXTRA: ${{ github.event.inputs.extra }}
+        run: node scripts/competitor-tour.mjs
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: competitor
+          path: competitor/
+          retention-days: 30
+      - name: Push screenshots to branch competitor-shots
+        if: always()
+        run: |
+          set -e
+          dir="runs/${{ github.run_id }}"
+          mkdir -p /tmp/shots/$dir && cp -r competitor/* /tmp/shots/$dir/ 2>/dev/null || true
+          cd /tmp/shots
+          git init -q && git checkout -q -b competitor-shots
+          git config user.name "competitor-study" && git config user.email "actions@github.com"
+          git remote add origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+          git fetch -q origin competitor-shots && git reset -q --soft origin/competitor-shots || true
+          git add -A && git commit -q -m "competitor shots ${{ github.run_id }}" && git push -q origin competitor-shots
