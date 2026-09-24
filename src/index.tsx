@@ -16,6 +16,8 @@ import adminOps from './routes/admin-ops';
 import api1688Admin, { getClient, syncStock } from './routes/api1688-admin';
 import { loadSettings } from './lib/pricing';
 import { retranslatePending } from './lib/translate';
+import partnerApi from './routes/partner-api';
+import { retryDispatch } from './lib/partner';
 import { Client1688, type Tokens } from './lib/api1688';
 import { runServerJobs } from './lib/crawl';
 import { settleLinkRequests } from './lib/link-requests';
@@ -67,6 +69,7 @@ app.use('*', async (c, next) => {
 // الاسم القديم لملف الإضافة (قبل هدهدي): رابط محفوظ عند صاحب المشروع يبقى يعمل
 app.get('/talin-extension.zip', (c) => c.redirect('/hudhud-extension.zip', 301));
 app.route('/', img);
+app.route('/api/partner/v1', partnerApi);   // قبل /api: واجهة شركات الشحن برمزها لا برمز الاستيراد
 app.route('/api', api);
 app.route('/admin/api1688', api1688Admin);
 app.route('/admin', adminOps);
@@ -106,6 +109,8 @@ export default {
       try {
         // الترجمة معزولة: عطل فيها (كنمط LIKE طويل في ٢٤/٠٩/٢٦) كان يُسقط ما بعدها في الكتلة نفسها — ربط طلبات الروابط والإثراء
         if (env.AI) try { const r = await retranslatePending(env.DB, env.AI, 40); console.log('cron translate', JSON.stringify(r)); } catch (e: any) { console.error('cron translate', e?.message ?? e); }
+        // طلبات لم تصل API شركة الشحن (خادمها معطّل أو بطيء): تُعاد بمهلة متزايدة
+        try { const n = await retryDispatch(env.DB, 'https://hudhude.com'); if (n) console.log('partner dispatch retried', n); } catch (e: any) { console.error('partner dispatch', e?.message ?? e); }
         // طلبات «اطلبي برابط» التي نُشر منتجها بعد ترجمته (كان مسودة لحظة الاستيراد)
         await settleLinkRequests(env.DB);
         if (!s.src_key) return;

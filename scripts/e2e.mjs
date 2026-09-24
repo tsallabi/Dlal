@@ -2114,6 +2114,182 @@ expect(!!mOrder, `الطلب اكتمل من الجوال (${mp.url().split('/')
 expect(await has(mp, 'مدفوع') || await has(mp, 'قيد المعالجة') || await has(mp, 'تم استلام'), 'صفحة الطلب تؤكد الدفع للزبونة');
 await mp.screenshot({ path: `${OUT}/${String(++n).padStart(2, '0')}-mobile-order.png` });
 
+// ---------- نظام شركاء الشحن (٢٤/٠٩/٢٦): الطلب المدفوع يذهب إلى API الشريك، ولوحته: حالة وصور وفواتير وأسعار ----------
+// شريك وهمي يستمع على 8805 ويحفظ ما يصله. كل ما يُغيَّر هنا (رابط API، الأسعار) يُعاد في finally.
+{
+  const got = [];
+  const ptSrv = createServer((q, res) => {
+    let b = ''; q.on('data', d => b += d); q.on('end', () => { got.push({ h: q.headers, body: b }); res.writeHead(200, { 'content-type': 'application/json' }); res.end('{"received":true}'); });
+  });
+  await new Promise(r => ptSrv.listen(8805, '127.0.0.1', r));
+  let orig = null, mediaSrc = '/partner/media/0';
+  try {
+    await login(page, '0920000000', 'partner123');
+    // ربط API: المفتاحان يُولَّدان عند أول فتح
+    await page.goto(BASE + '/partner/api');
+    const keys = await page.locator('code.po-key').allTextContents();
+    const [secret, token] = keys.map(k => k.trim());
+    expect(secret?.length >= 40 && token?.length >= 40, `لوحة الشريك تولّد مفتاح توقيع ورمز API (${secret?.length}/${token?.length})`);
+    orig = { url: await page.inputValue('input[name=api_url]'), on: await page.isChecked('input[name=api_enabled]') };
+    await page.goto(BASE + '/partner/rates');
+    for (const k of ['fee_commission_pct', 'fee_domestic_lyd', 'fee_air_kg_lyd', 'fee_sea_kg_lyd', 'fee_delivery_lyd']) orig[k] = await page.inputValue(`input[name=${k}]`);
+    // أسعاري: الشريك يضع أسعاره بنفسه
+    await page.fill('input[name=fee_commission_pct]', '5'); await page.fill('input[name=fee_domestic_lyd]', '2');
+    await page.fill('input[name=fee_air_kg_lyd]', '40'); await page.fill('input[name=fee_sea_kg_lyd]', '15'); await page.fill('input[name=fee_delivery_lyd]', '10');
+    await page.click('button:has-text("حفظ أسعاري")'); await page.waitForLoadState('networkidle');
+    expect(await has(page, 'حُفظت أسعارك'), 'الشريك يحفظ أسعاره');
+    expect((await page.inputValue('input[name=fee_air_kg_lyd]')) === '40', 'سعر الشحن الجوي المحفوظ يظهر في الخانة');
+    // المثال: 50 د.ل ونصف كيلو ⟵ عمولة 2.5 ونقل 2 وشحن 20 وتوصيل 10 = 34.5 له، و38.5 على الزبون (دينار على كل بند من الأربعة)
+    expect(await page.locator('.card-box table.tbl tr:last-child').textContent().then(t => t.includes('34.5') && t.includes('38.5')), 'مثال الأسعار يحسب حقه (34.5) وما يدفعه الزبون مع دينار على كل بند (38.5)');
+    expect(!(await has(page, '35%')) && !(await has(page, 'markup')), 'صفحة أسعار الشريك لا تكشف ربحنا على البضاعة');
+    await shot(page, 'partner-rates');
+
+    await page.goto(BASE + '/partner/api');
+    await page.fill('input[name=api_url]', 'http://127.0.0.1:8805/hook'); await page.check('input[name=api_enabled]');
+    await page.click('button:has-text("حفظ")'); await page.waitForLoadState('networkidle');
+    await page.click('button:has-text("إرسال طلب تجريبي")'); await page.waitForLoadState('networkidle');
+    expect(await has(page, 'وصل الطلب التجريبي'), 'زر «إرسال طلب تجريبي» يصل نظام الشريك ويقول ذلك');
+    const t0 = got.find(g => g.h['x-hudhude-event'] === 'order.test');
+    expect(!!t0 && t0.h['x-hudhude-signature'] === 'sha256=' + createHmac('sha256', secret).update(t0.body).digest('hex'), 'الطلب التجريبي موقَّع بمفتاح الشريك (HMAC-SHA256 على الجسم كما هو)');
+    await shot(page, 'partner-api');
+
+    // الزبونة تشتري وتدفع بماي باي ⟵ الطلب يصل الشريك وحده بلا تدخل
+    await login(page, PHONE, 'secret456');
+    await page.goto(BASE + '/c/bags');
+    await page.click('.card >> nth=1'); await page.waitForLoadState('networkidle');
+    await page.click('#addForm button[type=submit]'); await page.waitForLoadState('networkidle');
+    await page.goto(BASE + '/checkout'); await page.waitForLoadState('networkidle');
+    await page.selectOption('select[name=city]', 'طرابلس').catch(() => {});
+    await page.fill('textarea[name=address]', 'شارع الجمهورية، عمارة 7').catch(() => {});
+    await page.check('input[value=mypay_sadad]');
+    await page.click('button:has-text("تأكيد الطلب")'); await page.waitForLoadState('networkidle');
+    if (page.url().includes('/pay/mock/')) { await page.click('button:has-text("تأكيد الدفع")'); await page.waitForURL(/paid=1/, { timeout: 30000 }).catch(() => {}); }
+    const pCode = page.url().match(/DL-\d{4}-\d{6}/)?.[0];
+    expect(!!pCode && await has(page, 'مدفوع'), `طلب الشريك مدفوع (${pCode})`);
+    const hit = got.find(g => g.h['x-hudhude-order'] === pCode && g.h['x-hudhude-event'] === 'order.paid');
+    expect(!!hit, `الطلب المدفوع وصل API الشريك فور تأكيد الدفع (${got.length} طلبًا وصل الخادم الوهمي)`);
+    const pj = hit ? JSON.parse(hit.body) : {};
+    expect(hit && hit.h['x-hudhude-signature'] === 'sha256=' + createHmac('sha256', secret).update(hit.body).digest('hex'), 'الطلب المرسَل موقَّع توقيعًا صحيحًا');
+    const it0 = pj.order?.items?.[0] ?? {};
+    expect(/1688\.com\/offer\//.test(it0.url ?? '') && it0.qty >= 1 && pj.order?.customer?.phone, `الطلب يحمل رابط 1688 والكمية وهاتف الزبونة (${it0.url})`);
+    const du = pj.order?.dues ?? {};
+    expect(du.goods > 0 && Math.abs(du.commission - du.goods * 0.05) < 0.02 && du.delivery === 10 && du.domestic === 2 * it0.qty, `مستحقات الشريك بأسعاره (بضاعة ${du.goods}، عمولة ${du.commission}، نقل ${du.domestic}، شحن ${du.shipping}، توصيل ${du.delivery})`);
+    expect(!/total_lyd|markup|price_lyd/.test(hit?.body ?? ''), 'ما يُرسل للشريك لا يكشف سعر البيع ولا ربحنا');
+    expect(/\/api\/partner\/v1\/orders\/DL-/.test(pj.callbacks?.status ?? ''), 'الطلب يحمل روابط التحديث للشريك');
+
+    // لوحة الشريك: صفحة الطلب
+    await login(page, '0920000000', 'partner123');
+    await page.goto(BASE + '/partner/all');
+    await page.click(`a.po-link:has-text("${pCode}")`); await page.waitForLoadState('networkidle');
+    expect(page.url().endsWith('/partner/order/' + pCode), 'رقم الطلب في لوحة الشريك يفتح صفحته');
+    expect(await page.locator('table.po-dues').count() === 1 && await page.locator('table.po-dues').textContent().then(t => t.includes(String(du.total).replace(/\.0+$/, ''))), `صفحة الطلب تعرض مستحقات الشريك (الإجمالي ${du.total})`);
+    await page.selectOption('.po-move select[name=status]', 'purchasing'); await page.fill('.po-move input[name=note]', 'بدأنا الشراء من المورد');
+    await page.click('.po-move button'); await page.waitForLoadState('networkidle');
+    expect(await page.locator('.po-ev').textContent().then(t => t.includes('بدأنا الشراء من المورد')), 'الشريك يغيّر الحالة بملاحظة تظهر في سجل الطلب');
+    // صورة كاميرا كبيرة (2400×1800) ⟵ تُصغَّر في المتصفح قبل الرفع
+    const big = await page.evaluate(() => { const c = document.createElement('canvas'); c.width = 2400; c.height = 1800; const g = c.getContext('2d'); for (let i = 0; i < 400; i++) { g.fillStyle = `hsl(${i * 7},70%,${30 + i % 40}%)`; g.fillRect((i * 97) % 2400, (i * 53) % 1800, 180, 140); } return c.toDataURL('image/png').split(',')[1]; });
+    const bigBuf = Buffer.from(big, 'base64');
+    await page.selectOption('.po-upload select[name=stage]', 'purchasing');
+    await page.setInputFiles('.po-upload input[type=file]', { name: 'IMG_2041.png', mimeType: 'image/png', buffer: bigBuf });
+    await page.fill('.po-upload input[name=caption]', 'البضاعة بعد الشراء'); await page.check('.po-upload input[name=public]');
+    await page.click('.po-upload button'); await page.waitForURL(/ok=1|err=/, { timeout: 20000 }).catch(() => {}); await page.waitForLoadState('networkidle');
+    expect(page.url().includes('ok=1'), `رفع الصورة نجح (${decodeURIComponent(page.url().split('err=')[1] ?? '')})`);
+    const ph = page.locator('.po-ph img').first();
+    mediaSrc = await ph.getAttribute('src');
+    const dims = await ph.evaluate(i => new Promise(r => i.complete ? r([i.naturalWidth, i.naturalHeight]) : (i.onload = () => r([i.naturalWidth, i.naturalHeight]))));
+    const kb = await page.locator('.po-ph small').first().textContent();
+    expect(dims[0] === 1600 && dims[1] === 1200, `الصورة صُغّرت في الجهاز إلى 1600×1200 (${dims.join('×')}، ${kb.trim()}) من ${Math.round(bigBuf.length / 1024)} ك.ب`);
+    // فاتورة المرحلة
+    await page.selectOption('.po-inv select[name=stage]', 'purchasing');
+    await page.locator('.po-inv input[name=desc]').nth(0).fill('عمولة شراء'); await page.locator('.po-inv input[name=amount]').nth(0).fill('40');
+    await page.locator('.po-inv input[name=desc]').nth(1).fill('نقل داخلي إلى المخزن'); await page.locator('.po-inv input[name=amount]').nth(1).fill('25.5');
+    await page.click('.po-inv button'); await page.waitForLoadState('networkidle');
+    const invHref = await page.locator('a:has-text("عرض وطباعة")').first().getAttribute('href');
+    expect(!!invHref, 'إنشاء فاتورة للمرحلة يضيفها لقائمة فواتير الطلب');
+    await shot(page, 'partner-order');
+    await page.goto(BASE + invHref);
+    expect(await has(page, 'INV-1-') && await has(page, '65.5 د.ل') && await has(page, 'نقل داخلي إلى المخزن'), 'صفحة الفاتورة تعرض رقمها وبنودها وإجماليها 65.5');
+    expect(await page.locator('button:has-text("طباعة")').count() === 1, 'الفاتورة فيها زر طباعة / PDF');
+    await shot(page, 'partner-invoice');
+
+    // موظف الشريك يصوّر ويرفع من هاتفه: صفحة الطلب بعرض 390 بلا تمرير أفقي، وزر الرفع في متناوله
+    {
+      const pm = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, locale: 'ar' });
+      const pp = await pm.newPage();
+      await pp.goto(BASE + '/login'); await pp.fill('input[name=phone]', '0920000000'); await pp.fill('input[name=password]', 'partner123'); await pp.click('button:has-text("دخول")'); await pp.waitForLoadState('networkidle');
+      await pp.goto(BASE + '/partner/order/' + pCode);
+      const sw = await pp.evaluate(() => document.documentElement.scrollWidth);
+      expect(sw <= 391, `صفحة طلب الشريك في الجوال بلا تمرير أفقي (${sw} من 390)`);
+      expect(await pp.locator('.po-upload input[type=file]').isVisible(), 'خانة رفع الصورة ظاهرة في الجوال');
+      await pp.screenshot({ path: `${OUT}/${String(++n).padStart(2, '0')}-partner-order-mobile.png` });
+      await pm.close();
+    }
+    // واجهة الشريك البرمجية برمزه
+    const H = { authorization: 'Bearer ' + token };
+    const lst = await ctx.request.get(BASE + '/api/partner/v1/orders?status=purchasing', { headers: H });
+    expect(lst.ok() && (await lst.json()).orders.some(o => o.code === pCode), 'API الشريك يسرد طلباته بحالتها');
+    expect((await ctx.request.get(BASE + '/api/partner/v1/orders', { headers: { authorization: 'Bearer wrong-token-wrong-token-xx' } })).status() === 401, 'رمز خاطئ يُرفض 401');
+    expect((await ctx.request.post(BASE + '/api/partner/v1/orders/DL-2000-000000/status', { headers: H, data: { status: 'purchased' } })).status() === 404, 'طلب ليس للشريك ⟵ 404');
+    expect((await ctx.request.post(BASE + `/api/partner/v1/orders/${pCode}/status`, { headers: H, data: { status: 'paid' } })).status() === 400, 'حالة غير مسموحة ⟵ 400');
+    const st = await ctx.request.post(BASE + `/api/partner/v1/orders/${pCode}/status`, { headers: H, data: { status: 'at_warehouse', note: 'وزن 0.4 كغ' } });
+    expect(st.ok(), `API يغيّر الحالة إلى «وصل المخزن» (${st.status()})`);
+    const tiny = await page.evaluate(() => { const c = document.createElement('canvas'); c.width = 64; c.height = 48; const g = c.getContext('2d'); g.fillStyle = '#B05A20'; g.fillRect(0, 0, 64, 48); return c.toDataURL('image/jpeg', 0.8); });
+    const ap = await ctx.request.post(BASE + `/api/partner/v1/orders/${pCode}/photos`, { headers: H, data: { stage: 'at_warehouse', image_base64: tiny, caption: 'في المخزن', public: true } });
+    expect(ap.ok() && (await ap.json()).id > 0, 'API يرفع صورة مرحلة (base64)');
+    const ai = await ctx.request.post(BASE + `/api/partner/v1/orders/${pCode}/invoices`, { headers: H, data: { stage: 'at_warehouse', lines: [{ desc: 'Air freight 0.4kg', amount: 16 }] } });
+    const aij = await ai.json();
+    expect(ai.ok() && /^INV-1-\d{5}$/.test(aij.number) && aij.total === 16, `API ينشئ فاتورة (${aij.number} = ${aij.total})`);
+    await page.goto(BASE + '/partner/order/' + pCode);
+    expect(await has(page, 'وصل مخزن الصين') && (await page.locator('.po-ph').count()) === 2, 'تحديثات API تظهر في لوحة الشريك (الحالة والصورة الثانية)');
+
+    // الزبونة ترى الصور التي أظهرها الشريك
+    await login(page, PHONE, 'secret456');
+    await page.goto(BASE + '/orders/' + pCode);
+    const cimgs = page.locator('.order-photos img');
+    expect(await cimgs.count() === 2, `صفحة طلب الزبونة تعرض صور المراحل المعلَّمة لها (${await cimgs.count()})`);
+    expect(await cimgs.first().evaluate(i => new Promise(r => i.complete ? r(i.naturalWidth) : (i.onload = () => r(i.naturalWidth)))) > 0, 'صورة المرحلة تُحمَّل فعلًا عند الزبونة');
+    await shot(page, 'customer-order-photos');
+
+    // شريك آخر لا يرى طلبات شاهين ولا صورها
+    await login(page, '0910000000', 'admin123');
+    await page.goto(BASE + '/admin/staff');
+    if (!(await has(page, '0920000077'))) {
+      await page.fill('form[action="/admin/staff/new"] input[name=name]', 'موظف الشريك الاحتياطي'); await page.fill('form[action="/admin/staff/new"] input[name=phone]', '0920000077');
+      await page.fill('form[action="/admin/staff/new"] input[name=password]', 'partner777'); await page.selectOption('form[action="/admin/staff/new"] select[name=role]', 'partner');
+      await page.selectOption('form[action="/admin/staff/new"] select[name=partner_id]', '2'); await page.click('form[action="/admin/staff/new"] button'); await page.waitForLoadState('networkidle');
+    }
+    // الأدمن: معاينة الرف بأسعار الشريك، ورفض اعتماد شريك بلا سعر شحن
+    await page.goto(BASE + '/admin/partners?preview=1');
+    const pvRows = await page.locator('table.pp-preview tr').count();
+    expect(pvRows >= 6, `الأدمن يعاين أسعار الرف بأسعار الشريك قبل اعتمادها (${pvRows - 1} منتجات)`);
+    expect(await page.locator('button:has-text("اعتمد أسعار")').count() === 1, 'زر اعتماد أسعار الشريك ظاهر لشريك وضع سعر الشحن');
+    expect(await has(page, `${pCode}`) && await has(page, 'وصل ✓'), 'سجل الإرسال في لوحة الأدمن يعرض الطلب الذي وصل الشريك');
+    await shot(page, 'admin-partners-preview');
+    await page.goto(BASE + '/admin/partners?preview=2');
+    expect(await has(page, 'لم يضع سعر الشحن الجوي') && await page.locator('button:has-text("اعتمد أسعار")').count() === 0, 'شريك بلا سعر شحن لا يُعتمد للتسعير');
+    await login(page, '0920000077', 'partner777');
+    const r403 = await page.goto(BASE + '/partner/order/' + pCode);
+    expect(r403.status() === 403, `موظف شريك آخر يُمنع من طلب شاهين (${r403.status()})`);
+    const rpost = await page.evaluate(async ([b, code]) => (await fetch(b + `/partner/order/${code}/move`, { method: 'POST', body: new URLSearchParams({ status: 'delivered' }), redirect: 'manual' })).status, [BASE, pCode]);
+    expect(rpost === 403, `ولا يستطيع تغيير حالته (${rpost})`);
+    // يُسأل الخادم مباشرة: المتصفح نفسه فتح الصورة بجلسة شاهين قبل قليل وقد يعرضها من ذاكرته المؤقتة
+    const mid = (await page.request.get(BASE + mediaSrc)).status();
+    expect(mid === 404 && /\/partner\/media\/\d+$/.test(mediaSrc), `ولا يفتح صور طلبات غيره (${mediaSrc} ⟵ ${mid})`);
+  } finally {
+    // إعادة ربط شاهين وأسعاره كما كانت
+    if (orig) {
+      await login(page, '0920000000', 'partner123');
+      await page.goto(BASE + '/partner/api'); await page.fill('input[name=api_url]', orig.url);
+      if (orig.on) await page.check('input[name=api_enabled]'); else await page.uncheck('input[name=api_enabled]');
+      await page.click('button:has-text("حفظ")'); await page.waitForLoadState('networkidle');
+      await page.goto(BASE + '/partner/rates');
+      for (const k of ['fee_commission_pct', 'fee_domestic_lyd', 'fee_air_kg_lyd', 'fee_sea_kg_lyd', 'fee_delivery_lyd']) await page.fill(`input[name=${k}]`, String(orig[k]));
+      await page.click('button:has-text("حفظ أسعاري")'); await page.waitForLoadState('networkidle');
+    }
+    ptSrv.close();
+  }
+}
+
 // ---------- D1 يرفض نمط LIKE فوق 50 بايتًا (المحلي لا يرفضه فلا يراه أي فحص آخر) — ٢٤/٠٩/٢٦ ----------
 // دفعة الترجمة سقطت على الحي بـ500 «LIKE or GLOB pattern too complex» ساعتين. نحرس المصدر: كل نمط LIKE يمرّ بـlikePat
 {

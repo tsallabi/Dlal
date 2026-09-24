@@ -10,6 +10,7 @@ import { getCategories, PRODUCT_SELECT, fmt, imgUrl, orderCode, timeAgo, notify,
 import type { ProductRow } from '../lib/db';
 import { KIND_NOTE, type ListingKind } from '../lib/source';
 import { loadSettings, computePrice, shipRates, seaOn } from '../lib/pricing';
+import { partnerDelivery, pricingPartnerId } from '../lib/partner';
 import type { ShipMode, Settings } from '../lib/pricing';
 import { checkCoupon } from '../lib/coupons';
 import { loadMyPay } from '../lib/mypay';
@@ -755,6 +756,8 @@ export function cityRates(s: Settings): Record<string, number> {
   return out;
 }
 export const deliveryFor = (s: Settings, city?: string | null) => {
+  // حين تُسعَّر البضاعة بأسعار شريك شحن: توصيله داخل ليبيا + رسم المنصة، ما دام وضع له سعرًا
+  const pd = partnerDelivery(s); if (pd !== null) return pd;
   const r = cityRates(s);
   return city && r[city] !== undefined ? r[city] : parseFloat(s.delivery_lyd);
 };
@@ -988,8 +991,9 @@ store.post('/checkout', async (c) => {
   const total = Math.round((Math.max(0, t.subtotal - t.discount) - t.pointsLyd + delivery) * 100) / 100;
 
   // توزيع الطلب على شريك شحن نشط حسب نسبة التوزيع
+  // الأسعار محسوبة بأسعار «شريك التسعير» ⟵ الطلب يذهب إليه هو، وإلا فالتوزيع بالنسبة كما كان
   const partner = await db.prepare(
-    `SELECT p.id FROM partners p WHERE p.active=1 ORDER BY p.share_percent DESC,
+    `SELECT p.id FROM partners p WHERE p.active=1 ORDER BY (p.id=${pricingPartnerId(t.s)}) DESC, p.share_percent DESC,
      (SELECT COUNT(*) FROM orders o WHERE o.partner_id=p.id AND o.status IN ('paid','purchasing')) ASC LIMIT 1`,
   ).first<{ id: number }>();
   const ins = await db.prepare(
@@ -1029,15 +1033,26 @@ store.post('/checkout', async (c) => {
 });
 
 // ---------- الطلب (يوجّه /account إلى المنطقة الجديدة) ----------
+// صورة مرحلة أظهرها الشريك: لصاحبة الطلب (أو الأدمن) وحدها، وما لم يُعلَّم «للزبونة» لا يُقدَّم أبدًا
+store.get('/orders/:code/photo/:id', async (c) => {
+  const u = c.get('user'); if (!u) return c.notFound();
+  const m = await c.env.DB.prepare('SELECT m.data,m.mime,m.url FROM order_media m JOIN orders o ON o.id=m.order_id WHERE m.id=? AND o.code=? AND m.public=1 AND (o.user_id=? OR ?=1)')
+    .bind(Number(c.req.param('id')), c.req.param('code'), u.id, u.role === 'admin' ? 1 : 0).first<any>();
+  if (!m) return c.notFound();
+  if (m.url) return c.redirect(m.url);
+  return new Response(new Uint8Array(m.data), { headers: { 'content-type': m.mime, 'cache-control': 'private, max-age=86400' } });
+});
 store.get('/orders/:code', async (c) => {
   const u = c.get('user'); if (!u) return c.redirect('/login?next=' + encodeURIComponent(c.req.path));
   const db = c.env.DB;
   const o = await db.prepare('SELECT * FROM orders WHERE code=? AND (user_id=? OR ?=1)').bind(c.req.param('code'), u.id, u.role === 'admin' ? 1 : 0).first<any>();
   if (!o) return c.notFound();
-  const [items, events, pays] = await Promise.all([
+  const [items, events, pays, photos] = await Promise.all([
     db.prepare(`SELECT oi.*,p.slug,(SELECT url FROM product_images i WHERE i.product_id=p.id ORDER BY sort LIMIT 1) AS image FROM order_items oi JOIN products p ON p.id=oi.product_id WHERE order_id=?`).bind(o.id).all<any>(),
     db.prepare('SELECT * FROM order_events WHERE order_id=? ORDER BY id').bind(o.id).all<any>(),
     db.prepare('SELECT * FROM payments WHERE order_id=? ORDER BY id DESC').bind(o.id).all<any>(),
+    // صور المراحل التي اختار شريك الشحن إظهارها (بضاعتك في المخزن، الطرد قبل الشحن…)
+    db.prepare('SELECT id,stage,url,caption,created_at FROM order_media WHERE order_id=? AND public=1 ORDER BY id').bind(o.id).all<any>(),
   ]);
   const s = await loadSettings(db);
   const steps = ['paid', 'purchased', 'at_warehouse', 'shipped', 'arrived', 'ready', 'delivered'];
@@ -1087,6 +1102,10 @@ store.get('/orders/:code', async (c) => {
                 <div class={`st ${isDone ? 'done' : ''} ${isNow ? 'now' : ''}`}><div class="dotl"></div><div><div class="lbl">{sd.ar}</div>{done.get(st) && <div class="when">{timeAgo(done.get(st))}</div>}</div></div>); })}
             </div>
           </div>
+          {photos.results.length > 0 && <div class="card-box"><h3>📷 صور طلبك من مراحل الشحن</h3>
+            <div class="order-photos">{photos.results.map(m => <figure><a href={m.url ?? `/orders/${o.code}/photo/${m.id}`} target="_blank"><img src={m.url ?? `/orders/${o.code}/photo/${m.id}`} alt="" loading="lazy" /></a>
+              <figcaption>{ORDER_STATUS[m.stage]?.ar ?? m.stage}{m.caption ? ` — ${m.caption}` : ''}<br />{timeAgo(m.created_at)}</figcaption></figure>)}</div>
+          </div>}
           <div class="card-box"><h3>المنتجات</h3>
             {items.results.map(it => (
               <div class="cart-row"><img src={imgUrl(it.image)} alt="" loading="lazy" referrerpolicy="no-referrer" /><div><div class="t"><a href={`/p/${it.slug}`}>{it.title_ar}</a></div><div class="v">{[it.color, it.size].filter(Boolean).join(' · ')} × {it.qty}</div>

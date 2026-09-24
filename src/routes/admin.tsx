@@ -16,6 +16,7 @@ import { requirePerm, logActivity } from '../lib/perm';
 import { settleLinkRequests, LINK_SOURCES, LINK_STATUS } from '../lib/link-requests';
 import { validPixel, validVerify, bustMetaCache } from '../lib/meta';
 import { setOrderStatus, markOrderPaid } from '../lib/orders';
+import { RATE_KEYS, RATE_AR, PP_KEY, syncPricingPartner, pricingPartnerId, attemptDispatch } from '../lib/partner';
 import { Translator, hasCJK, goodTitle, retranslatePending, releaseHeldDrafts, BROKEN_SQL } from '../lib/translate';
 
 const admin = new Hono<Env>();
@@ -124,6 +125,7 @@ admin.get('/orders/:code', async (c) => {
       <div class="two">
         <div>
           <div class="card-box"><h3>الحالة: <span class={`status ${ORDER_STATUS[o.status]?.color}`}>{ORDER_STATUS[o.status]?.ar}</span></h3>
+            {o.partner_id && <p style="font-size:13px;margin:0 0 8px"><a href={`/partner/order/${o.code}`} target="_blank">📷 صور المراحل وفواتير الشريك ومستحقاته ←</a></p>}
             {o.status === 'pending_payment' && (
               <form method="post" action={`/admin/orders/${o.code}/confirm-payment`} class="inline">
                 <input type="text" name="payment_ref" placeholder="رقم مرجع الدفع / الإيصال" required />
@@ -166,7 +168,7 @@ admin.post('/orders/:code/confirm-payment', requirePerm('orders.manage', 'paymen
   if (!o) return c.notFound();
   await db.prepare('UPDATE orders SET partner_id=? WHERE id=?').bind(Number(f.partner_id), o.id).run();
   await db.prepare("INSERT INTO payments(order_id,provider,gateway,amount_lyd,status,trx_ref,provider_ref) SELECT id,'manual',payment_method,total_lyd,'paid',code||'-M'||strftime('%s','now'),? FROM orders WHERE id=?").bind(String(f.payment_ref), o.id).run();
-  await markOrderPaid(db, o.id, String(f.payment_ref), u.id, 'تم تأكيد الدفع يدويًا وإرسال الطلب لفريق الشراء');
+  await markOrderPaid(db, o.id, String(f.payment_ref), u.id, 'تم تأكيد الدفع يدويًا وإرسال الطلب لفريق الشراء', new URL(c.req.url).origin);
   await logActivity(db, u.id, 'order.confirm_payment', code, String(f.payment_ref));
   return c.redirect(`/admin/orders/${code}?ok=1`);
 });
@@ -703,8 +705,9 @@ admin.post('/pricing/backfill-costs', async (c) => {
   for (let i = 0; i < stmts.length; i += 100) await db.batch(stmts.slice(i, i + 100));
   return c.redirect(`/admin/reports?filled=${results.length}`);
 });
-admin.post('/pricing/reprice-all', async (c) => {
-  const db = c.env.DB; const s = await loadSettings(db); const cats = await getCategories(db);
+// إعادة تسعير الرف كله بالإعدادات الحالية — تُستدعى من زر التسعير ومن تفعيل «شريك التسعير»
+async function repriceAll(db: D1Database) {
+  const s = await loadSettings(db); const cats = await getCategories(db);
   const { results } = await db.prepare('SELECT id,source_price_cny,weight_g,volume_cm3,category_id,min_qty FROM products').all<any>();
   const stmts = results.map(p => {
     const cat = cats.find(x => x.id === p.category_id);
@@ -714,24 +717,123 @@ admin.post('/pricing/reprice-all', async (c) => {
     return db.prepare('UPDATE products SET price_lyd=?,price_sea_lyd=? WHERE id=?').bind(air.total_lyd, sea.total_lyd, p.id);
   });
   for (let i = 0; i < stmts.length; i += 100) await db.batch(stmts.slice(i, i + 100));
+  await db.prepare("DELETE FROM settings WHERE key='reprice_needed'").run();
+  return results.length;
+}
+admin.post('/pricing/reprice-all', async (c) => {
+  await repriceAll(c.env.DB);
   return c.redirect('/admin/pricing?ok=1');
 });
 
 // ---------- الشركاء ----------
+// عيّنة المعاينة: منتجات نشطة بأسعار متفاوتة، تُسعَّر مرتين (الحالي وبأسعار الشريك) قبل أي تغيير على الرف
+async function previewSample(db: D1Database) {
+  const n = (await db.prepare("SELECT COUNT(*) n FROM products WHERE status='active'").first<{ n: number }>())?.n ?? 0;
+  const sel = `SELECT p.id,p.slug,p.title_ar,p.source_price_cny,p.weight_g,p.volume_cm3,p.min_qty,p.price_lyd,c.est_weight_g,c.markup_percent FROM products p LEFT JOIN categories c ON c.id=p.category_id
+     WHERE p.status='active' ORDER BY p.price_lyd LIMIT 1 OFFSET ?`;
+  // عشر نقاط موزّعة على سلّم الأسعار من الأرخص إلى الأغلى
+  const res = await db.batch([0.02, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.85, 0.97].map(q => db.prepare(sel).bind(Math.floor(n * q))));
+  return res.map(r => (r.results as any[])[0]).filter(Boolean);
+}
 admin.get('/partners', async (c) => {
-  const rows = await c.env.DB.prepare("SELECT p.*,(SELECT COUNT(*) FROM orders o WHERE o.partner_id=p.id AND o.status IN ('paid','purchasing','purchased','at_warehouse')) AS active_orders,(SELECT COUNT(*) FROM users u WHERE u.partner_id=p.id) AS staff FROM partners p ORDER BY p.id").all<any>();
+  const db = c.env.DB; const s = await loadSettings(db); const pp = pricingPartnerId(s);
+  const rows = await db.prepare(`SELECT p.*,(SELECT COUNT(*) FROM orders o WHERE o.partner_id=p.id AND o.status IN ('paid','purchasing','purchased','at_warehouse')) AS active_orders,(SELECT COUNT(*) FROM users u WHERE u.partner_id=p.id) AS staff,
+      (SELECT status FROM partner_dispatch d WHERE d.partner_id=p.id ORDER BY d.id DESC LIMIT 1) AS last_dispatch FROM partners p ORDER BY p.id`).all<any>();
+  const log = await db.prepare('SELECT d.id,d.status,d.http_status,d.attempts,d.error,d.created_at,d.sent_at,o.code,p.name FROM partner_dispatch d JOIN orders o ON o.id=d.order_id JOIN partners p ON p.id=d.partner_id ORDER BY d.id DESC LIMIT 30').all<any>();
+  // المعاينة: ?preview=ID يحسب الأسعار كما لو اختير هذا الشريك، دون حفظ شيء
+  const pv = Number(c.req.query('preview') ?? 0) || 0;
+  const pvp = pv ? rows.results.find(p => p.id === pv) : null;
+  let sample: any[] = [];
+  if (pvp) {
+    const s2: Record<string, string> = { ...s, pricing_partner_id: String(pvp.id) };
+    for (const k of RATE_KEYS) s2[PP_KEY[k]] = String(pvp[k] ?? 0);
+    sample = (await previewSample(db)).map(p => {
+      const w = p.weight_g ?? p.est_weight_g ?? 300;
+      const now = computePrice(s, p.source_price_cny, w, p.markup_percent, p.volume_cm3, 'air', p.min_qty ?? 1);
+      const nw = computePrice(s2, p.source_price_cny, w, p.markup_percent, p.volume_cm3, 'air', p.min_qty ?? 1);
+      return { ...p, w, now, nw };
+    });
+  }
+  const DS: Record<string, string> = { pending: 'بانتظار إعادة المحاولة', sending: 'يُرسل', sent: 'وصل ✓', failed: 'فشل نهائيًا', test: 'تجربة' };
   return shell(c, 'partners', 'شركاء الشحن والشراء', (
     <>
-      <Flash msg={c.req.query('ok') ? 'تم الحفظ ✓' : undefined} />
-      <p style="font-size:13px;color:#666">يمكن إضافة أكثر من شريك. الطلبات الجديدة تُوزَّع حسب نسبة التوزيع، ويمكن تغيير الشريك لأي طلب يدويًا.</p>
+      <Flash msg={c.req.query('ok') ? (c.req.query('repriced') ? `تم ✓ — أُعيد تسعير ${c.req.query('repriced')} منتجًا` : 'تم الحفظ ✓') : undefined} /><Flash type="err" msg={c.req.query('err') || undefined} />
+      {s.reprice_needed === '1' && <div class="flash err">شريك التسعير غيّر أسعاره — أسعار الرف ما زالت القديمة. <form method="post" action="/admin/partners/reprice" class="inline" style="display:inline"><button class="btn sm warn">أعد تسعير الرف الآن</button></form></div>}
+      <p style="font-size:13px;color:#666">يمكن إضافة أكثر من شريك. الطلبات الجديدة تُوزَّع حسب نسبة التوزيع، ويمكن تغيير الشريك لأي طلب يدويًا. كل طلب يُدفع يُرسل فورًا إلى API الشريك إن فعّله من لوحته («🔌 ربط API»).</p>
       <div class="tbl-wrap"><table class="tbl"><tr><th>الشريك</th><th>عنوان المخزن</th><th>التواصل</th><th>$/كغ</th><th>نسبة التوزيع</th><th>نشط</th><th>طلبات جارية</th><th>موظفون</th><th></th></tr>
         {rows.results.map(p => <tr><form method="post" action={`/admin/partners/${p.id}`}><td><input type="text" name="name" value={p.name} /></td><td><input type="text" name="warehouse_address" value={p.warehouse_address ?? ''} /></td><td><input type="text" name="contact" value={p.contact ?? ''} /></td><td><input type="number" step="0.1" name="ship_rate_per_kg" value={p.ship_rate_per_kg} style="width:70px" /></td><td><input type="number" name="share_percent" value={p.share_percent} style="width:70px" /></td><td><select name="active"><option value="1" selected={!!p.active}>نعم</option><option value="0" selected={!p.active}>لا</option></select></td><td>{p.active_orders}</td><td>{p.staff}</td><td><button class="btn sm ghost">حفظ</button></td></form></tr>)}
       </table></div>
       <form method="post" action="/admin/partners/new" class="card-box inline" style="margin-top:14px"><input type="text" name="name" placeholder="اسم الشريك الجديد" required /><input type="text" name="warehouse_address" placeholder="عنوان المخزن في الصين" /><input type="text" name="contact" placeholder="واتساب/وي شات" /><button class="btn sm">+ إضافة شريك</button></form>
+
+      <div class="card-box pp-rates"><h3>أسعار الشركاء وربطهم</h3>
+        <p style="font-size:13px;color:#666;margin-top:0">كل شريك يضع أسعاره بنفسه من لوحته («💰 أسعاري»). ما يدفعه الزبون = البضاعة + <b>{s.partner_goods_margin_pct ?? '35'}%</b> ربحنا عليها (لا يراه الشريك) + كل بند بسعر الشريك + <b>{s.partner_fee_margin_lyd ?? '1'} د.ل</b> على كل بند + الجمارك.</p>
+        <div class="tbl-wrap"><table class="tbl"><tr><th>الشريك</th>{RATE_KEYS.map(k => <th>{RATE_AR[k].ar}<br /><small>{RATE_AR[k].unit}</small></th>)}<th>API</th><th></th></tr>
+          {rows.results.map(p => <tr class={p.id === pp ? 'pp-on' : ''}><td><b>{p.name}</b>{p.id === pp && <><br /><span class="status green">شريك التسعير</span></>}<br /><small>{p.rates_updated_at ? `عدّلها ${timeAgo(p.rates_updated_at)}` : 'لم يضع أسعاره بعد'}</small></td>
+            {RATE_KEYS.map(k => <td>{p[k] ?? 0}</td>)}
+            <td>{p.api_enabled && p.api_url ? <span class="status green">مفعّل</span> : p.api_url ? <span class="status gray">موقوف</span> : <span class="status gray">لا رابط</span>}{p.last_dispatch && <><br /><small>آخر إرسال: {DS[p.last_dispatch] ?? p.last_dispatch}</small></>}</td>
+            <td><a class="btn sm ghost" href={`/admin/partners?preview=${p.id}#preview`}>معاينة الأسعار</a> <a class="btn sm ghost" href={`/partner?partner=${p.id}`} target="_blank">لوحته</a></td></tr>)}
+        </table></div>
+        <form method="post" action="/admin/partners/margins" class="inline" style="margin-top:10px">
+          <label>ربحنا على البضاعة %</label><input type="number" step="0.1" min="0" name="partner_goods_margin_pct" value={s.partner_goods_margin_pct ?? '35'} style="width:80px" />
+          <label>رسم المنصة على كل بند (د.ل)</label><input type="number" step="0.1" min="0" name="partner_fee_margin_lyd" value={s.partner_fee_margin_lyd ?? '1'} style="width:80px" />
+          <button class="btn sm dark">حفظ</button>
+        </form>
+        <p style="font-size:13px;margin-bottom:0">تسعير الرف الآن: {pp ? <b>بأسعار «{rows.results.find(p => p.id === pp)?.name ?? pp}»</b> : <b>التسعير العام (صفحة التسعير)</b>}.
+          {pp > 0 && <form method="post" action="/admin/partners/pricing" class="inline" style="display:inline"><input type="hidden" name="partner_id" value="0" /><button class="btn sm ghost" onclick="return confirm('العودة إلى التسعير العام وإعادة تسعير الرف كله؟')">العودة للتسعير العام</button></form>}</p>
+      </div>
+
+      {pvp && <div class="card-box" id="preview"><h3>معاينة: الرف بأسعار «{pvp.name}» (الشحن الجوي)</h3>
+        {!(pvp.fee_air_kg_lyd > 0) && <div class="flash err">هذا الشريك لم يضع سعر الشحن الجوي للكيلو بعد — لا يمكن التسعير به حتى يضعه.</div>}
+        <div class="tbl-wrap"><table class="tbl pp-preview"><tr><th>المنتج</th><th>الوزن</th><th>البضاعة</th><th>ربحنا {s.partner_goods_margin_pct ?? '35'}%</th><th>خدمات الشريك + رسومنا</th><th>الجمارك</th><th>السعر الآن</th><th>بأسعار الشريك</th><th>الفرق</th></tr>
+          {sample.map(p => { const d = p.nw.total_lyd - p.now.total_lyd; return <tr>
+            <td><a href={`/p/${p.slug}`} target="_blank">{String(p.title_ar).slice(0, 40)}</a></td><td>{p.w} غ</td><td>{fmt(p.nw.goods_lyd)}</td><td>{fmt(p.nw.markup_lyd)}</td>
+            <td>{fmt(Math.round((p.nw.safety_lyd + p.nw.domestic_ship_lyd + p.nw.intl_ship_lyd) * 100) / 100)}</td><td>{fmt(p.nw.customs_lyd)}</td>
+            <td>{fmt(p.now.total_lyd)}</td><td><b>{fmt(p.nw.total_lyd)}</b></td><td style={`color:${d > 0 ? '#8c2121' : '#1a7f37'}`}>{d > 0 ? '+' : ''}{fmt(d)}</td></tr>; })}
+        </table></div>
+        {pvp.id !== pp && pvp.fee_air_kg_lyd > 0 && <form method="post" action="/admin/partners/pricing" style="margin-top:10px"><input type="hidden" name="partner_id" value={pvp.id} />
+          <button class="btn dark" onclick="return confirm('تسعير الرف كله بأسعار هذا الشريك الآن؟')">اعتمد أسعار «{pvp.name}» للرف وأعد التسعير</button></form>}
+      </div>}
+
+      <div class="card-box"><h3>سجل إرسال الطلبات إلى الشركاء</h3>
+        {log.results.length === 0 ? <p style="font-size:13px;color:#666">لم يُرسل أي طلب بعد — يبدأ حين يفعّل شريك ربط API من لوحته.</p> :
+          <div class="tbl-wrap"><table class="tbl"><tr><th>الطلب</th><th>الشريك</th><th>الحالة</th><th>HTTP</th><th>المحاولات</th><th>الخطأ</th><th>الوقت</th><th></th></tr>
+            {log.results.map(d => <tr><td><a href={`/admin/orders/${d.code}`}>{d.code}</a></td><td>{d.name}</td><td>{DS[d.status] ?? d.status}</td><td>{d.http_status ?? '—'}</td><td>{d.attempts}</td><td dir="ltr" style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{d.error ?? ''}</td><td>{timeAgo(d.sent_at ?? d.created_at)}</td>
+              <td>{(d.status === 'pending' || d.status === 'failed') && <form method="post" action={`/admin/partners/dispatch/${d.id}/retry`}><button class="btn sm ghost">أعد الإرسال</button></form>}</td></tr>)}
+          </table></div>}
+      </div>
     </>
   ));
 });
 admin.post('/partners/new', async (c) => { const f = await c.req.parseBody(); await c.env.DB.prepare('INSERT INTO partners(name,warehouse_address,contact,share_percent) VALUES(?,?,?,0)').bind(String(f.name), String(f.warehouse_address ?? ''), String(f.contact ?? '')).run(); return c.redirect('/admin/partners?ok=1'); });
+const setKey = (db: D1Database, k: string, v: string) => db.prepare("INSERT INTO settings(key,value,updated_at) VALUES(?,?,datetime('now')) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=datetime('now')").bind(k, v);
+admin.post('/partners/margins', async (c) => {
+  const f = await c.req.parseBody(); const db = c.env.DB;
+  const n = (v: any, max: number) => String(Math.max(0, Math.min(max, parseFloat(latinDigits(String(v ?? ''))) || 0)));
+  await db.batch([setKey(db, 'partner_goods_margin_pct', n(f.partner_goods_margin_pct, 500)), setKey(db, 'partner_fee_margin_lyd', n(f.partner_fee_margin_lyd, 1000))]);
+  await logActivity(db, c.get('user')!.id, 'partners.margins', String(f.partner_goods_margin_pct), String(f.partner_fee_margin_lyd));
+  // الهوامش تدخل السعر المخزَّن: إن كان شريك تسعير مختارًا يُعاد تسعير الرف فورًا
+  if (pricingPartnerId(await loadSettings(db))) return c.redirect(`/admin/partners?ok=1&repriced=${await repriceAll(db)}`);
+  return c.redirect('/admin/partners?ok=1');
+});
+// اختيار شريك التسعير (0 = التسعير العام): تُنسخ أسعاره للإعدادات ثم يُعاد تسعير الرف كله
+admin.post('/partners/pricing', async (c) => {
+  const f = await c.req.parseBody(); const db = c.env.DB; const id = Number(f.partner_id) || 0;
+  if (id) {
+    const p = await db.prepare('SELECT fee_air_kg_lyd FROM partners WHERE id=?').bind(id).first<any>();
+    if (!p || !(p.fee_air_kg_lyd > 0)) return c.redirect('/admin/partners?err=' + encodeURIComponent('هذا الشريك لم يضع سعر الشحن الجوي بعد'));
+  }
+  await setKey(db, 'pricing_partner_id', String(id)).run();
+  if (id) await syncPricingPartner(db);
+  await logActivity(db, c.get('user')!.id, 'partners.pricing', String(id), '');
+  return c.redirect(`/admin/partners?ok=1&repriced=${await repriceAll(db)}`);
+});
+admin.post('/partners/reprice', async (c) => { const db = c.env.DB; await syncPricingPartner(db); return c.redirect(`/admin/partners?ok=1&repriced=${await repriceAll(db)}`); });
+admin.post('/partners/dispatch/:id/retry', async (c) => {
+  const id = Number(c.req.param('id'));
+  await c.env.DB.prepare("UPDATE partner_dispatch SET status='pending',next_at=NULL WHERE id=? AND status IN ('pending','failed')").bind(id).run();
+  const r = await attemptDispatch(c.env.DB, id, new URL(c.req.url).origin);
+  return c.redirect(r.ok ? '/admin/partners?ok=1' : '/admin/partners?err=' + encodeURIComponent(`لم يصل: ${r.error ?? 'HTTP ' + r.http}`));
+});
 admin.post('/partners/:id', async (c) => { const f = await c.req.parseBody(); await c.env.DB.prepare('UPDATE partners SET name=?,warehouse_address=?,contact=?,ship_rate_per_kg=?,share_percent=?,active=? WHERE id=?').bind(String(f.name), String(f.warehouse_address ?? ''), String(f.contact ?? ''), Number(f.ship_rate_per_kg) || 0, Number(f.share_percent) || 0, Number(f.active), Number(c.req.param('id'))).run(); return c.redirect('/admin/partners?ok=1'); });
 
 // ---------- طلبات «اطلبي برابط» ----------

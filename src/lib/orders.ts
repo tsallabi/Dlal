@@ -2,6 +2,7 @@
 import { ORDER_STATUS } from '../types';
 import { notify } from './db';
 import { loadSettings } from './pricing';
+import { onOrderPaid } from './partner';
 
 const MSGS: Record<string, string> = {
   paid: 'تم تأكيد دفع طلبك ✓ بدأ فريقنا في الصين شراء منتجاتك.',
@@ -39,7 +40,7 @@ export async function setOrderStatus(db: D1Database, code: string, status: strin
 }
 
 // تأكيد الدفع (من البوابة أو يدويًا)
-export async function markOrderPaid(db: D1Database, orderId: number, ref: string, byUserId: number | null, note: string) {
+export async function markOrderPaid(db: D1Database, orderId: number, ref: string, byUserId: number | null, note: string, origin = 'https://hudhude.com') {
   const o = await db.prepare('SELECT id,code,user_id,status,partner_id FROM orders WHERE id=?').bind(orderId).first<any>();
   if (!o) return null;
   if (o.status !== 'pending_payment') return o;   // idempotent
@@ -47,6 +48,9 @@ export async function markOrderPaid(db: D1Database, orderId: number, ref: string
   if (!pid) pid = (await db.prepare("SELECT id FROM partners WHERE active=1 ORDER BY share_percent DESC LIMIT 1").first<any>())?.id ?? null;
   await db.prepare("UPDATE orders SET payment_ref=?,partner_id=?,paid_at=datetime('now') WHERE id=?").bind(ref, pid, o.id).run();
   await setOrderStatus(db, o.code, 'paid', byUserId, note);
+  // مستحقات الشريك بأسعاره يومها، ثم الإرسال إلى API شركة الشحن إن كان ربطها مفعّلًا. عطل هنا لا يُفسد الدفع:
+  // السطر محفوظ في صندوق الإرسال والكرون يعيد المحاولة.
+  try { await onOrderPaid(db, o.id, origin); } catch (e: any) { console.error('partner dispatch', e?.message ?? e); }
   return o;
 }
 

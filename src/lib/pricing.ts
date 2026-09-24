@@ -73,6 +73,26 @@ export function computePrice(
   const usdPerKg = ch.basis === 'حجم' && perCbm > 0 ? perCbm / (1000000 / divisor) : shipPerKg;
 
   const goods = sourcePriceCny * fx;
+  // تسعير الرف بأسعار شريك الشحن (٢٤/٠٩/٢٦): البضاعة + ربحنا عليها (٣٥٪، لا يراه الشريك) + كل بند ينفّذه الشريك
+  // بسعره هو + رسم المنصة (دينار) على البند + الجمارك. يعمل فقط حين يُختار «شريك التسعير» في /admin/partners.
+  if ((parseInt(s.pricing_partner_id || '0') || 0) > 0) {
+    const m = Math.max(0, parseFloat(s.partner_fee_margin_lyd ?? '1') || 0);
+    const gm = (categoryMarkup ?? parseFloat(s.partner_goods_margin_pct || '35')) / 100;
+    const q = Math.max(1, minQty || 1);
+    const commission = goods * (parseFloat(s.pp_commission_pct || '0') / 100) + m;
+    const domesticP = (parseFloat(s.pp_domestic_lyd || '0') + m) / q;
+    const perKgP = parseFloat((mode === 'sea' ? s.pp_sea_kg_lyd : s.pp_air_kg_lyd) || '0');
+    const shipP = ch.kg * perKgP + m;
+    const customsP = goods * customs;
+    const markupP = goods * gm;
+    const totalP = roundPrice(goods + markupP + commission + domesticP + shipP + customsP);
+    const costP = goods + (commission - m) + (domesticP - m / q) + (shipP - m) + customsP;
+    return {
+      goods_lyd: r2(goods), domestic_ship_lyd: r2(domesticP), intl_ship_lyd: r2(shipP), customs_lyd: r2(customsP), safety_lyd: r2(commission), markup_lyd: r2(markupP),
+      total_lyd: totalP, weight_g: weightG, volume_cm3: vol, chargeable_kg: Math.round(ch.kg * 1000) / 1000,
+      ship_basis: ch.basis, mode, cost_lyd: r2(costP), profit_lyd: r2(totalP - costP),
+    };
+  }
   // الشحن الداخلي في الصين يُدفع **مرة واحدة للطرد** لا لكل قطعة.
   // قطعة أقلّ طلبها 100 تصل في طرد واحد، فتحميل كل قطعة 6 يوان كان يضاعف سعر اللوط 70 ضعفًا:
   // كيس بـ0.05 يوان ظهر بـ8 د.ل للقطعة و800 د.ل للّوط، و99% منها شحن داخلي مكرَّر (22/09/26).

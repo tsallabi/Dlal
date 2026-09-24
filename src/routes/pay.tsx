@@ -133,7 +133,7 @@ export async function handleWebhook(env: Env['Bindings'], rawBody: string, signa
       return { status: 400, body: { ok: false, error: 'amount mismatch' } };
     }
     await db.prepare("UPDATE payments SET status='paid',provider_ref=COALESCE(?,provider_ref),gateway=COALESCE(?,gateway),raw=?,updated_at=datetime('now') WHERE id=?").bind(w.providerRef ?? null, w.gateway ?? null, rawBody.slice(0, 4000), p.id).run();
-    await markOrderPaid(db, p.order_id, `MyPay ${w.providerRef ?? p.trx_ref}`, null, `دفع إلكتروني عبر ماي باي (${w.gateway ?? p.gateway}) — ${w.providerRef ?? ''}`);
+    await markOrderPaid(db, p.order_id, `MyPay ${w.providerRef ?? p.trx_ref}`, null, `دفع إلكتروني عبر ماي باي (${w.gateway ?? p.gateway}) — ${w.providerRef ?? ''}`, origin);
     await log(db, p.id, 'in', origin + '/api/mypay/webhook', 200, rawBody, 'تم تأكيد الدفع وتحويل الطلب إلى مدفوع');
   } else if (w.failed) {
     await db.prepare("UPDATE payments SET status='failed',raw=?,updated_at=datetime('now') WHERE id=? AND status<>'paid'").bind(rawBody.slice(0, 4000), p.id).run();

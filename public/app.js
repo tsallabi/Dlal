@@ -330,3 +330,36 @@ document.addEventListener('click', e => {
     }
   }
 })();
+
+// صور مراحل الطلب في لوحة الشريك: تُصغَّر في الجهاز قبل الرفع (أقصى ضلع 1600 بكسل، JPEG 0.82 ≈ 200 ك.ب)
+// فصورة كاميرا الهاتف (4-8 م.ب) ترفع بسرعة على إنترنت ضعيف ولا تتجاوز حد الخادم. إن تعذّر التصغير يُرسل النموذج كما هو.
+(function () {
+  document.querySelectorAll('form[data-compress]').forEach(function (form) {
+    form.addEventListener('submit', function (e) {
+      var input = form.querySelector('input[type=file]');
+      var file = input && input.files && input.files[0];
+      if (!file || !/^image\//.test(file.type) || !window.fetch || !document.createElement('canvas').toBlob) return;
+      e.preventDefault();
+      form.classList.add('po-busy');
+      var fallback = function () { form.classList.remove('po-busy'); form.removeAttribute('data-compress'); HTMLFormElement.prototype.submit.call(form); };
+      var url = URL.createObjectURL(file);
+      var img = new Image();
+      img.onerror = fallback;
+      img.onload = function () {
+        var max = 1600, w = img.naturalWidth, h = img.naturalHeight, k = Math.min(1, max / Math.max(w, h));
+        var cv = document.createElement('canvas'); cv.width = Math.round(w * k); cv.height = Math.round(h * k);
+        var g = cv.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height); g.drawImage(img, 0, 0, cv.width, cv.height);
+        URL.revokeObjectURL(url);
+        cv.toBlob(function (blob) {
+          if (!blob) return fallback();
+          var fd = new FormData(form);
+          fd.set(input.name, blob, (file.name || 'photo').replace(/\.[^.]+$/, '') + '.jpg');
+          fetch(form.action, { method: 'POST', body: fd, credentials: 'same-origin' })
+            .then(function (r) { location.href = r.url || form.action; })
+            .catch(fallback);
+        }, 'image/jpeg', 0.82);
+      };
+      img.src = url;
+    });
+  });
+})();

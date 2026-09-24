@@ -46,8 +46,8 @@ export const PartnerShell: FC<{ user: User; partner: { name: string }; active: s
       <link rel="stylesheet" href="/style.css" /><link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     </head>
     <body class="admin-body">
-      <header class="hdr"><div class="hdr-top wrap"><a href="/partner" class="logo"><img src="/hudhud-logo.svg" alt="" width="77" height="64" /><span class="t"><b>هدهدي</b><i>HUDHUDE</i><u>بوابتك إلى الصين</u></span></a><span class="pill" style="background:#0b6b66">لوحة الشحن — {partner.name}</span>
-        <nav class="hdr-links"><span>{user.name}</span><a href="/logout">خروج</a></nav></div></header>
+      <header class="hdr"><div class="hdr-top wrap"><a href="/partner" class="logo"><img src="/hudhud-logo.svg" alt="" width="77" height="64" /><span class="t"><b>هدهدي</b><i>HUDHUDE</i><u>بوابتك إلى الصين</u></span></a><span class="pill">لوحة الشحن — {partner.name}</span>
+        <nav class="hdr-links"><span class="me">{user.name}</span><a href="/logout">خروج</a></nav></div></header>
       <div class="dash wrap">
         <aside class="side">
           <a href="/partner" class={active === 'queue' ? 'on' : ''}>🛒 بانتظار الشراء {counts.paid ? <i class="badge" style="position:static">{counts.paid}</i> : null}</a>
@@ -56,6 +56,8 @@ export const PartnerShell: FC<{ user: User; partner: { name: string }; active: s
           <a href="/partner/shipments" class={active === 'shipments' ? 'on' : ''}>✈️ الشحنات</a>
           <a href="/partner/delivery" class={active === 'delivery' ? 'on' : ''}>🏠 التسليم في ليبيا</a>
           <a href="/partner/all" class={active === 'all' ? 'on' : ''}>📋 كل الطلبات</a>
+          <a href="/partner/rates" class={active === 'rates' ? 'on' : ''}>💰 أسعاري</a>
+          <a href="/partner/api" class={active === 'api' ? 'on' : ''}>🔌 ربط API</a>
         </aside>
         <section><h2 class="dash-title">{title}</h2>{children}</section>
       </div>
