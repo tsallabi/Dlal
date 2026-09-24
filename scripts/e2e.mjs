@@ -1897,7 +1897,7 @@ if (/localhost|127\.0\.0\.1/.test(BASE)) {
   d1(`UPDATE variants SET color='Navy blue' WHERE product_id=${enPid} AND color='كحلي'; UPDATE variants SET size='Female XL' WHERE product_id=${enPid} AND size='XL نسائي';
       INSERT INTO variants(product_id,color,size,in_stock) VALUES(${enPid},'non-returnable]','L',1),(${enPid},'Main picture','L',1);
       DELETE FROM attr_seen WHERE src IN ('Navy blue','Female XL');
-      INSERT INTO variants(product_id,color,size,in_stock) VALUES(${enPid},'قميص قصير','L',1),(${enPid},'2012 شورت قصير','L',1),(${enPid},'أحمر','XL【European size in stock】',1),(${enPid},'بورجوازي أحمر','L',1);
+      INSERT INTO variants(product_id,color,size,in_stock) VALUES(${enPid},'قميص قصير','L',1),(${enPid},'2012 شورت قصير','L',1),(${enPid},'أحمر','XL【European size in stock】',1),(${enPid},'بورجوازي أحمر','L',1),(${enPid},'أحمر','Xl',1);
       INSERT OR REPLACE INTO translations(src,dst,kind) VALUES('Bordeaux Red','بورجوازي أحمر','attr');
       INSERT OR REPLACE INTO translations(src,dst,kind) VALUES('double short-coffee','شورت قصير','attr');
       INSERT OR REPLACE INTO translations(src,dst,kind) VALUES('2011 double short-coffee','قميص قصير','attr')`);
@@ -1912,7 +1912,7 @@ if (/localhost|127\.0\.0\.1/.test(BASE)) {
   expect(fixedEn.colors.includes('كحلي') && fixedEn.sizes.includes('XL نسائي') && !/Navy|Female|non-returnable|Main picture/i.test(fixedAll), `بعد الإصلاح الصفحة نفسها بالعربية (${fixedAll})`);
   // أول تشغيل حي: النموذج أسقط رقم التصميم («2011 double short-coffee» ⟵ «قميص قصير»). الفاشل يعود إلى أصله
   expect(fixedEn.colors.includes('عنابي') && !fixedEn.colors.includes('بورجوازي أحمر'), `القاموس يغلب ترجمة النموذج على الرف: «Bordeaux Red» ⟵ «عنابي» لا «بورجوازي أحمر» (${fixedEn.colors.join('، ')})`);
-  expect(fixedEn.sizes.includes('XL') && !fixedEn.sizes.some(x => /European/.test(x)), `القاموس بلا حرف عربي يُقبل: «XL【European size in stock】» ⟵ «XL» (${fixedEn.sizes.join('، ')})`);
+  expect(fixedEn.sizes.includes('XL') && !fixedEn.sizes.includes('Xl') && !fixedEn.sizes.some(x => /European/.test(x)), `القاموس بلا حرف عربي يُقبل: «XL【European size in stock】» ⟵ «XL» (${fixedEn.sizes.join('، ')})`);
   expect(!fixedEn.colors.some(x => /قميص قصير|شورت قصير/.test(x)) && fixedEn.colors.includes('2011 double short-coffee') && fixedEn.colors.includes('2012 double short-coffee'), `الترجمة الفاشلة أُعيدت إلى أصلها لتُترجم من جديد (${fixedEn.colors.join('، ')})`);
   d1(`DELETE FROM variants WHERE product_id=${enPid} AND color IN ('2011 double short-coffee','2012 double short-coffee')`);
   await shot(page, 'variants-arabic');

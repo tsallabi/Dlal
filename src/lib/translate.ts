@@ -422,6 +422,9 @@ const EN_SQL = (f: string) => `${f} GLOB '*[A-Za-z][A-Za-z][A-Za-z]*' AND ${f} N
 export async function fixEnglishVariants(db: D1Database, tr: Translator, limit = 100): Promise<{ fixed: number; dropped: number }> {
   let fixed = 0, dropped = 0;
   await revertBadEnglish(db);
+  // «Xl»، «xl»، «m»: رمز مقاس بحروف مختلطة من حرفين أو أقل لا يدخل الطابور (يشترط ثلاثة أحرف) فيبقى كما هو
+  for (const f of ['color', 'size'] as const) fixed += (await db.prepare(`UPDATE variants SET ${f}=upper(${f}) WHERE ${f} GLOB '[XxSsMmLl2-7]*' AND ${f} <> upper(${f})
+     AND upper(${f}) IN ('S','M','L','XL','XXL','XXXL','XXXXL','XS','XXS','2XL','3XL','4XL','5XL','6XL','7XL')`).run()).meta?.changes ?? 0;
   // ما يئس منه النموذج قد يغطيه القاموس بعد توسيعه — مجانًا
   const { results: gaveUp } = await db.prepare('SELECT src FROM attr_seen WHERE tries BETWEEN 3 AND 98 LIMIT 300').all<{ src: string }>();
   for (const { src } of gaveUp) {
