@@ -1,0 +1,44 @@
+# منشورات فيسبوك وإنستغرام بمنتجات حقيقية: يرسمها متصفح حقيقي من صور المنتجات عبر وسيط الموقع،
+# ويفتح صفحة كل منتج الحية ليتأكد أن سعرها هو سعر المنشور. بيئة المساعد محجوبة عن الصور وعن hudhude.com.
+# النتائج: الصور وcaptions.md في artifact وفي الفرع social-posts.
+name: Social posts
+on:
+  workflow_dispatch:
+    inputs:
+      site:
+        description: الموقع
+        default: https://hudhude.com
+permissions:
+  contents: write
+jobs:
+  posts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Playwright chromium
+        run: npm i -D playwright@1 && npx playwright install --with-deps chromium
+      - name: Render posts
+        env:
+          SITE: ${{ github.event.inputs.site }}
+          OUT: social-out
+        run: node design/social/posts.mjs
+      - name: Upload
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: social-posts
+          path: social-out/
+          retention-days: 60
+      - name: Push to branch social-posts
+        if: always()
+        run: |
+          set -e
+          mkdir -p /tmp/p/runs/${{ github.run_id }} && cp -r social-out/* /tmp/p/runs/${{ github.run_id }}/ 2>/dev/null || true
+          cd /tmp/p && git init -q && git checkout -q -b social-posts
+          git config user.name "social-posts" && git config user.email "actions@github.com"
+          git remote add origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+          git fetch -q origin social-posts && git reset -q --soft origin/social-posts || true
+          git add -A && git commit -q -m "posts ${{ github.run_id }}" && git push -q origin social-posts
