@@ -222,10 +222,14 @@ export class Translator {
     if (!extra && this.mem.has(k)) return this.mem.get(k)!;
     const d = kind === 'attr' ? (en ? enAttr(k) : dictTranslate(k)) : null;
     if (d !== null) { this.mem.set(k, d); return d; }
+    // «2011 double short-coffee»: رقم التصميم يُفصل ويبقى، ويُترجم الباقي وحده — النموذج كان يُسقطه
+    // فيصير «قميص قصير» وتتطابق خيارات مختلفة أمام الزبونة (٢٤/٠٩/٢٦)
+    const code = en ? k.match(/^([A-Za-z]{0,3}\d{1,5}[A-Za-z]?)\s*[-–]?\s+(.+)$/) : null;
+    if (code) { const rest = await this.t(code[2], 'attr'); return rest && rest !== code[2] && enOk(code[2], rest) ? `${code[1].toUpperCase()} ${rest}` : text; }
     const row = extra ? null : await this.db.prepare('SELECT dst FROM translations WHERE src=?').bind(k).first<{ dst: string }>().catch(() => null);
     // الذاكرة قد تكون مسمومة: ترجمة مكسورة محفوظة تُعاد إلى الأبد فلا يتغيّر العنوان مهما
     // أُعيدت المحاولة (أربعة عناوين بلغت سبع محاولات بلا تغيير). نحذفها ونسأل النموذج من جديد.
-    if (row && goodArabic(row.dst) && !(kind === 'title' && brokenTitle(row.dst, k))) { this.mem.set(k, row.dst); return row.dst; }
+    if (row && goodArabic(row.dst) && !(kind === 'title' && brokenTitle(row.dst, k)) && !(en && !enOk(k, row.dst))) { this.mem.set(k, row.dst); return row.dst; }
     if (row) await this.db.prepare('DELETE FROM translations WHERE src=?').bind(k).run().catch(() => {});
     const fallback = hintEn && !hasCJK(hintEn) ? hintEn.slice(0, 200) : text;
     if (this.aiCalls >= this.maxAi) return fallback;
@@ -233,8 +237,9 @@ export class Translator {
     let out = await translateZhAr(this.ai, k, kind, hintEn, extra);
     if (!out) return fallback;
     // مقاس لاتيني داخل القيمة (مثل "加大码XL") يبقى كما هو حتى لو عرّبه النموذج
-    if (kind === 'attr') { const sz = k.match(/(XXS|XS|S|M|L|XL|XXL|XXXL|[2-6]XL)(?![A-Za-z])/i); if (sz && !new RegExp(`\\b${sz[1]}\\b`, 'i').test(out)) { const rest = dictTranslate(k.replace(sz[1], '').replace(/码/g, '').trim()); out = rest ? `${rest} ${sz[1].toUpperCase()}` : sz[1].toUpperCase(); } }
+    if (kind === 'attr' && !en) { const sz = k.match(/(?<![A-Za-z'])(XXS|XS|S|M|L|XL|XXL|XXXL|[2-6]XL)(?![A-Za-z])/i); if (sz && !new RegExp(`\\b${sz[1]}\\b`, 'i').test(out)) { const rest = dictTranslate(k.replace(sz[1], '').replace(/码/g, '').trim()); out = rest ? `${rest} ${sz[1].toUpperCase()}` : sz[1].toUpperCase(); } }
     if (kind === 'title' && brokenTitle(out, k)) return fallback;   // مكسور أيضًا: لا يُحفظ ولا يُستبدل به القديم
+    if (en && !enOk(k, out)) return fallback;                       // «1.38inch» ⟵ «38 سم»: رقم ضاع أو تغيّر
     if (extra) return out;                                          // ناتج سياقي: لا يدخل الذاكرة
     this.mem.set(k, out);
     await this.db.prepare('INSERT OR REPLACE INTO translations(src,dst,kind) VALUES(?,?,?)').bind(k, out, kind).run().catch(() => {});
@@ -361,6 +366,28 @@ export async function retranslatePending(db: D1Database, ai: any, limit = 40): P
   return { products: n, variants: nv, tried, remaining: left?.n ?? 0, held: left?.d ?? 0, variantsLeft: vLeft?.n ?? 0, released, swept, enFixed: en.fixed, enDropped: en.dropped, enLeft: await englishVariantsLeft(db) };
 }
 
+// ترجمة قيمة إنجليزية مقبولة: فيها حرف عربي، وكل رقم في الأصل باقٍ فيها كما هو
+// (أول تشغيل حي أعطى «Women's black» ⟵ «S»، و«1.38inch» ⟵ «38 سم»)
+export function enOk(src: string, out: string): boolean {
+  if (!/[\u0621-\u064A]/.test(out)) return false;
+  const nums = (x: string): string[] => x.match(/\d+(?:\.\d+)?/g) ?? [];
+  const o = nums(out);
+  return nums(src).every(n => o.includes(n));
+}
+// ما كتبته ترجمة فاشلة قبل هذه الحراسة يعود إلى أصله ثم يُعاد بالقواعد الجديدة. «S»/«M» لا تُعاد:
+// تشترك مع مقاسات حقيقية فتفسدها. ذاكرة الترجمة الفاشلة تُحذف.
+async function revertBadEnglish(db: D1Database): Promise<number> {
+  const { results } = await db.prepare("SELECT src,dst FROM translations WHERE kind='attr' AND src GLOB '*[A-Za-z][A-Za-z][A-Za-z]*' AND src NOT GLOB '*[一-龥]*' LIMIT 500").all<{ src: string; dst: string }>();
+  let n = 0;
+  for (const { src, dst } of results) {
+    if (!needsEnTr(src)) continue;
+    const bad = !enOk(src, dst) || /^[A-Za-z]{0,3}\d{1,5}[A-Za-z]?\s*[-–]?\s+/.test(src);
+    if (!bad) continue;
+    if (/[\u0621-\u064A]/.test(dst)) for (const f of ['color', 'size'] as const) n += (await db.prepare(`UPDATE variants SET ${f}=? WHERE ${f}=?`).bind(src, dst).run()).meta?.changes ?? 0;
+    await db.prepare("DELETE FROM translations WHERE src=? AND kind='attr'").bind(src).run();
+  }
+  return n;
+}
 // قيم ألوان ومقاسات إنجليزية: قيمةً مميّزة لا سطرًا (القيمة الواحدة على مئات الأسطر)، والقاموس أولًا ثم النموذج.
 // الشظيّة (رأس عمود أو صفة دعائية) تُحذف من المنتقي، وما لا يحتاج شيئًا («XXL») أو عجز عنه النموذج
 // ثلاثًا يُسجَّل في attr_seen فلا يعود إلى رأس الدفعة التالية.
@@ -368,6 +395,7 @@ const EN_SQL = (f: string) => `${f} GLOB '*[A-Za-z][A-Za-z][A-Za-z]*' AND ${f} N
    AND ${f} NOT IN (SELECT src FROM attr_seen WHERE tries >= 3)`;
 export async function fixEnglishVariants(db: D1Database, tr: Translator, limit = 100): Promise<{ fixed: number; dropped: number }> {
   let fixed = 0, dropped = 0;
+  await revertBadEnglish(db);
   // شظايا عربية قديمة من الترجمة: «جميع المقاسات متوفرة»، «حجم المادة: حرير الحليب 230 جرام…»
   for (const f of ['color', 'size'] as const) {
     const r = await db.prepare(`UPDATE variants SET ${f}=NULL WHERE ${f} IN ('جميع المقاسات متوفرة','جميع المقاسات','المقاسات متوفرة') OR (${f} LIKE '%:%' AND length(${f}) > 20)`).run();
@@ -382,7 +410,7 @@ export async function fixEnglishVariants(db: D1Database, tr: Translator, limit =
       if (!needsEnTr(v)) { await db.prepare("INSERT INTO attr_seen(src,tries) VALUES(?,99) ON CONFLICT(src) DO UPDATE SET tries=99").bind(v).run(); continue; }
       const calls = tr.aiCalls;
       const out = await tr.t(v, 'attr');
-      if (out && out !== v && /[\u0600-\u06FF]/.test(out) && !needsEnTr(out)) { await db.prepare(`UPDATE variants SET ${f}=? WHERE ${f}=?`).bind(out.slice(0, 60), v).run(); fixed++; }
+      if (out && out !== v && enOk(v, out) && !needsEnTr(out)) { await db.prepare(`UPDATE variants SET ${f}=? WHERE ${f}=?`).bind(out.slice(0, 60), v).run(); fixed++; }
       // محاولة تُعدّ فقط إن سُئل النموذج فعلًا: نفاد ميزانية الدفعة ليس عجزًا عن القيمة
       else if (tr.aiCalls > calls) await db.prepare("INSERT INTO attr_seen(src,tries) VALUES(?,1) ON CONFLICT(src) DO UPDATE SET tries=tries+1,at=datetime('now')").bind(v).run();
     }

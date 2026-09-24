@@ -1896,7 +1896,9 @@ if (/localhost|127\.0\.0\.1/.test(BASE)) {
   const enPid = `(SELECT id FROM products WHERE source_offer_id='${enOffer}')`;
   d1(`UPDATE variants SET color='Navy blue' WHERE product_id=${enPid} AND color='كحلي'; UPDATE variants SET size='Female XL' WHERE product_id=${enPid} AND size='XL نسائي';
       INSERT INTO variants(product_id,color,size,in_stock) VALUES(${enPid},'non-returnable]','L',1),(${enPid},'Main picture','L',1);
-      DELETE FROM attr_seen WHERE src IN ('Navy blue','Female XL')`);
+      DELETE FROM attr_seen WHERE src IN ('Navy blue','Female XL');
+      INSERT INTO variants(product_id,color,size,in_stock) VALUES(${enPid},'قميص قصير','L',1);
+      INSERT OR REPLACE INTO translations(src,dst,kind) VALUES('2011 double short-coffee','قميص قصير','attr')`);
   const legacy = await openEn();
   expect(legacy.colors.includes('Navy blue'), `العيّنة القديمة ظاهرة بالإنجليزية قبل الإصلاح (${legacy.colors.join('، ')})`);
   const enStats0 = await page.evaluate(async (b) => (await (await fetch(b + '/api/source/stats', { method: 'POST', headers: { 'content-type': 'application/json', 'x-import-token': 'dev-import-token' }, body: '{}' })).json()).totals, BASE);
@@ -1906,6 +1908,9 @@ if (/localhost|127\.0\.0\.1/.test(BASE)) {
   const fixedEn = await openEn();
   const fixedAll = [...fixedEn.colors, ...fixedEn.sizes].join('، ');
   expect(fixedEn.colors.includes('كحلي') && fixedEn.sizes.includes('XL نسائي') && !/Navy|Female|non-returnable|Main picture/i.test(fixedAll), `بعد الإصلاح الصفحة نفسها بالعربية (${fixedAll})`);
+  // أول تشغيل حي: النموذج أسقط رقم التصميم («2011 double short-coffee» ⟵ «قميص قصير»). الفاشل يعود إلى أصله
+  expect(!fixedEn.colors.includes('قميص قصير') && fixedEn.colors.includes('2011 double short-coffee'), `الترجمة الفاشلة أُعيدت إلى أصلها لتُترجم من جديد (${fixedEn.colors.join('، ')})`);
+  d1(`DELETE FROM variants WHERE product_id=${enPid} AND color='2011 double short-coffee'`);
   await shot(page, 'variants-arabic');
 }
 if (stockJob) await extCall('/api/crawl/report', { job_id: stockJob.id, started_at: new Date().toISOString(), status: 'ok', checked: 0 });
