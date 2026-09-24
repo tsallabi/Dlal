@@ -35,6 +35,8 @@ async function openAndAsk(url, msg, tabRef) {
   const loaded = await new Promise(res => { const h = (id, info) => { if (id === tab.id && info.status === 'complete') { clearTimeout(t); chrome.tabs.onUpdated.removeListener(h); res(true); } }; const t = setTimeout(() => { chrome.tabs.onUpdated.removeListener(h); res(false); }, 30000); chrome.tabs.onUpdated.addListener(h); });
   // صفحة لم يكتمل تحميلها في ٣٠ ثانية لا تُقرأ: قراءتها ناقصة تعطي «بلا سعر» فيُعلَّم منتج متوفر «غير متوفر»
   if (!loaded) return { timeout: true, url };
+  // التوصيات ومنتجات المتجر تُحمَّل عند التمرير إليها: ننزل إلى أسفل الصفحة كما يفعل الإنسان
+  if (msg.type === 'extractDetail') await within(chrome.scripting.executeScript({ target: { tabId: tab.id }, injectImmediately: true, func: () => { window.scrollTo(0, document.body ? document.body.scrollHeight : 0); } }), 5000).catch(() => {});
   await sleep(pace(4000, 8000));   // وقت لعرض المحتوى الديناميكي + إيقاع بشري
   if (msg.type === 'extractDetail') {   // بيانات SKU تعيش في window الصفحة (العالم الرئيسي) وليس في عالم سكربت المحتوى
     try {
@@ -59,12 +61,16 @@ async function runJob(job) {
   const keepAlive = setInterval(() => chrome.runtime.getPlatformInfo(() => {}), 20000);
   try {
     if (job.type === 'stock') {
-      const q = await api('/api/import/queue');
+      const q = await api('/api/import/queue?v=' + VERSION);
       const ids = (q.ids || []).slice(0, job.max_new || 100);
-      await log(`فحص المخزون: ${ids.length} منتج`);
+      const fresh = q.fresh || [];   // منتجات جديدة اكتُشفت روابطها في صفحات الدفعات السابقة
+      const total = ids.length + fresh.length;
+      await log(`فحص المخزون: ${ids.length} منتج` + (fresh.length ? ` + ${fresh.length} جديد مكتشف` : ''));
+      // روابط المنتجات الأخرى في الصفحة → الخادم (ولو صفرًا: هذا ما يثبت هل تعرضها 1688 لزائر غير مسجّل)
+      const harvest = (from, r) => api('/api/crawl/discover', { method: 'POST', body: JSON.stringify({ from, ids: r?.links || [] }) }).catch(() => {});
       for (const id of ids) {
         // سطر الحالة في النافذة يتحرّك مع كل منتج (لا يُكتب في السجل حتى لا يُغرقه ١٠٠ سطر)
-        await chrome.storage.local.set({ status: `فحص المخزون والإثراء: ${rep.checked + 1} من ${ids.length}`, progress: { done: rep.checked, total: ids.length, at: Date.now() } });
+        await chrome.storage.local.set({ status: `فحص المخزون والإثراء: ${rep.checked + 1} من ${total}`, progress: { done: rep.checked, total, at: Date.now() } });
         const r = await within(openAndAsk(`https://detail.1688.com/offer/${id}.html`, { type: 'extractDetail' }, tabRef), PRODUCT_MS);
         if (r?.timeout || r?.error) {
           // الصفحة لم تُحمَّل أو لم تُجب خلال دقيقة: نغلق تبويبها (الجديد يُفتح للمنتج التالي) ونتخطّاها.
@@ -90,6 +96,25 @@ async function runJob(job) {
         } else {
           await api('/api/import/check', { method: 'POST', body: JSON.stringify({ offerId: id, inStock: false, priceCny: null }) });
         }
+        await harvest(id, r);
+        rep.checked++;
+        await sleep(pace(9000, 15000));
+      }
+      // اكتشاف مجاني: نفتح صفحة المنتج الجديد (تفتح بلا حساب) ونستورده منها في قسم الصفحة التي وُجد فيها
+      if (rep.status === 'ok') for (const f of fresh) {
+        await chrome.storage.local.set({ status: `منتج جديد مكتشف: ${rep.checked + 1} من ${total}`, progress: { done: rep.checked, total, at: Date.now() } });
+        const r = await within(openAndAsk(`https://detail.1688.com/offer/${f.id}.html`, { type: 'extractDetail' }, tabRef), PRODUCT_MS);
+        if (r?.blocked) {
+          rep.status = 'blocked';
+          rep.note = r.blocked === 'login' ? `1688 طلب تسجيل دخول لعرض صفحة المنتج ${f.id} — لم تعد تفتح لزائر غير مسجّل` : 'كابتشا/حجب عند ' + f.id;
+          break;
+        }
+        if (r?.timeout || r?.error) { if (tabRef.id) { chrome.tabs.remove(tabRef.id).catch(() => {}); tabRef.id = null; } }
+        if (r?.item && r.item.priceCny) {
+          const res = await api('/api/import', { method: 'POST', body: JSON.stringify({ category_id: f.category_id ?? null, page_url: 'ext:discover', items: [r.item] }) });
+          rep.imported += res.imported || 0;
+        } else await api('/api/crawl/discover/fail', { method: 'POST', body: JSON.stringify({ offerId: f.id }) }).catch(() => {});
+        if (!r?.timeout && !r?.error) await harvest(f.id, r);
         rep.checked++;
         await sleep(pace(9000, 15000));
       }

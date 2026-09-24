@@ -109,12 +109,26 @@
     };
   }
 
+  // ===== اكتشاف مجاني: روابط منتجات أخرى في صفحة المنتج =====
+  // توصيات «看了又看» ومنتجات المتجر نفسه تحمل روابط detail.1688.com/offer/{id}. نلتقطها من
+  // الروابط وسمات data-* ومن نصّ الصفحة (بعض الأقسام تُرسم من JSON مضمّن). لا ندري أتعرضها 1688
+  // لزائر غير مسجّل — العدد الذي يصل الخادم هو الجواب، والصفر جواب أيضًا.
+  function offerLinks(own) {
+    const ids = new Set();
+    const add = (v) => { const id = String(v || ''); if (/^\d{9,15}$/.test(id) && id !== own) ids.add(id); };
+    $$('a[href]').forEach(a => add(offerIdFrom(a.getAttribute('href'))));
+    $$('[data-offer-id],[data-offerid],[data-id][class*="offer" i]').forEach(e => add(e.dataset.offerId || e.dataset.offerid || e.dataset.id));
+    const html = document.documentElement.innerHTML;
+    for (const m of html.matchAll(/detail\.1688\.com\/offer\/(\d{9,15})/g)) add(m[1]);
+    return [...ids].slice(0, 80);
+  }
+
   chrome.runtime.onMessage.addListener((msg, _s, reply) => {
     try {
       const b = blocked();
       if (b) return reply({ blocked: b, url: location.href, title: document.title });
       if (msg.type === 'extractList') return reply({ items: extractList(), url: location.href, title: document.title });
-      if (msg.type === 'extractDetail') return reply({ item: extractDetail(msg.init), url: location.href });
+      if (msg.type === 'extractDetail') { const item = extractDetail(msg.init); return reply({ item, links: offerLinks(item?.offerId || offerIdFrom(location.href)), url: location.href }); }
       reply({ error: 'unknown' });
     } catch (e) { reply({ error: e.message }); }
     return true;

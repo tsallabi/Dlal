@@ -14,6 +14,8 @@ export type LiveState = {
   status: string;
   total: number; done: number; pct: number;
   gain: { img: number; vars: number; wt: number }; gone: number;
+  // اكتشاف مجاني (1.7.0+): صفحات قُرئت، كم منها حمل روابط منتجات أخرى، كم رابطًا جديدًا، كم منتجًا أُضيف
+  disc: { pages: number; linked: number; links: number; added: number };
   last: { title: string; slug: string | null; offer: string } | null;
   lastAgoS: number | null; startedAgoS: number | null; finishedAgoS: number | null;
   etaMin: number | null;
@@ -64,6 +66,7 @@ export async function liveState(db: D1Database): Promise<LiveState> {
   return {
     state, status: l?.status ?? 'idle', total, done, pct: total ? Math.min(100, Math.round((done / total) * 100)) : 0,
     gain: { img: l?.gain_img ?? 0, vars: l?.gain_var ?? 0, wt: l?.gain_wt ?? 0 }, gone: l?.gone ?? 0,
+    disc: { pages: l?.pages_read ?? 0, linked: l?.pages_linked ?? 0, links: l?.links_new ?? 0, added: l?.gain_new ?? 0 },
     last, lastAgoS, startedAgoS, finishedAgoS, etaMin, online, seenAgoS, version: ver?.value ?? '', next,
   };
 }

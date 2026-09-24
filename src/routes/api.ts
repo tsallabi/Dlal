@@ -34,6 +34,12 @@ api.post('/import', async (c) => {
   const r = await importProducts(c.env.DB, body.items.slice(0, 200), body.category_id ?? null, c.get('user')?.id ?? null, body.page_url ?? 'bookmarklet', c.env.AI);
   // منتج قرأته دفعة الإثراء في الإضافة: خطوة في شريط التقدّم
   if (body.page_url === 'ext:stock') await liveStep(c.env.DB, body.items.length, r.gain, 0, String(body.items[body.items.length - 1]?.offerId ?? ''));
+  // منتج جديد اكتشفته الإضافة في صفحة منتج آخر: أُضيف، أو رُفض (توأم أرخص منه، أو بلا سعر)
+  if (body.page_url === 'ext:discover') {
+    const id = String(body.items[0]?.offerId ?? '');
+    await c.env.DB.prepare("UPDATE discovered_offers SET status=?,tries=tries+1,done_at=datetime('now') WHERE offer_id=?").bind(r.imported ? 'imported' : 'skipped', id).run();
+    await liveStep(c.env.DB, 1, null, 0, r.imported ? id : '', r.imported);
+  }
   return c.json(r);
 });
 
@@ -41,10 +47,10 @@ api.post('/import', async (c) => {
 // الإضافة (حتى 1.5.0) لا تكلّم الخادم إلا في آخر الدفعة — ١٠٠ منتج ≈ نصف ساعة من الصمت.
 // لكنها تمرّ على الخادم عند كل منتج أصلًا: الطابور في البداية، ثم /import (ext:stock) أو
 // /import/check لكل منتج، ثم /crawl/report في النهاية. نسجّل هذه المرور فيصير للصمت شريط.
-export async function liveStep(db: D1Database, n: number, g: { img: number; vars: number; wt: number } | null, gone: number, offer: string) {
-  await db.prepare(`UPDATE crawler_live SET done=done+?,gain_img=gain_img+?,gain_var=gain_var+?,gain_wt=gain_wt+?,gone=gone+?,
-      last_offer=?,last_at=datetime('now'),status=CASE WHEN status='idle' THEN 'running' ELSE status END WHERE id=1`)
-    .bind(n, g?.img ?? 0, g?.vars ?? 0, g?.wt ?? 0, gone, offer || null).run();
+export async function liveStep(db: D1Database, n: number, g: { img: number; vars: number; wt: number } | null, gone: number, offer: string, neu = 0) {
+  await db.prepare(`UPDATE crawler_live SET done=done+?,gain_img=gain_img+?,gain_var=gain_var+?,gain_wt=gain_wt+?,gone=gone+?,gain_new=gain_new+?,
+      last_offer=COALESCE(?,last_offer),last_at=datetime('now'),status=CASE WHEN status='idle' THEN 'running' ELSE status END WHERE id=1`)
+    .bind(n, g?.img ?? 0, g?.vars ?? 0, g?.wt ?? 0, gone, neu, offer || null).run();
 }
 
 // قائمة الفحص: الأهم أولًا ثم الأقدم فحصًا
@@ -66,13 +72,22 @@ api.get('/import/queue', async (c) => {
   // وإلا ضاع ما أُضيف من «أضافته في ٢٤ ساعة» ولم يعرف صاحب المشروع أن الدفعات تنقطع.
   const prev = await c.env.DB.prepare('SELECT * FROM crawler_live WHERE id=1').first<any>();
   if (job && prev?.status === 'running' && prev.done > 0) {
-    await c.env.DB.prepare(`INSERT INTO crawl_runs(job_id,started_at,status,pages,found,imported,updated,enriched,checked,note,gain_img,gain_var,gain_wt) VALUES(?,?,'partial',0,0,0,?,?,?,?,?,?,?)`)
-      .bind(job.id, prev.started_at ?? prev.last_at, prev.done, Math.max(prev.gain_img, prev.gain_var, prev.gain_wt), prev.done,
-        `انقطعت الدفعة بعد ${prev.done}${prev.total ? ' من ' + prev.total : ''} منتج بلا تقرير (أُغلق كروم أو توقف عامل الإضافة)`, prev.gain_img, prev.gain_var, prev.gain_wt).run();
+    await c.env.DB.prepare(`INSERT INTO crawl_runs(job_id,started_at,status,pages,found,imported,updated,enriched,checked,note,gain_img,gain_var,gain_wt,gain_new,links_new) VALUES(?,?,'partial',?,0,?,?,?,?,?,?,?,?,?,?)`)
+      .bind(job.id, prev.started_at ?? prev.last_at, prev.pages_read ?? 0, prev.gain_new ?? 0, prev.done, Math.max(prev.gain_img, prev.gain_var, prev.gain_wt), prev.done,
+        `انقطعت الدفعة بعد ${prev.done}${prev.total ? ' من ' + prev.total : ''} منتج بلا تقرير (أُغلق كروم أو توقف عامل الإضافة)`, prev.gain_img, prev.gain_var, prev.gain_wt, prev.gain_new ?? 0, prev.links_new ?? 0).run();
   }
-  const total = Math.min(results.length, job?.max_new || 100);
-  await c.env.DB.prepare(`UPDATE crawler_live SET started_at=datetime('now'),finished_at=NULL,status='running',total=?,done=0,gain_img=0,gain_var=0,gain_wt=0,gone=0,last_offer=NULL,last_at=datetime('now') WHERE id=1`).bind(total).run();
-  return c.json({ ids: results.map(r => r.source_offer_id) });
+  // منتجات جديدة اكتُشفت في صفحات الدفعات السابقة — للإضافة 1.7.0 فما فوق فقط (الأقدم تتجاهلها
+  // فيبقى الشريط ناقصًا إلى الأبد لو حُسبت في المجموع)
+  const v = (c.req.query('v') ?? '').split('.').map(Number);
+  const canDiscover = (v[0] ?? 0) > 1 || ((v[0] ?? 0) === 1 && (v[1] ?? 0) >= 7);
+  const per = Math.max(0, Math.min(100, parseInt((await c.env.DB.prepare("SELECT value FROM settings WHERE key='discover_per_batch'").first<{ value: string }>())?.value ?? '') || 0));
+  const fresh = canDiscover && per ? (await c.env.DB.prepare(`SELECT d.offer_id id,d.category_id FROM discovered_offers d
+     WHERE d.status='new' AND d.tries < 2 AND NOT EXISTS (SELECT 1 FROM products p WHERE p.source='1688' AND p.source_offer_id=d.offer_id)
+     ORDER BY d.tries, d.found_at LIMIT ?`).bind(per).all<{ id: string; category_id: number | null }>()).results : [];
+  const total = Math.min(results.length, job?.max_new || 100) + fresh.length;
+  await c.env.DB.prepare(`UPDATE crawler_live SET started_at=datetime('now'),finished_at=NULL,status='running',total=?,done=0,gain_img=0,gain_var=0,gain_wt=0,gone=0,
+      pages_read=0,pages_linked=0,links_new=0,gain_new=0,last_offer=NULL,last_at=datetime('now') WHERE id=1`).bind(total).run();
+  return c.json({ ids: results.map(r => r.source_offer_id), fresh });
 });
 
 api.post('/import/check', async (c) => {
@@ -94,6 +109,36 @@ api.post('/import/check', async (c) => {
   // الإضافة تنادي هذا حين لا تقرأ الصفحة سعرًا (المنتج نزل أو لم تُحمَّل الصفحة): خطوة بلا إضافة
   await liveStep(c.env.DB, 1, null, b.inStock ? 0 : 1, String(b.offerId));
   return c.json({ ok: true, flagged: !!bigChange });
+});
+
+// ---------- اكتشاف مجاني ----------
+// الإضافة ترسل روابط المنتجات التي وجدتها في كل صفحة قرأتها (ولو صفرًا: عدد الصفحات بلا روابط
+// هو الدليل على أن 1688 لا تعرض توصيات لزائر غير مسجّل). يُحفظ الجديد وحده، بقسم الصفحة التي وُجد فيها.
+const DISCOVER_CAP = 20000;   // سقف الطابور: الاكتشاف يتضاعف كالشجرة، ولا نريد جدولًا بلا قاع
+api.post('/crawl/discover', async (c) => {
+  if (!tokenOk(c)) return c.json({ error: 'رمز غير صحيح' }, 401);
+  const b = await c.req.json<{ from: string; ids: string[] }>().catch(() => ({ from: '', ids: [] as string[] }));
+  const db = c.env.DB;
+  const from = String(b.from ?? '');
+  const ids = [...new Set((Array.isArray(b.ids) ? b.ids : []).map(String).filter(x => /^\d{9,15}$/.test(x) && x !== from))].slice(0, 80);
+  const pending = (await db.prepare("SELECT COUNT(*) n FROM discovered_offers WHERE status='new'").first<{ n: number }>())?.n ?? 0;
+  let added = 0;
+  if (ids.length && pending < DISCOVER_CAP) {
+    const res = await db.batch(ids.map(id => db.prepare(`INSERT OR IGNORE INTO discovered_offers(offer_id,from_offer,category_id)
+      SELECT ?,?,(SELECT category_id FROM products WHERE source='1688' AND source_offer_id=?)
+      WHERE NOT EXISTS (SELECT 1 FROM products WHERE source='1688' AND source_offer_id=?)`).bind(id, from || null, from, id)));
+    added = res.reduce((n, r) => n + (r.meta?.changes ?? 0), 0);
+  }
+  await db.prepare('UPDATE crawler_live SET pages_read=pages_read+1,pages_linked=pages_linked+?,links_new=links_new+? WHERE id=1').bind(ids.length ? 1 : 0, added).run();
+  return c.json({ ok: true, found: ids.length, added, capped: pending >= DISCOVER_CAP });
+});
+// صفحة منتج مكتشف لم تُقرأ (لم تُحمَّل، أو بلا سعر): محاولتان ثم نكفّ عنه
+api.post('/crawl/discover/fail', async (c) => {
+  if (!tokenOk(c)) return c.json({ error: 'رمز غير صحيح' }, 401);
+  const b = await c.req.json<{ offerId: string }>();
+  await c.env.DB.prepare("UPDATE discovered_offers SET tries=tries+1,status=CASE WHEN tries+1>=2 THEN 'failed' ELSE status END,done_at=datetime('now') WHERE offer_id=?").bind(String(b.offerId ?? '')).run();
+  await liveStep(c.env.DB, 1, null, 1, '');
+  return c.json({ ok: true });
 });
 
 // فحص قبل الدفع: هل كل منتجات السلة متاحة؟
@@ -137,12 +182,15 @@ api.post('/crawl/report', async (c) => {
   const live = job?.type === 'stock' ? await db.prepare('SELECT * FROM crawler_live WHERE id=1').first<any>() : null;
   const g = { img: live?.gain_img ?? 0, vars: live?.gain_var ?? 0, wt: live?.gain_wt ?? 0 };
   const enriched = live ? Math.max(g.img, g.vars, g.wt) : (b.enriched ?? 0);
+  // الاكتشاف المجاني يُذكر حين قرأت الإضافة صفحات (1.7.0+): وجدت روابط أم لا
+  const disc = live && live.pages_read ? ` · منتجات جديدة +${live.gain_new ?? 0} · روابط جديدة ${live.links_new ?? 0} من ${live.pages_linked ?? 0}/${live.pages_read} صفحة` : '';
   const summary = live
-    ? `${status}: فُحص ${b.checked ?? 0} · صور +${g.img} · مقاسات/ألوان +${g.vars} · وزن +${g.wt} · لم يُقرأ ${live.gone ?? 0}`
+    ? `${status}: فُحص ${b.checked ?? 0} · صور +${g.img} · مقاسات/ألوان +${g.vars} · وزن +${g.wt} · لم يُقرأ ${live.gone ?? 0}${disc}`
     : `${status}: صفحات ${b.pages ?? 0} · وُجد ${b.found ?? 0} · جديد ${b.imported ?? 0} · محدّث ${b.updated ?? 0} · مُثرى ${b.enriched ?? 0} · مفحوص ${b.checked ?? 0}`;
   await db.batch([
-    db.prepare('INSERT INTO crawl_runs(job_id,started_at,status,pages,found,imported,updated,enriched,checked,note,gain_img,gain_var,gain_wt) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)')
-      .bind(b.job_id ?? null, b.started_at ?? new Date().toISOString(), status, b.pages ?? 0, b.found ?? 0, b.imported ?? 0, b.updated ?? 0, enriched, b.checked ?? 0, b.note ? String(b.note).slice(0, 500) : null, g.img, g.vars, g.wt),
+    db.prepare('INSERT INTO crawl_runs(job_id,started_at,status,pages,found,imported,updated,enriched,checked,note,gain_img,gain_var,gain_wt,gain_new,links_new) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+      .bind(b.job_id ?? null, b.started_at ?? new Date().toISOString(), status, live ? (live.pages_read ?? 0) : (b.pages ?? 0), b.found ?? 0,
+        live ? (live.gain_new ?? 0) : (b.imported ?? 0), b.updated ?? 0, enriched, b.checked ?? 0, b.note ? String(b.note).slice(0, 500) : null, g.img, g.vars, g.wt, live?.gain_new ?? 0, live?.links_new ?? 0),
     db.prepare("UPDATE crawl_jobs SET run_now=0,last_run_at=datetime('now'),last_summary=?,cooldown_until=CASE WHEN ?='blocked' THEN datetime('now','+2 hours') ELSE NULL END WHERE id=?")
       .bind(summary, status, b.job_id ?? 0),
     ...(live ? [db.prepare("UPDATE crawler_live SET finished_at=datetime('now'),status=?,last_at=datetime('now') WHERE id=1").bind(status === 'ok' ? 'done' : status)] : []),

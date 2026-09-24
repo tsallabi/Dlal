@@ -415,7 +415,7 @@ ops.use('/crawler*', requirePerm('catalog.manage'));
 // نسخة الإضافة المتوقَّعة. تُطابق extension/manifest.json ويحرس التطابقَ فحصٌ في e2e.
 // سببها: صاحب المشروع وجد نسختين مثبّتتين معًا («دلال» القديمة و«تالين») ورقمهما واحد
 // لأني غيّرت الشيفرة ولم أرفع الرقم — فلم يستطع التمييز بينهما، وكلتاهما تزحف معًا.
-export const EXT_VERSION = '1.6.1';
+export const EXT_VERSION = '1.7.0';
 
 // شريط تقدّم الإضافة. طلب صاحب المشروع: «ضع شريطًا يظهر التقدّم حتى أعرف أن الإضافة تعمل
 // وتجلب وتثري المنتجات». يُرسم هنا ويُعاد رسمه كل ٥ ثوانٍ من /admin/crawler/live بلا إعادة تحميل.
@@ -452,7 +452,9 @@ const LiveCard = ({ l }: { l: LiveState }) => {
         <span title="منتجات لم يكن لها مقاسات ولا ألوان">📏 مقاسات وألوان <b>+{l.gain.vars}</b></span>
         <span title="منتجات لم يكن لها وزن — الوزن يصحّح سعر الشحن">⚖️ وزن <b>+{l.gain.wt}</b></span>
         <span title="الصفحة لم تُظهر سعرًا: نزل المنتج من 1688 أو لم تُحمَّل">⛔ لم يُقرأ <b>{l.gone}</b></span>
+        {l.disc.pages > 0 && <span class="live-new" title="منتجات جديدة استوردتها الإضافة من روابط وجدتها في صفحات 1688 — بلا حساب ولا كريدت">🆕 منتجات جديدة <b>+{l.disc.added}</b></span>}
       </div>
+      {l.disc.pages > 0 && <div class="live-disc">🔗 اكتشاف مجاني: <b>{l.disc.links.toLocaleString('ar-LY')}</b> رابط منتج جديد في <b>{l.disc.linked}</b> من {l.disc.pages} صفحة قرأتها هذه الدفعة{l.disc.linked === 0 ? ' — الصفحات لم تحمل روابط منتجات أخرى' : ''}</div>}
       {l.last && <div class="live-last">آخر منتج: {l.last.slug ? <a href={`/p/${l.last.slug}`} target="_blank">{l.last.title.slice(0, 70)}</a> : l.last.title} · {agoAr(l.lastAgoS)}</div>}
       {l.state !== 'running' && <div class="live-next">{l.next}</div>}
       {!l.online && l.state !== 'running' && <div class="live-off">الإضافة لم تتصل بالموقع {l.seenAgoS === null ? 'بعد' : `منذ ${agoAr(l.seenAgoS).replace('قبل ', '')}`} — تعمل فقط وكروم مفتوح على هذا الحاسوب.</div>}
@@ -482,8 +484,13 @@ ops.get('/crawler', async (c) => {
   ]);
   const thin = { n: (have?.total ?? 0) - (have?.complete ?? 0) };
   const live = await liveState(db);
-  const gains = await db.prepare(`SELECT COALESCE(SUM(r.gain_img),0) img, COALESCE(SUM(r.gain_var),0) vars, COALESCE(SUM(r.gain_wt),0) wt FROM crawl_runs r JOIN crawl_jobs j ON j.id=r.job_id
-     WHERE j.type='stock' AND r.started_at >= datetime('now','-24 hours')`).first<{ img: number; vars: number; wt: number }>();
+  const gains = await db.prepare(`SELECT COALESCE(SUM(r.gain_img),0) img, COALESCE(SUM(r.gain_var),0) vars, COALESCE(SUM(r.gain_wt),0) wt,
+       COALESCE(SUM(r.gain_new),0) neu, COALESCE(SUM(r.links_new),0) links, COALESCE(SUM(r.pages),0) pages FROM crawl_runs r JOIN crawl_jobs j ON j.id=r.job_id
+     WHERE j.type='stock' AND r.started_at >= datetime('now','-24 hours')`).first<{ img: number; vars: number; wt: number; neu: number; links: number; pages: number }>();
+  // الاكتشاف المجاني: ما في الطابور وما انتهى إليه
+  const disc = await db.prepare(`SELECT COUNT(*) total, COALESCE(SUM(status='new'),0) pending, COALESCE(SUM(status='imported'),0) imported,
+       COALESCE(SUM(status='skipped'),0) skipped, COALESCE(SUM(status='failed'),0) failed FROM discovered_offers`).first<{ total: number; pending: number; imported: number; skipped: number; failed: number }>();
+  const perBatch = Math.max(0, parseInt(s.discover_per_batch ?? '') || 0);
   // معدّل آخر ٢٤ ساعة: ما **فحصته مهمة الإثراء وحدها**. كان يجمع `updated` من كل التشغيلات،
   // فدخلت فيه مهام البحث الـ١٥٥ على الخادم (كل منها «يحدّث» عشرات المنتجات) فظهر «١٠٬٦٦٠
   // في ٢٤ ساعة · يكتمل خلال يومين» والإضافة لم تكمل ساعتها الأولى. رقم مطمئن كاذب.
@@ -505,6 +512,19 @@ ops.get('/crawler', async (c) => {
         <Meter label="🖼 معرض صور (أكثر من صورة)" n={have?.img ?? 0} total={have?.total ?? 0} />
         <Meter label="📏 مقاسات أو ألوان" n={have?.vars ?? 0} total={have?.total ?? 0} note="منتج بلا مقاسات قد يكون فعلًا بمقاس واحد (كوب، حقيبة)." />
         <Meter label="⚖️ وزن حقيقي من المورّد" n={have?.wt ?? 0} total={have?.total ?? 0} note="صفحة 1688 بلا تسجيل دخول لا تذكر الوزن في أغلب المنتجات، فهذا الشريط يتقدّم ببطء مهما عملت الإضافة. حتى يصل الوزن الحقيقي يُسعَّر المنتج بالوزن التقديري لقسمه." />
+      </div>
+      {/* سؤال صاحب المشروع: «ألا يمكننا أن نجلب بالإضافة مجانًا؟» — الجواب يُقاس هنا لا يُفترض */}
+      <div id="discover" class="card-box disc-box"><h3>🔗 اكتشاف منتجات جديدة مجانًا</h3>
+        <p style="font-size:12.5px;color:#555;margin:0 0 8px">صفحة البحث في 1688 تطلب حسابًا، لكن <b>صفحة المنتج</b> تفتح بلا حساب وقد تحمل روابط منتجات أخرى (توصيات، منتجات المتجر نفسه).
+          الإضافة تقرأ هذه الروابط في كل صفحة تزورها للإثراء، ثم تفتح بعضها في الدفعة التالية وتستورده في قسم الصفحة التي وُجد فيها — <b>بلا حساب ولا كريدت</b>.
+          المنتج الجديد يمرّ بنفس القواعد: الجملة (أقل طلب قطعتان فأكثر) وإعلانات التغليف تدخل مخفية، والمكرّر الأغلى يُتجاهل، والعنوان الصيني يبقى مسودة حتى يُترجم.</p>
+        <p class="disc-24" style="font-size:13px;margin:0 0 8px">آخر ٢٤ ساعة: قرأت الإضافة <b>{(gains?.pages ?? 0).toLocaleString('ar-LY')}</b> صفحة · وجدت <b>{(gains?.links ?? 0).toLocaleString('ar-LY')}</b> رابط منتج جديد · أضافت <b>{(gains?.neu ?? 0).toLocaleString('ar-LY')}</b> منتجًا جديدًا للمتجر</p>
+        {(gains?.pages ?? 0) >= 20 && (gains?.links ?? 0) === 0 && <p class="disc-none" style="font-size:12.5px;margin:0 0 8px;padding:8px 10px;border-radius:8px;background:#fff6e5;border:1px solid #f0d49b;color:#7a5200">
+          قرأت الإضافة {gains?.pages} صفحة ولم تجد فيها رابط منتج آخر واحدًا: صفحة المنتج في 1688 لا تعرض التوصيات لزائر غير مسجّل. الاكتشاف المجاني لا يعمل بهذا الطريق — جلب منتجات جديدة يبقى عبر مزوّد API أو زر الاستيراد يدويًا.</p>}
+        <p class="disc-q" style="font-size:13px;margin:0 0 8px">في الطابور: <b>{(disc?.pending ?? 0).toLocaleString('ar-LY')}</b> ينتظر · أُضيف {(disc?.imported ?? 0).toLocaleString('ar-LY')} · مكرّر أو مرفوض {(disc?.skipped ?? 0).toLocaleString('ar-LY')} · تعذّرت قراءته {(disc?.failed ?? 0).toLocaleString('ar-LY')}</p>
+        <form method="post" action="/admin/crawler/discover" class="inline" style="gap:8px;align-items:center"><label style="margin:0">منتجات جديدة في كل دفعة</label>
+          <input type="number" name="per" value={String(perBatch)} min="0" max="100" style="width:80px" /><button class="btn sm">حفظ</button>
+          <small style="color:#666">٠ = إيقاف الاستيراد (تبقى الروابط تُجمع). كل منتج صفحة إضافية بإيقاع بشري ≈ ١٥ ثانية؛ يتطلب الإضافة 1.7.0.</small></form>
       </div>
       <div class="kpis">
         <div class="kpi"><b class={online ? 'ok' : ''} style={online ? 'color:#1a9c5b' : 'color:#d3262b'}>{online ? 'متصلة' : 'غير متصلة'}</b><span>آخر اتصال: {seen} {s.crawler_version ? `· v${s.crawler_version}` : ''}</span></div>
@@ -553,9 +573,9 @@ ops.get('/crawler', async (c) => {
               <li>افتح <span class="mono" style="display:inline">chrome://extensions</span> → فعّل "وضع المطوّر" → "تحميل غير مضغوط" → اختر المجلد.</li>
               <li>أعد تحميل هذه الصفحة بعد التثبيت: تأخذ الإضافة العنوان والرمز تلقائيًا ويظهر شريط أخضر بالأعلى. (يدويًا عند الحاجة: العنوان <span class="mono" style="display:inline">{origin}</span> والرمز <span class="mono" style="display:inline">{c.env.IMPORT_TOKEN ?? '(IMPORT_TOKEN غير مضبوط)'}</span>.)</li>
               <li>اضغط أيقونة الإضافة ثم "اختبار الاتصال"؛ يجب أن يظهر عدد المهام. بعدها "شغّل الآن".</li>
-              <li>سجّل الدخول في 1688 مرة واحدة في نفس المتصفح، واتركه مفتوحًا. الإضافة تفحص المهام كل 15 دقيقة وتعمل في تبويب خلفي.</li>
+              <li>لا تحتاج تسجيل دخول في 1688. اترك كروم مفتوحًا: الإضافة تفحص المهام كل 15 دقيقة وتعمل في تبويب خلفي.</li>
             </ol>
-            <p style="font-size:12px;color:#666">عند ظهور كابتشا من 1688 تتوقف الإضافة ساعتين وتُعلمك بإشعار؛ حلّ الكابتشا في التبويب ثم اضغط "شغّل الآن". لا تفتح أكثر من مهمة بحث كل ساعة في الأيام الأولى حتى لا يُقيَّد حساب 1688.</p>
+            <p style="font-size:12px;color:#666">عند ظهور كابتشا من 1688 تتوقف الإضافة ساعتين وتُعلمك بإشعار؛ حلّ الكابتشا في التبويب ثم اضغط "شغّل الآن".</p>
           </div>
         </div>
       </div>
@@ -565,6 +585,13 @@ ops.get('/crawler', async (c) => {
 // جزء الصفحة الذي يتجدّد كل ٥ ثوانٍ: شريط التقدّم وحده (استعلام خفيف بلا إحصاءات الكتالوج)
 ops.get('/crawler/live', async (c) => c.html(<LiveCard l={await liveState(c.env.DB)} />));
 
+ops.post('/crawler/discover', async (c) => {
+  const f = await c.req.parseBody(); const db = c.env.DB;
+  const per = Math.max(0, Math.min(100, parseInt(String(f.per ?? '')) || 0));
+  await db.prepare("INSERT INTO settings(key,value,updated_at) VALUES('discover_per_batch',?,datetime('now')) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=datetime('now')").bind(String(per)).run();
+  await logActivity(db, c.get('user')!.id, 'crawler.discover', String(per));
+  return c.redirect('/admin/crawler?ok=1#discover');
+});
 ops.post('/crawler/new', async (c) => {
   const f = await c.req.parseBody(); const db = c.env.DB;
   const type = ['search', 'url', 'stock'].includes(String(f.type)) ? String(f.type) : 'search';

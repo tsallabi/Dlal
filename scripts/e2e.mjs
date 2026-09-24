@@ -1683,6 +1683,50 @@ const queue = await page.evaluate(async (b) => {
 }, BASE);
 expect(Array.isArray(queue.ids), 'طابور الإضافة يعيد قائمة أرقام');
 expect(queue.ids.every(x => /^[0-9]{9,}$/.test(String(x))), `كل رقم في الطابور رقم منتج 1688 صالح (${queue.ids.slice(0, 2).join(',')})`);
+// ---------- اكتشاف مجاني: روابط منتجات أخرى في صفحة المنتج (الإضافة 1.7.0) ----------
+// سؤال صاحب المشروع: «ألا يمكننا أن نجلب بالإضافة مجانًا؟». البحث يطلب حسابًا، وصفحة المنتج لا.
+// عيّنتنا: رقمان جديدان وُجدا في صفحة liveOffer، ومعهما رقم منتج قائم وآخر فاسد ورقم الصفحة نفسها.
+const d1 = '81' + String(Date.now()).slice(-10), d2 = '82' + String(Date.now()).slice(-10);
+const dsc = await extCall('/api/crawl/discover', { from: liveOffer, ids: [d1, d2, liveOffer2, 'abc', liveOffer, d1] });
+expect(dsc.found === 3 && dsc.added === 2, `الخادم يحفظ الجديد وحده: لا المنتج القائم ولا الفاسد ولا الصفحة نفسها ولا المكرّر (وُجد ${dsc.found} · حُفظ ${dsc.added})`);
+expect((await extCall('/api/crawl/discover', { from: liveOffer, ids: [d1, d2] })).added === 0, 'الرابط نفسه لا يُحفظ مرتين');
+const qOld = await extCall('/api/import/queue?v=1.6.1');
+expect(!(qOld.fresh || []).length, 'الإضافة القديمة (1.6.1) لا تستلم منتجات جديدة — لا تعرف ماذا تفعل بها فيبقى الشريط ناقصًا');
+const qNew = await extCall('/api/import/queue?v=' + extManifest.version);
+const fr1 = (qNew.fresh || []).find(f => f.id === d1);
+expect(!!fr1 && (qNew.fresh || []).some(f => f.id === d2), `الإضافة ${extManifest.version} تستلم الرابطين المكتشفين (${(qNew.fresh || []).length} في الدفعة)`);
+expect(fr1?.category_id === 1, `وبقسم الصفحة التي وُجدا فيها (قسم ${fr1?.category_id})`);
+const lvD = await extCall('/api/crawl/live');
+expect(lvD.total >= (qNew.fresh || []).length && lvD.total <= (qNew.ids || []).length + (qNew.fresh || []).length, `حجم الدفعة يشمل المنتجات الجديدة (${lvD.total})`);
+// الإضافة فتحت صفحة d1 فقرأتها واستوردتها، وصفحة d2 لم تُحمَّل مرتين
+const rD = await extCall('/api/import', { category_id: fr1?.category_id ?? 1, page_url: 'ext:discover', items: [{ offerId: d1, url: `https://detail.1688.com/offer/${d1}.html`, title: `مكتشف ${liveTag}`, priceCny: 22,
+  images: ['https://cbu01.alicdn.com/img/ibank/d1a.jpg', 'https://cbu01.alicdn.com/img/ibank/d1b.jpg'], variants: [{ color: 'أزرق', inStock: true }], weightG: 180, minQty: 1, inStock: true }] });
+expect(rD.imported === 1, `المنتج المكتشف دخل المتجر (جديد ${rD.imported})`);
+await extCall('/api/crawl/discover', { from: d1, ids: [] });   // صفحة بلا روابط: تُعدّ صفحة مقروءة بلا روابط
+await extCall('/api/crawl/discover/fail', { offerId: d2 }); await extCall('/api/crawl/discover/fail', { offerId: d2 });
+const lvD2 = await extCall('/api/crawl/live');
+expect(lvD2.disc?.added === 1 && lvD2.disc?.pages === 1 && lvD2.disc?.linked === 0, `الشريط يعدّ المنتج الجديد والصفحة بلا روابط (${JSON.stringify(lvD2.disc)})`);
+const qAfter = await extCall('/api/import/queue?v=' + extManifest.version);
+expect(!(qAfter.fresh || []).some(f => f.id === d1 || f.id === d2), 'المستورد والمتعذّر مرتين يخرجان من الطابور');
+await page.goto(BASE + '/admin/products?q=' + d1);
+expect(await has(page, `مكتشف ${liveTag}`), 'المنتج المكتشف يظهر في لوحة المنتجات');
+// على الشاشة: بطاقة الاكتشاف في صفحة الزاحف، وضبط العدد في الدفعة من الزر
+await extCall('/api/crawl/discover', { from: liveOffer, ids: [d2.replace(/^82/, '83')] });
+await page.goto(BASE + '/admin/crawler');
+expect(await page.locator('#discover h3', { hasText: 'اكتشاف منتجات جديدة مجانًا' }).isVisible(), 'صفحة الزاحف فيها بطاقة «اكتشاف منتجات جديدة مجانًا»');
+const discTxt = ((await page.locator('#discover .disc-q').textContent()) || '').replace(/\s+/g, ' ');
+expect(/أُضيف [1-9]/.test(discTxt) && /تعذّرت قراءته [1-9]/.test(discTxt), `وتعرض الطابور وما انتهى إليه (${discTxt.trim()})`);
+expect(/اكتشاف مجاني/.test((await page.locator('#live .live-disc').textContent().catch(() => '')) || ''), 'وشريط التقدّم يذكر الروابط المكتشفة في الدفعة');
+const perBefore = await page.locator('#discover input[name=per]').inputValue();
+await page.fill('#discover input[name=per]', '0'); await page.click('#discover button'); await page.waitForLoadState('networkidle');
+expect((await page.locator('#discover input[name=per]').inputValue()) === '0', 'زر الحفظ يضبط العدد في كل دفعة (٠ = إيقاف)');
+const qOff = await extCall('/api/import/queue?v=' + extManifest.version);
+expect(!(qOff.fresh || []).length, 'وبـ٠ لا تستلم الإضافة منتجات جديدة');
+await page.fill('#discover input[name=per]', perBefore); await page.click('#discover button'); await page.waitForLoadState('networkidle');
+expect((await page.locator('#discover input[name=per]').inputValue()) === perBefore, `أُعيد العدد كما كان (${perBefore})`);
+await extCall('/api/crawl/discover/fail', { offerId: d2.replace(/^82/, '83') }); await extCall('/api/crawl/discover/fail', { offerId: d2.replace(/^82/, '83') });
+await shot(page, 'crawler-discover');
+if (stockJob) await extCall('/api/crawl/report', { job_id: stockJob.id, started_at: new Date().toISOString(), status: 'ok', checked: 0 });
 await page.goto(BASE + '/logout');
 
 // ---------- جوال ----------
