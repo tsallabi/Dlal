@@ -1,4 +1,4 @@
-// هدهد — سكربت المحتوى: يستخرج بيانات المنتجات من صفحات 1688 عند طلب الخلفية
+// هدهدي — سكربت المحتوى: يستخرج بيانات المنتجات من صفحات 1688 عند طلب الخلفية
 (function () {
   if (window.__dlalContent) return; window.__dlalContent = true;
   const $ = (s, r = document) => r.querySelector(s);
@@ -14,7 +14,8 @@
   // حسابًا صينيًا**، فلا جدوى من إعادة المحاولة — هذا تغيّر في 1688 يحتاج خطة أخرى.
   function blocked() {
     const u = location.href, t = document.title;
-    if (/login\.1688|passport\.|member\.1688\.com\/(login|signin)|请登录|登录后查看/i.test(u + ' ' + t)) return 'login';
+    // 1688 يحوّل الزائر غير المسجّل إلى login.taobao.com لا إلى نطاقه — كان يفوتنا فتعود صفحة الدخول «ok — ٠»
+    if (/login\.1688|login\.taobao\.com|login\.alibaba|passport\.|member\.1688\.com\/(login|signin)|请登录|登录后查看|账号登录|密码登录/i.test(u + ' ' + t)) return 'login';
     if (/punish|captcha|\/verify|访问被拒绝|安全验证|滑动验证|baxia/i.test(u + ' ' + t)) return 'captcha';
     if ($('#nc_1_n1z, .nc-container, #baxia-dialog-content, .J_MIDDLEWARE_FRAME_WIDGET')) return 'captcha';
     return null;

@@ -1580,6 +1580,28 @@ expect(!(await has(page, 'نسخة إضافة قديمة متصلة')), 'الت�
 // وصفحة الكوبونات لم تعد تنكسر (وضعتُ التحذير فيها خطأً فسقطت بـ500)
 const cp = await page.goto(BASE + '/admin/coupons');
 expect(cp.status() === 200, `صفحة الكوبونات تعمل (${cp.status()})`);
+// ---------- مهام البحث للخادم وحده: الإضافة بلا حساب 1688 تُحوَّل إلى صفحة الدخول فتعود «ok — ٠» ----------
+// (٢٤/٠٩/٢٦: حوّل صاحب المشروع ثماني مهام بحث إلى الإضافة لأن الواجهة سمحت، فعادت كلها صفرًا)
+await page.goto(BASE + '/admin/crawler');
+await page.fill('form[action="/admin/crawler/new"] input[name=name]', 'بحث فحص');
+await page.selectOption('form[action="/admin/crawler/new"] select[name=type]', 'search');
+await page.fill('form[action="/admin/crawler/new"] input[name=query]', '连衣裙 测试');
+await page.locator('form[action="/admin/crawler/new"] button').click(); await page.waitForLoadState('networkidle');
+const sRow = page.locator('tr', { hasText: 'بحث فحص' }).first();
+expect(await sRow.locator('select[name=runner]').count() === 0 && (await sRow.textContent()).includes('البحث يتطلب حساب 1688'), 'مهمة البحث لا تعرض خيار «الإضافة» وتقول لماذا');
+const sId = (await sRow.locator('form[action^="/admin/crawler/"]').first().getAttribute('action')).split('/').pop();
+// حتى لو أُرسل الطلب يدويًا: يُرفض برسالة وتبقى للخادم
+const forcedRunner = await page.evaluate(async ([b, id]) => {
+  const r = await fetch(b + '/admin/crawler/' + id, { method: 'POST', body: new URLSearchParams({ action: 'runner', runner: 'extension' }), redirect: 'follow' });
+  return { url: r.url, html: await r.text() };
+}, [BASE, sId]);
+expect(forcedRunner.url.includes('err=') && forcedRunner.html.includes('يتطلب حسابًا صينيًا'), 'فرض «الإضافة» على مهمة بحث يُرفض برسالة تشرح السبب');
+const jobsForExt = await page.evaluate(async ([b, v]) => (await fetch(b + '/api/crawl/jobs?v=' + v, { headers: { 'x-import-token': 'dev-import-token' } })).json(), [BASE, extManifest.version]);
+expect((jobsForExt.jobs || []).every(j => j.type === 'stock'), `الإضافة لا تستلم إلا مهمة فحص المخزون (${(jobsForExt.jobs || []).map(j => j.type).join('،') || 'لا شيء مستحق'})`);
+// نعيد الحالة: نحذف مهمة الفحص
+await page.goto(BASE + '/admin/crawler');
+await page.locator('tr', { hasText: 'بحث فحص' }).first().locator('button[value=delete]').click(); await page.waitForLoadState('networkidle');
+expect(await page.locator('tr', { hasText: 'بحث فحص' }).count() === 0, 'مهمة الفحص حُذفت بعد التجربة');
 // ---------- شريط تقدّم الإضافة: يتحرّك على الشاشة مع كل منتج، بلا إعادة تحميل ----------
 // طلب صاحب المشروع: «ضع شريطًا يظهر التقدّم حتى أعرف أن الإضافة تعمل وتجلب وتثري المنتجات».
 // الإضافة كانت صامتة ٣٠ دقيقة لكل دفعة. نلعب دورها خطوةً خطوة ونراقب الصفحة المفتوحة تتغيّر وحدها.

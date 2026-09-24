@@ -415,7 +415,7 @@ ops.use('/crawler*', requirePerm('catalog.manage'));
 // نسخة الإضافة المتوقَّعة. تُطابق extension/manifest.json ويحرس التطابقَ فحصٌ في e2e.
 // سببها: صاحب المشروع وجد نسختين مثبّتتين معًا («دلال» القديمة و«تالين») ورقمهما واحد
 // لأني غيّرت الشيفرة ولم أرفع الرقم — فلم يستطع التمييز بينهما، وكلتاهما تزحف معًا.
-export const EXT_VERSION = '1.6.0';
+export const EXT_VERSION = '1.6.1';
 
 // شريط تقدّم الإضافة. طلب صاحب المشروع: «ضع شريطًا يظهر التقدّم حتى أعرف أن الإضافة تعمل
 // وتجلب وتثري المنتجات». يُرسم هنا ويُعاد رسمه كل ٥ ثوانٍ من /admin/crawler/live بلا إعادة تحميل.
@@ -497,7 +497,7 @@ ops.get('/crawler', async (c) => {
   const T: Record<string, string> = { search: 'بحث بكلمة', url: 'رابط قائمة', stock: 'فحص مخزون' };
   return shell(c, 'crawler', 'الزاحف — إضافة المتصفح', (
     <>
-      <Flash msg={c.req.query('ok') ? 'تم ✓' : undefined} />
+      <Flash msg={c.req.query('ok') ? 'تم ✓' : undefined} /><Flash type="err" msg={c.req.query('err') || undefined} />
       <LiveCard l={live} />
       <script dangerouslySetInnerHTML={{ __html: `(function(){var busy=0;setInterval(function(){if(document.hidden||busy)return;busy=1;fetch('/admin/crawler/live',{credentials:'same-origin'}).then(function(r){return r.ok?r.text():''}).then(function(h){var el=document.getElementById('live');if(h&&el)el.outerHTML=h}).catch(function(){}).then(function(){busy=0})},5000)})()` }} />
       <div class="card-box meters"><h3>اكتمال بيانات الكتالوج</h3>
@@ -524,7 +524,9 @@ ops.get('/crawler', async (c) => {
               ولا تفتحها الإضافة أبدًا. إن طلب 1688 يومًا تسجيل دخول لصفحة منتج فستصلك إشعارة تقول ذلك صراحةً بدل «كابتشا».
             </p>
             <div class="tbl-wrap"><table class="tbl"><tr><th>المهمة</th><th>من ينفّذها</th><th>القسم</th><th>الحدود</th><th>آخر تشغيل</th><th>الحالة</th><th class="acts"></th></tr>
-              {jobs.results.map(j => <tr><td><b>{j.name}</b> <span class="status gray" style="font-size:10px">{T[j.type]}</span><br /><small class="mono job-q" title={j.query ?? ''}>{(j.query ?? '').slice(0, 40)}</small></td><td><form method="post" action={`/admin/crawler/${j.id}`} class="inline"><input type="hidden" name="action" value="runner" /><select name="runner" onchange="this.form.submit()" style="font-size:12px;padding:2px 4px"><option value="any" selected={j.runner === 'any'}>أيهما</option><option value="server" selected={j.runner === 'server'}>الخادم (API)</option><option value="extension" selected={j.runner === 'extension'}>الإضافة (مجانًا)</option></select></form></td>
+              {jobs.results.map(j => <tr><td><b>{j.name}</b> <span class="status gray" style="font-size:10px">{T[j.type]}</span><br /><small class="mono job-q" title={j.query ?? ''}>{(j.query ?? '').slice(0, 40)}</small></td><td>{j.type === 'stock'
+                ? <form method="post" action={`/admin/crawler/${j.id}`} class="inline"><input type="hidden" name="action" value="runner" /><select name="runner" onchange="this.form.submit()" style="font-size:12px;padding:2px 4px"><option value="any" selected={j.runner === 'any'}>أيهما</option><option value="server" selected={j.runner === 'server'}>الخادم (API)</option><option value="extension" selected={j.runner === 'extension'}>الإضافة (مجانًا)</option></select></form>
+                : <><span class="status gray" style="font-size:11px">الخادم (API)</span><br /><small class="runner-why" style="font-size:10.5px;color:#8c2121">البحث يتطلب حساب 1688 — لا تنفّذه الإضافة</small></>}</td>
                 <td>{j.cat ?? '—'}</td><td><small>{j.type === 'stock' ? `${j.max_new} منتج` : `${j.max_pages} صفحة`}<br />كل {j.interval_hours} س</small></td><td class="sum"><small title={j.last_summary ?? ''}>{j.last_run_at ? timeAgo(j.last_run_at) : '—'}<br />{(j.last_summary ?? '').slice(0, 70)}</small></td><td><span class={`status ${j.cooldown_until && j.cooldown_until > new Date().toISOString().slice(0, 19).replace('T', ' ') ? 'red' : j.run_now ? 'blue' : j.active ? 'green' : 'gray'}`}>{j.run_now ? 'في الطابور' : j.active ? 'نشطة' : 'موقوفة'}</span></td>
                 <td class="acts"><form method="post" action={`/admin/crawler/${j.id}`} class="inline"><button class="btn sm ok" name="action" value="run">شغّل الآن</button><button class="btn sm ghost" name="action" value="toggle">{j.active ? 'إيقاف' : 'تفعيل'}</button><button class="btn sm ghost" name="action" value="delete" style="color:#d3262b">حذف</button></form></td></tr>)}
             </table></div>
@@ -576,7 +578,17 @@ ops.post('/crawler/:id', async (c) => {
   if (f.action === 'delete') await db.prepare('DELETE FROM crawl_jobs WHERE id=?').bind(id).run();
   else if (f.action === 'toggle') await db.prepare('UPDATE crawl_jobs SET active=1-active WHERE id=?').bind(id).run();
   else if (f.action === 'run') await db.prepare('UPDATE crawl_jobs SET run_now=1,cooldown_until=NULL,active=1 WHERE id=?').bind(id).run();
-  else if (f.action === 'runner') await db.prepare("UPDATE crawl_jobs SET runner=? WHERE id=?").bind(['any', 'server', 'extension'].includes(String(f.runner)) ? String(f.runner) : 'any', id).run();
+  else if (f.action === 'runner') {
+    // البحث وروابط القوائم تتطلب حساب 1688، والإضافة تعمل بلا حساب: تُحوَّل إلى صفحة الدخول فتعود «ok — ٠».
+    // الإضافة لفحص المخزون والإثراء وحده (صفحة المنتج تفتح بلا حساب).
+    const job = await db.prepare('SELECT type FROM crawl_jobs WHERE id=?').bind(id).first<{ type: string }>();
+    const want = ['any', 'server', 'extension'].includes(String(f.runner)) ? String(f.runner) : 'any';
+    if (job && job.type !== 'stock' && want !== 'server') {
+      await db.prepare("UPDATE crawl_jobs SET runner='server' WHERE id=?").bind(id).run();
+      return c.redirect('/admin/crawler?err=' + encodeURIComponent('البحث في 1688 يتطلب حسابًا صينيًا، والإضافة تعمل بلا حساب — ففتح صفحة البحث يحوّلها إلى صفحة الدخول ويعود صفرًا. مهام البحث ينفّذها الخادم وحده؛ الإضافة لفحص المخزون والإثراء.'));
+    }
+    await db.prepare('UPDATE crawl_jobs SET runner=? WHERE id=?').bind(want, id).run();
+  }
   await logActivity(db, c.get('user')!.id, `crawler.job.${f.action}`, String(id));
   return c.redirect('/admin/crawler?ok=1');
 });

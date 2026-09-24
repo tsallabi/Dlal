@@ -109,12 +109,13 @@ const touch = (db: D1Database, ver: string | undefined) => db.batch([
   db.prepare("INSERT INTO settings(key,value,updated_at) VALUES('crawler_version',?,datetime('now')) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=datetime('now')").bind(ver ?? ''),
 ]);
 
-// المهام المستحقة الآن (الخادم يقرر الاستحقاق)
+// المهام المستحقة الآن (الخادم يقرر الاستحقاق). للإضافة مهمة فحص المخزون وحدها: صفحة المنتج تفتح بلا حساب
+// 1688، أما البحث فيحوّلها إلى صفحة الدخول فتعود «ok — ٠» (حدث ٢٤/٠٩/٢٦ لثماني مهام بحث)
 api.get('/crawl/jobs', async (c) => {
   if (!tokenOk(c)) return c.json({ error: 'رمز غير صحيح' }, 401);
   await touch(c.env.DB, c.req.query('v'));
   const { results } = await c.env.DB.prepare(`SELECT j.*,c.name_ar AS category_name FROM crawl_jobs j LEFT JOIN categories c ON c.id=j.category_id
-    WHERE j.active=1 AND j.runner IN ('any','extension') AND (j.cooldown_until IS NULL OR j.cooldown_until < datetime('now'))
+    WHERE j.active=1 AND j.runner IN ('any','extension') AND j.type='stock' AND (j.cooldown_until IS NULL OR j.cooldown_until < datetime('now'))
       AND (j.run_now=1 OR j.last_run_at IS NULL OR j.last_run_at < datetime('now', '-' || j.interval_hours || ' hours'))
     ORDER BY j.run_now DESC, j.last_run_at ASC LIMIT 5`).all<any>();
   return c.json({ jobs: results, all: (await c.env.DB.prepare('SELECT id,name,type,active,last_run_at FROM crawl_jobs ORDER BY id').all<any>()).results });
