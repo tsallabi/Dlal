@@ -81,3 +81,12 @@ export function imgUrl(u?: string | null): string {
   try { h = new URL(u).hostname; } catch { return '/placeholder.svg'; }
   return PROXY_HOSTS.test(h) ? `/img/${b64url(u)}` : u;
 }
+
+// نمط LIKE آمن لـD1: الحي يرفض نمطًا فوق 50 بايتًا («LIKE or GLOB pattern too complex» ⟵ خطأ 500)، والمحلي لا يرفض
+// فلا يراه e2e. الحرف العربي بايتان، فكلمة من 25 حرفًا أو رابط ملصوق في البحث كان يُسقط الصفحة (٢٤/٠٩/٢٦).
+export function likePat(s: string): string {
+  const enc = new TextEncoder();
+  let t = String(s ?? '').replace(/[%_]/g, ' ').trim();
+  while (t && enc.encode('%' + t + '%').length > 50) t = t.slice(0, -1);
+  return '%' + t + '%';
+}

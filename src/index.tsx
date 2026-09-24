@@ -104,7 +104,8 @@ export default {
     // ثم إثراء دفعتين من الناقص (50 منتجًا) بادئًا بالمحجوزات فتخرج للمتجر بعنوان عربي.
     ctx.waitUntil((async () => {
       try {
-        if (env.AI) { const r = await retranslatePending(env.DB, env.AI, 40); console.log('cron translate', JSON.stringify(r)); }
+        // الترجمة معزولة: عطل فيها (كنمط LIKE طويل في ٢٤/٠٩/٢٦) كان يُسقط ما بعدها في الكتلة نفسها — ربط طلبات الروابط والإثراء
+        if (env.AI) try { const r = await retranslatePending(env.DB, env.AI, 40); console.log('cron translate', JSON.stringify(r)); } catch (e: any) { console.error('cron translate', e?.message ?? e); }
         // طلبات «اطلبي برابط» التي نُشر منتجها بعد ترجمته (كان مسودة لحظة الاستيراد)
         await settleLinkRequests(env.DB);
         if (!s.src_key) return;

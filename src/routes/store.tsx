@@ -6,7 +6,7 @@ import { ORDER_STATUS, PAYMENT_METHODS, CITIES } from '../types';
 import { Layout, Flash } from '../views/layout';
 import { Grid, ProductCard } from '../views/product-card';
 import { Stars } from '../views/account';
-import { getCategories, PRODUCT_SELECT, fmt, imgUrl, orderCode, timeAgo, notify, realWa } from '../lib/db';
+import { getCategories, PRODUCT_SELECT, fmt, imgUrl, orderCode, timeAgo, notify, realWa, likePat } from '../lib/db';
 import type { ProductRow } from '../lib/db';
 import { KIND_NOTE, type ListingKind } from '../lib/source';
 import { loadSettings, computePrice, shipRates, seaOn } from '../lib/pricing';
@@ -485,7 +485,7 @@ store.get('/search', async (c) => {
   const where = terms.length
     ? "p.status='active' AND " + terms.map(() => '(p.title_ar LIKE ? OR p.description_ar LIKE ?)').join(' AND ')
     : "p.status='active' AND (p.title_ar LIKE ? OR p.description_ar LIKE ?)";
-  const binds = terms.length ? terms.flatMap(w => [`%${w}%`, `%${w}%`]) : [`%${q}%`, `%${q}%`];
+  const binds = terms.length ? terms.flatMap(w => [likePat(w), likePat(w)]) : [likePat(q), likePat(q)];
   return listPage(c, { title: `نتائج البحث: ${q}`, where, binds, q });
 });
 store.get('/sale', (c) => listPage(c, { title: 'عروض وتخفيضات', where: "p.status='active' AND p.home_ok=1 AND p.compare_price_lyd > p.price_lyd", binds: [] }));

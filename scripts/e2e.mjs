@@ -2106,6 +2106,18 @@ expect(!!mOrder, `الطلب اكتمل من الجوال (${mp.url().split('/')
 expect(await has(mp, 'مدفوع') || await has(mp, 'قيد المعالجة') || await has(mp, 'تم استلام'), 'صفحة الطلب تؤكد الدفع للزبونة');
 await mp.screenshot({ path: `${OUT}/${String(++n).padStart(2, '0')}-mobile-order.png` });
 
+// ---------- D1 يرفض نمط LIKE فوق 50 بايتًا (المحلي لا يرفضه فلا يراه أي فحص آخر) — ٢٤/٠٩/٢٦ ----------
+// دفعة الترجمة سقطت على الحي بـ500 «LIKE or GLOB pattern too complex» ساعتين. نحرس المصدر: كل نمط LIKE يمرّ بـlikePat
+{
+  const { readFileSync, readdirSync } = await import('node:fs');
+  const files = ['src/routes', 'src/lib'].flatMap(d => readdirSync(d).filter(f => /\.tsx?$/.test(f)).map(f => `${d}/${f}`));
+  const raw = files.filter(f => /`%\$\{|'% ' \+|LIKE \? AND length/.test(readFileSync(f, 'utf8')));
+  expect(raw.length === 0, `لا نمط LIKE مبنيّ من نص متغيّر خارج likePat (${raw.join('، ') || 'لا شيء'})`);
+  const longQ = 'https://detail.1688.com/offer/712345678901.html?spm=a26352.13672862.offerlist فستان_سهرة_طويل_بأكمام';
+  const rs = await page.goto(BASE + '/search?q=' + encodeURIComponent(longQ));
+  expect(rs.status() === 200 && await page.locator('nav.crumbs').count() > 0, `بحث بنص طويل ملصوق يفتح صفحة نتائج لا خطأ (${rs.status()})`);
+}
+
 // 404
 const r404 = await page.goto(BASE + '/p/not-exist'); expect(r404.status() === 404, 'صفحة غير موجودة تعيد 404');
 

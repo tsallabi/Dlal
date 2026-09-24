@@ -4,7 +4,7 @@ import type { Env } from '../types';
 import { ORDER_STATUS, PAYMENT_METHODS } from '../types';
 import { AdminShell } from '../views/dash';
 import { Flash } from '../views/layout';
-import { getCategories, PRODUCT_SELECT, fmt, imgUrl, timeAgo, latinDigits, realWa, notify } from '../lib/db';
+import { getCategories, PRODUCT_SELECT, fmt, imgUrl, timeAgo, latinDigits, realWa, notify, likePat } from '../lib/db';
 import type { ProductRow } from '../lib/db';
 import { classifyModesty } from '../lib/modesty';
 import { fingerprint, sameProduct } from '../lib/dedupe';
@@ -89,7 +89,7 @@ admin.get('/orders', async (c) => {
   const q = c.req.query('q') ?? '';
   let where = '1=1'; const binds: any[] = [];
   if (st) { where += ' AND o.status=?'; binds.push(st); }
-  if (q) { where += ' AND (o.code LIKE ? OR u.name LIKE ? OR u.phone LIKE ?)'; binds.push(`%${q}%`, `%${q}%`, `%${q}%`); }
+  if (q) { where += ' AND (o.code LIKE ? OR u.name LIKE ? OR u.phone LIKE ?)'; binds.push(likePat(q), likePat(q), likePat(q)); }
   const total = (await c.env.DB.prepare(`SELECT COUNT(*) n FROM orders o JOIN users u ON u.id=o.user_id WHERE ${where}`).bind(...binds).first<{ n: number }>())?.n ?? 0;
   const rows = await c.env.DB.prepare(`SELECT o.*,u.name,u.phone,pa.name AS partner FROM orders o JOIN users u ON u.id=o.user_id LEFT JOIN partners pa ON pa.id=o.partner_id WHERE ${where} ORDER BY o.id DESC LIMIT ? OFFSET ?`).bind(...binds, PER, (pageOf(c) - 1) * PER).all<any>();
   const counts = await c.env.DB.prepare('SELECT status,COUNT(*) n FROM orders GROUP BY status').all<any>();
@@ -182,7 +182,7 @@ admin.post('/orders/:code/status', requirePerm('orders.manage'), async (c) => {
 // ---------- الزبائن ----------
 admin.get('/customers', async (c) => {
   const q = c.req.query('q') ?? '';
-  const rows = await c.env.DB.prepare("SELECT u.id,u.name,u.phone,u.city,u.created_at,u.points,u.active,(SELECT COUNT(*) FROM orders o WHERE o.user_id=u.id) AS n,(SELECT COALESCE(SUM(total_lyd),0) FROM orders o WHERE o.user_id=u.id AND o.status NOT IN ('pending_payment','cancelled','refunded')) AS spent FROM users u WHERE role='customer' AND (u.name LIKE ? OR u.phone LIKE ?) ORDER BY u.id DESC LIMIT 300").bind(`%${q}%`, `%${q}%`).all<any>();
+  const rows = await c.env.DB.prepare("SELECT u.id,u.name,u.phone,u.city,u.created_at,u.points,u.active,(SELECT COUNT(*) FROM orders o WHERE o.user_id=u.id) AS n,(SELECT COALESCE(SUM(total_lyd),0) FROM orders o WHERE o.user_id=u.id AND o.status NOT IN ('pending_payment','cancelled','refunded')) AS spent FROM users u WHERE role='customer' AND (u.name LIKE ? OR u.phone LIKE ?) ORDER BY u.id DESC LIMIT 300").bind(likePat(q), likePat(q)).all<any>();
   return shell(c, 'customers', 'الزبائن', (
     <>
     <form class="inline" style="margin-bottom:10px"><input type="text" name="q" placeholder="اسم / هاتف" value={c.req.query('q') ?? ''} /><button class="btn sm">بحث</button></form>
@@ -390,7 +390,7 @@ const Pager = ({ c, total }: { c: Context<Env>; total: number }) => {
 admin.get('/products', async (c) => {
   const q = c.req.query('q') ?? ''; const st = c.req.query('status') ?? '';
   let where = '1=1'; const binds: any[] = [];
-  if (q) { where += ' AND (p.title_ar LIKE ? OR p.source_offer_id LIKE ?)'; binds.push(`%${q}%`, `%${q}%`); }
+  if (q) { where += ' AND (p.title_ar LIKE ? OR p.source_offer_id LIKE ?)'; binds.push(likePat(q), likePat(q)); }
   if (st) { where += ' AND p.status=?'; binds.push(st); }
   // ?stuck=1 — ما تعذّر إثراؤه بعد ثلاث محاولات من الإضافة المجانية: هؤلاء من يستحق الكريدت
   // ?moq=N — قطع الجملة: حدّها الأدنى N فأكثر. الزبونة لا تستطيع شراء أقل منه،
