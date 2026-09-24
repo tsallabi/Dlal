@@ -2323,6 +2323,62 @@ await mp.screenshot({ path: `${OUT}/${String(++n).padStart(2, '0')}-mobile-order
   }
 }
 
+// ---------- الموظفون: تعديل كامل، حذف، و«ادخل باسمه» (٢٤/٠٩/٢٦) ----------
+// طلب صاحب المشروع: «اجعل بإمكاني الدخول بحساب أي مستخدم لأجربه… وتعديل الموظفين: الأسماء وكلمات السر واسم المستخدم… أو حذف أي موظف»
+{
+  await login(page, '0910000000', 'admin123');
+  const row = (ph) => page.locator(`details.staff-row[data-phone="${ph}"]`);
+  const del = async (ph) => { await page.goto(BASE + '/admin/staff'); if (await row(ph).count()) { page.once('dialog', d => d.accept()); await row(ph).locator('summary').click(); await row(ph).locator('form[action$="/delete"] button').click(); await page.waitForLoadState('networkidle'); } };
+  try {
+    await del('0920000099'); await del('0920000098');   // بقايا تشغيلة سابقة انقطعت
+    await page.goto(BASE + '/admin/staff');
+    const sf = page.locator('form[action="/admin/staff/new"]');
+    await sf.locator('input[name=name]').fill('موظف تجربة'); await sf.locator('input[name=phone]').fill('0920000099');
+    await sf.locator('input[name=password]').fill('temp999'); await sf.locator('select[name=staff_role]').selectOption('support');
+    await sf.locator('button').click(); await page.waitForLoadState('networkidle');
+    expect(await row('0920000099').count() === 1, 'موظف جديد يظهر في قائمة الموظفين');
+    // تعديل كل شيء في نموذج واحد: الاسم والهاتف وكلمة المرور والدور (من إدارة إلى موظف شركة شحن)
+    await row('0920000099').locator('summary').click();
+    const ef = row('0920000099').locator('form.staff-edit');
+    await ef.locator('input[name=name]').fill('موظف تجربة معدّل'); await ef.locator('input[name=phone]').fill('+218 92 000 0098');
+    await ef.locator('input[name=password]').fill('temp998'); await ef.locator('select[name=role_key]').selectOption('partner:1');
+    await ef.locator('button').click(); await page.waitForLoadState('networkidle');
+    expect(await row('0920000098').count() === 1 && await row('0920000099').count() === 0 && (await row('0920000098').textContent()).includes('موظف تجربة معدّل'), 'تعديل الاسم والهاتف (اسم الدخول) يُحفظ بالصيغة الموحّدة');
+    expect((await row('0920000098').textContent()).includes('موظف شحن'), 'تحويل الموظف من الإدارة إلى شركة شحن');
+    await shot(page, 'admin-staff-edit');
+    await login(page, '0920000099', 'temp999');
+    expect(page.url().includes('/login'), 'الرقم وكلمة المرور القديمان لم يعودا يعملان');
+    await login(page, '0920000098', 'temp998'); await page.goto(BASE + '/partner');
+    expect(page.url().endsWith('/partner') && await has(page, 'لوحة الشحن'), 'الدخول بالرقم وكلمة المرور الجديدين يفتح لوحة الشحن (الدور الجديد)');
+    // «ادخل باسمه» من حساب المالك
+    await login(page, '0910000000', 'admin123'); await page.goto(BASE + '/admin/staff');
+    await row('0920000098').locator('summary').click();
+    await row('0920000098').locator('button:has-text("ادخل باسمه")').click(); await page.waitForLoadState('networkidle');
+    expect(page.url().endsWith('/partner') && await page.locator('.imp-bar').isVisible() && (await page.locator('.imp-bar').textContent()).includes('موظف تجربة معدّل'), 'المالك يدخل باسم الموظف فيرى لوحته وشريطًا أحمر باسمه');
+    expect((await page.goto(BASE + '/admin/staff')).status() === 403, 'وهو داخل باسم موظف الشحن لا يرى لوحة الإدارة (يرى ما يراه الموظف تمامًا)');
+    await page.goto(BASE + '/partner'); await shot(page, 'impersonate-partner');
+    await page.click('.imp-bar a'); await page.waitForLoadState('networkidle');
+    expect(page.url().includes('/admin/staff') && !(await page.locator('.imp-bar').count()) && await has(page, 'مصفوفة الصلاحيات'), '«عودة إلى حسابي» يعيد المالك إلى لوحته بلا تسجيل دخول');
+    // زبونة
+    await page.goto(BASE + '/admin/customers'); await page.click('a:has-text("منى التجريبية")'); await page.waitForLoadState('networkidle');
+    await page.click('button:has-text("ادخل باسمها")'); await page.waitForLoadState('networkidle');
+    expect(page.url().endsWith('/account') && await page.locator('.imp-bar').isVisible() && (await page.locator('.imp-bar').textContent()).includes('زبونة'), 'المالك يدخل باسم زبونة فيرى حسابها');
+    await page.goto(BASE + '/logout');
+    expect(page.url().includes('/admin/staff') && !(await page.locator('.imp-bar').count()), '«خروج» أثناء الدخول باسم غيره يعيد المالك إلى حسابه');
+    // الموظف غير المالك لا يرى «ادخل باسمه» ولا يستطيعه
+    await login(page, '0950000000', 'staff123');
+    const forged = await page.evaluate(async (b) => (await fetch(b + '/admin/as/2', { method: 'POST', redirect: 'manual' })).status, BASE);
+    expect(forged === 403, `«ادخل باسمه» للمالك وحده (${forged})`);
+    await login(page, '0910000000', 'admin123');
+  } finally {
+    await del('0920000098'); await del('0920000099');
+  }
+  await page.goto(BASE + '/admin/staff');
+  expect(await row('0920000098').count() === 0, 'حذف الموظف يزيله من القائمة');
+  await login(page, '0920000098', 'temp998');
+  expect(page.url().includes('/login'), 'والمحذوف لا يستطيع الدخول');
+}
+
 // ---------- D1 يرفض نمط LIKE فوق 50 بايتًا (المحلي لا يرفضه فلا يراه أي فحص آخر) — ٢٤/٠٩/٢٦ ----------
 // دفعة الترجمة سقطت على الحي بـ500 «LIKE or GLOB pattern too complex» ساعتين. نحرس المصدر: كل نمط LIKE يمرّ بـlikePat
 {

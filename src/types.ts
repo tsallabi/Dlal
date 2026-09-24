@@ -29,6 +29,8 @@ export type User = {
   address: string | null;
   points: number;
   active: number;
+  imp_by?: number | null;          // جلسة «ادخل باسمه»: معرّف المالك الذي فتحها
+  imp_name?: string | null;
 };
 
 export type Variables = {

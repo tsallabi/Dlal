@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import type { Env } from '../types';
 import { Layout, Flash } from '../views/layout';
 import { getCategories } from '../lib/db';
-import { hashPassword, verifyPassword, createSession, destroySession, normPhone } from '../lib/auth';
+import { hashPassword, verifyPassword, createSession, destroySession, normPhone, endImpersonation } from '../lib/auth';
 
 const auth = new Hono<Env>();
 
@@ -69,6 +69,8 @@ auth.post('/register', async (c) => {
   return c.redirect(next.startsWith('/') ? next : '/');
 });
 
-auth.get('/logout', async (c) => { await destroySession(c); return c.redirect('/'); });
+// «خروج» أثناء «ادخل باسمه» يعيد المالك إلى حسابه بدل أن يُخرجه من الموقع
+auth.get('/logout', async (c) => { if (await endImpersonation(c)) return c.redirect('/admin/staff'); await destroySession(c); return c.redirect('/'); });
+auth.get('/impersonate/end', async (c) => { await endImpersonation(c); return c.redirect('/admin/staff'); });
 
 export default auth;

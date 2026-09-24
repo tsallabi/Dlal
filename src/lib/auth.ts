@@ -28,12 +28,26 @@ export function newId(bytes = 24) {
   return toHex(crypto.getRandomValues(new Uint8Array(bytes)).buffer);
 }
 
-export async function createSession(c: Context<Env>, userId: number) {
+export async function createSession(c: Context<Env>, userId: number, imp?: { by: number; backSid: string }) {
   const id = newId();
-  const expires = new Date(Date.now() + 30 * 86400_000);
-  await c.env.DB.prepare('INSERT INTO sessions(id,user_id,expires_at) VALUES(?,?,?)')
-    .bind(id, userId, expires.toISOString()).run();
+  // جلسة «ادخل باسمه» ساعتان فقط: نسيانها مفتوحة على جهاز مشترك لا يترك حساب الموظف مفتوحًا شهرًا
+  const expires = new Date(Date.now() + (imp ? 2 * 3600_000 : 30 * 86400_000));
+  await c.env.DB.prepare('INSERT INTO sessions(id,user_id,expires_at,imp_by,back_sid) VALUES(?,?,?,?,?)')
+    .bind(id, userId, expires.toISOString(), imp?.by ?? null, imp?.backSid ?? null).run();
   setCookie(c, 'sid', id, { path: '/', httpOnly: true, sameSite: 'Lax', expires, secure: c.req.url.startsWith('https') });
+}
+
+// الخروج من «ادخل باسمه»: تُحذف جلسة الانتحال ويعود المالك إلى جلسته الأصلية إن بقيت صالحة
+export async function endImpersonation(c: Context<Env>): Promise<boolean> {
+  const sid = getCookie(c, 'sid');
+  if (!sid) return false;
+  const s = await c.env.DB.prepare("SELECT imp_by,back_sid FROM sessions WHERE id=?").bind(sid).first<{ imp_by: number | null; back_sid: string | null }>();
+  if (!s?.imp_by) return false;
+  await c.env.DB.prepare('DELETE FROM sessions WHERE id=?').bind(sid).run();
+  const back = s.back_sid ? await c.env.DB.prepare("SELECT expires_at FROM sessions WHERE id=? AND user_id=? AND expires_at > datetime('now')").bind(s.back_sid, s.imp_by).first<{ expires_at: string }>() : null;
+  if (!back) { deleteCookie(c, 'sid', { path: '/' }); return true; }
+  setCookie(c, 'sid', s.back_sid!, { path: '/', httpOnly: true, sameSite: 'Lax', expires: new Date(back.expires_at), secure: c.req.url.startsWith('https') });
+  return true;
 }
 
 export async function destroySession(c: Context<Env>) {
@@ -46,7 +60,8 @@ export async function loadUser(c: Context<Env>): Promise<User | null> {
   const sid = getCookie(c, 'sid');
   if (!sid) return null;
   const row = await c.env.DB.prepare(
-    `SELECT u.id,u.phone,u.name,u.email,u.role,u.staff_role,u.partner_id,u.city,u.address,u.points,u.active
+    `SELECT u.id,u.phone,u.name,u.email,u.role,u.staff_role,u.partner_id,u.city,u.address,u.points,u.active,
+            s.imp_by,(SELECT name FROM users WHERE id=s.imp_by) AS imp_name
      FROM sessions s JOIN users u ON u.id=s.user_id
      WHERE s.id=? AND s.expires_at > datetime('now')`,
   ).bind(sid).first<User>();

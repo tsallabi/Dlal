@@ -8,7 +8,8 @@ import { Flash } from '../views/layout';
 import { Stars } from '../views/account';
 import { getCategories, fmt, timeAgo, notify } from '../lib/db';
 import { liveState, agoAr, type LiveState } from '../lib/crawl-live';
-import { hashPassword, requireRole, normPhone } from '../lib/auth';
+import { hashPassword, requireRole, normPhone, createSession } from '../lib/auth';
+import { getCookie } from 'hono/cookie';
 import { requirePerm, STAFF_ROLES, ROLE_PERMS, PERM_LABELS, logActivity, permsOf } from '../lib/perm';
 import { loadSettings } from '../lib/pricing';
 import { mypayBase, loadMyPay, checkConnection } from '../lib/mypay';
@@ -354,6 +355,7 @@ ops.get('/customers/:id', async (c) => {
       <div>
         <div class="card-box"><h3>البيانات</h3>{u.phone}<br />{u.email ?? '—'}<br />{u.city ?? '—'}<br /><small>مسجلة {timeAgo(u.created_at)}</small><hr />{addrs.results.map(a => <div style="font-size:13px">📍 {a.name} · {a.phone} · {a.city} — {a.address}</div>)}</div>
         {canM && <form method="post" action={`/admin/customers/${id}/points`} class="card-box"><h3>تعديل النقاط</h3><div class="inline"><input type="number" name="delta" placeholder="+50 أو -20" required /><input type="text" name="reason" placeholder="السبب" required /><button class="btn sm">تطبيق</button></div></form>}
+        {c.get('user')!.staff_role === 'owner' && !c.get('user')!.imp_by && u.active ? <form method="post" action={`/admin/as/${id}`} class="card-box"><h3>جرّب الموقع بحسابها</h3><p style="font-size:12px;color:#666;margin:0 0 8px">يفتح المتجر كما تراه هي: سلتها وطلباتها وإشعاراتها. ما تفعله يُحفظ باسمها — لا تدفع ولا تلغِ طلبًا. «عودة إلى حسابي» من الشريط الأحمر.</p><button class="btn sm ok">👁 ادخل باسمها</button></form> : null}
         {canM && <form method="post" action={`/admin/customers/${id}/toggle`} class="card-box"><h3>الحساب</h3><button class="btn sm ghost" style={u.active ? 'color:#d3262b' : ''}>{u.active ? 'تعطيل الحساب' : 'تفعيل الحساب'}</button></form>}
         <div class="card-box"><h3>سجل النقاط</h3>{pts.results.map(l => <div style="font-size:13px;display:flex;justify-content:space-between;border-bottom:1px solid #eee;padding:4px 0"><span>{l.reason}</span><b style={`color:${l.delta > 0 ? '#1a9c5b' : '#d3262b'}`}>{l.delta > 0 ? '+' : ''}{l.delta}</b></div>)}</div>
       </div>
@@ -366,17 +368,47 @@ ops.post('/customers/:id/toggle', requirePerm('customers.manage'), async (c) => 
 // ---------- الموظفون والصلاحيات ----------
 ops.use('/staff*', requirePerm('staff.manage'));
 ops.get('/staff', async (c) => {
-  const rows = await c.env.DB.prepare("SELECT u.id,u.name,u.phone,u.role,u.staff_role,u.active,u.last_login_at,p.name AS partner FROM users u LEFT JOIN partners p ON p.id=u.partner_id WHERE u.role IN ('admin','partner') ORDER BY u.role,u.id").all<any>();
+  const rows = await c.env.DB.prepare("SELECT u.id,u.name,u.phone,u.role,u.staff_role,u.partner_id,u.active,u.last_login_at,p.name AS partner FROM users u LEFT JOIN partners p ON p.id=u.partner_id WHERE u.role IN ('admin','partner') AND u.phone NOT GLOB 'deleted-*' ORDER BY u.role,u.id").all<any>();
   const partners = await c.env.DB.prepare('SELECT id,name FROM partners').all<any>();
   const me = c.get('user')!;
+  const owner = me.staff_role === 'owner' && !me.imp_by;
+  const errs: Record<string, string> = { '1': 'رقم الهاتف مستخدم لحساب آخر', phone: 'رقم الهاتف مستخدم لحساب آخر', partner: 'اختر شركة موظف الشحن', pw: 'كلمة المرور 6 أحرف على الأقل' };
   return shell(c, 'staff', 'الموظفون والصلاحيات', (
     <>
-      <Flash msg={c.req.query('ok') ? 'تم ✓' : undefined} /><Flash type="err" msg={c.req.query('err') ? 'رقم الهاتف مستخدم' : undefined} />
+      <Flash msg={c.req.query('ok') ? 'تم ✓' : undefined} /><Flash type="err" msg={errs[c.req.query('err') ?? ''] ?? (c.req.query('err') ? 'تعذّر الحفظ' : undefined)} />
       <div class="two staff-grid">
         <div>
-          <div class="tbl-wrap"><table class="tbl"><tr><th>الاسم</th><th>الهاتف</th><th>الدور</th><th>الشريك</th><th>الحالة</th><th></th></tr>
-            {rows.results.map(u => <tr><form method="post" action={`/admin/staff/${u.id}`}><td>{u.name}</td><td>{u.phone}</td><td>{u.role === 'partner' ? 'موظف شريك شحن' : <select name="staff_role" disabled={u.id === me.id}>{(Object.keys(STAFF_ROLES) as StaffRole[]).map(r => <option value={r} selected={r === (u.staff_role ?? 'admin')}>{STAFF_ROLES[r].ar}</option>)}</select>}</td><td>{u.partner ?? '—'}</td><td><span class={`status ${u.active ? 'green' : 'red'}`}>{u.active ? 'نشط' : 'معطّل'}</span></td><td class="inline">{u.id !== me.id && <><button class="btn sm ghost" name="action" value="save">حفظ</button><button class="btn sm ghost" name="action" value="toggle">{u.active ? 'تعطيل' : 'تفعيل'}</button><input type="text" name="password" placeholder="كلمة مرور جديدة" style="width:130px" /><button class="btn sm ghost" name="action" value="password">تعيين</button></>}</td></form></tr>)}
-          </table></div>
+          <p style="font-size:13px;color:#555;margin:0 0 10px">اضغط <b>«تعديل»</b> لتغيير الاسم أو الهاتف (اسم الدخول) أو كلمة المرور أو الدور أو الشركة — تستطيع تحويل الحساب نفسه إلى موظف آخر. {owner && <>و<b>«ادخل باسمه»</b> يفتح الموقع كما يراه ذلك الموظف لتجرّبه بنفسك، ثم «عودة إلى حسابي» من الشريط الأحمر أعلى الصفحة.</>}</p>
+          <div class="staff-list">
+            {rows.results.map(u => (
+              <details class="staff-row" data-phone={u.phone}>
+                <summary>
+                  <b>{u.name}</b><span dir="ltr">{u.phone}</span>
+                  <span>{u.role === 'partner' ? `موظف شحن · ${u.partner ?? '—'}` : STAFF_ROLES[(u.staff_role ?? 'admin') as StaffRole]?.ar}</span>
+                  <span class={`status ${u.active ? 'green' : 'red'}`}>{u.active ? 'نشط' : 'معطّل'}</span>
+                  <small>{u.last_login_at ? `آخر دخول ${timeAgo(u.last_login_at)}` : 'لم يدخل بعد'}</small>
+                  <span class="btn sm ghost">تعديل ▾</span>
+                </summary>
+                <form method="post" action={`/admin/staff/${u.id}/edit`} class="staff-edit">
+                  <label>الاسم</label><input type="text" name="name" value={u.name} required />
+                  <label>الهاتف (اسم الدخول)</label><input type="tel" name="phone" value={u.phone} dir="ltr" required />
+                  <label>كلمة مرور جديدة <small>(اتركها فارغة لتبقى الحالية)</small></label><input type="text" name="password" minlength={6} autocomplete="new-password" />
+                  {u.id === me.id ? <p style="font-size:12px;color:#666">لا تستطيع تغيير دورك أنت.</p> : <>
+                    <label>الدور</label>
+                    <select name="role_key">
+                      {(Object.keys(STAFF_ROLES) as StaffRole[]).map(r => <option value={`admin:${r}`} selected={u.role === 'admin' && r === (u.staff_role ?? 'admin')}>موظف إدارة — {STAFF_ROLES[r].ar}</option>)}
+                      {partners.results.map(p => <option value={`partner:${p.id}`} selected={u.role === 'partner' && u.partner_id === p.id}>موظف شركة شحن — {p.name}</option>)}
+                    </select></>}
+                  <button class="btn sm dark">حفظ التعديلات</button>
+                </form>
+                {u.id !== me.id && <div class="inline staff-acts">
+                  <form method="post" action={`/admin/staff/${u.id}`}><button class="btn sm ghost" name="action" value="toggle">{u.active ? 'تعطيل الدخول' : 'تفعيل الدخول'}</button></form>
+                  {owner && u.active && u.staff_role !== 'owner' && <form method="post" action={`/admin/as/${u.id}`}><button class="btn sm ok">👁 ادخل باسمه</button></form>}
+                  <form method="post" action={`/admin/staff/${u.id}/delete`}><button class="btn sm ghost" style="color:#d3262b" onclick={`return confirm('حذف ${String(u.name).replace(/'/g, '')} نهائيًا؟ لن يستطيع الدخول، ويصير رقمه متاحًا لحساب جديد.')`}>حذف</button></form>
+                </div>}
+              </details>
+            ))}
+          </div>
           <div class="card-box"><h3>مصفوفة الصلاحيات</h3><div class="tbl-wrap"><table class="tbl perm-matrix"><tr><th>الصلاحية</th>{(Object.keys(STAFF_ROLES) as StaffRole[]).map(r => <th>{STAFF_ROLES[r].ar}</th>)}</tr>
             {(Object.keys(PERM_LABELS) as (keyof typeof PERM_LABELS)[]).map(p => <tr><td>{PERM_LABELS[p]}</td>{(Object.keys(STAFF_ROLES) as StaffRole[]).map(r => <td style="text-align:center">{ROLE_PERMS[r].includes(p) ? '✓' : <span style="color:#ccc">—</span>}</td>)}</tr>)}
           </table></div></div>
@@ -386,7 +418,7 @@ ops.get('/staff', async (c) => {
           {/* سأل صاحب المشروع «أي صلاحية أعطيها لشريك الشحن بحيث لا يرى عملي؟»: صلاحيات الإدارة لا تخصّه أصلًا.
               دور «موظف شركة شحن» لا يدخل /admin إطلاقًا (403) ويرى طلبات شركته وحدها. الحقلان يتبدّلان بحسب الدور */}
           <label>الدور</label><select name="role" onchange="var p=this.value==='partner';this.form.querySelector('.st-admin').hidden=p;this.form.querySelector('.st-partner').hidden=!p;this.form.partner_id.required=p"><option value="admin">موظف إدارة عندك (اختر صلاحيته أدناه)</option><option value="partner">موظف شركة شحن (يرى طلبات شركته فقط)</option></select>
-          <div class="st-admin"><label>صلاحية الإدارة</label><select name="staff_role">{(Object.keys(STAFF_ROLES) as StaffRole[]).map(r => <option value={r}>{STAFF_ROLES[r].ar} — {STAFF_ROLES[r].desc}</option>)}</select></div>
+          <div class="st-admin"><label>صلاحية الإدارة</label><select name="staff_role">{(Object.keys(STAFF_ROLES) as StaffRole[]).map(r => <option value={r} selected={r === 'support'}>{STAFF_ROLES[r].ar} — {STAFF_ROLES[r].desc}</option>)}</select></div>
           <div class="st-partner" hidden><label>الشركة</label><select name="partner_id"><option value="">— اختر الشركة —</option>{partners.results.map(p => <option value={p.id}>{p.name}</option>)}</select>
             <p style="font-size:12px;color:#555;margin:6px 0 0">موظف الشركة لا يدخل لوحة الإدارة أبدًا، ولا يرى الأسعار ولا الأرباح ولا الزبائن الآخرين ولا طلبات الشركات الأخرى. يرى طلبات شركته فقط في <b>hudhude.com/partner</b>: يشتري ويغيّر الحالة ويرفع الصور والفواتير ويضع أسعاره.</p></div>
           <button class="btn" style="margin-top:10px">إضافة</button></form>
@@ -412,6 +444,56 @@ ops.post('/staff/:id', async (c) => {
   else if (f.staff_role && STAFF_ROLES[String(f.staff_role) as StaffRole]) await db.prepare("UPDATE users SET staff_role=? WHERE id=? AND role='admin'").bind(String(f.staff_role), id).run();
   await logActivity(db, me.id, `staff.${f.action ?? 'save'}`, String(id), f.staff_role ? String(f.staff_role) : undefined);
   return c.redirect('/admin/staff?ok=1');
+});
+
+// تعديل موظف كاملًا: الاسم والهاتف (اسم الدخول) وكلمة المرور والدور والشركة — «الحساب نفسه لموظف آخر»
+ops.post('/staff/:id/edit', async (c) => {
+  const f = await c.req.parseBody(); const db = c.env.DB; const id = Number(c.req.param('id')); const me = c.get('user')!;
+  const u = await db.prepare("SELECT id,role FROM users WHERE id=? AND role IN ('admin','partner')").bind(id).first<any>();
+  if (!u) return c.redirect('/admin/staff');
+  const phone = normPhone(String(f.phone ?? ''));
+  const name = String(f.name ?? '').trim().slice(0, 80);
+  if (!name || phone.length < 9) return c.redirect('/admin/staff?err=save');
+  if (await db.prepare('SELECT 1 FROM users WHERE phone=? AND id<>?').bind(phone, id).first()) return c.redirect('/admin/staff?err=phone');
+  const pw = String(f.password ?? '');
+  if (pw && pw.length < 6) return c.redirect('/admin/staff?err=pw');
+  const sets = ['name=?', 'phone=?']; const binds: any[] = [name, phone];
+  if (pw) { sets.push('password_hash=?'); binds.push(await hashPassword(pw)); }
+  // الدور: «admin:ops» أو «partner:3». لا يغيّر أحد دوره هو (قد يُخرج نفسه من اللوحة)
+  const rk = String(f.role_key ?? '');
+  if (id !== me.id && rk) {
+    const [kind, val] = rk.split(':');
+    if (kind === 'admin' && STAFF_ROLES[val as StaffRole]) { sets.push("role='admin'", 'staff_role=?', 'partner_id=NULL'); binds.push(val); }
+    else if (kind === 'partner' && Number(val) > 0) { sets.push("role='partner'", 'staff_role=NULL', 'partner_id=?'); binds.push(Number(val)); }
+  }
+  await db.prepare(`UPDATE users SET ${sets.join(',')} WHERE id=?`).bind(...binds, id).run();
+  // كلمة مرور جديدة أو دور جديد: تُغلق جلساته المفتوحة فيدخل بالجديد
+  if ((pw || rk) && id !== me.id) await db.prepare('DELETE FROM sessions WHERE user_id=?').bind(id).run();
+  await logActivity(db, me.id, 'staff.edit', String(id), `${name} ${phone}${pw ? ' +pw' : ''}${rk ? ' ' + rk : ''}`);
+  return c.redirect('/admin/staff?ok=1');
+});
+// حذف موظف: يُمحى إن لم يترك أثرًا؛ وإلا (سجل طلبات، نشاط) يُعطَّل ويُحرَّر رقمه ويختفي من القائمة — السجلّات تبقى صحيحة
+ops.post('/staff/:id/delete', async (c) => {
+  const db = c.env.DB; const id = Number(c.req.param('id')); const me = c.get('user')!;
+  if (id === me.id) return c.redirect('/admin/staff');
+  const u = await db.prepare("SELECT id,name,phone,staff_role FROM users WHERE id=? AND role IN ('admin','partner')").bind(id).first<any>();
+  if (!u || u.staff_role === 'owner') return c.redirect('/admin/staff');
+  await db.prepare('DELETE FROM sessions WHERE user_id=?').bind(id).run();
+  try { await db.prepare('DELETE FROM users WHERE id=?').bind(id).run(); }
+  catch { await db.prepare("UPDATE users SET active=0,phone='deleted-'||id,name=name||' (محذوف)' WHERE id=?").bind(id).run(); }
+  await logActivity(db, me.id, 'staff.delete', String(id), `${u.name} ${u.phone}`);
+  return c.redirect('/admin/staff?ok=1');
+});
+
+// «ادخل باسمه»: للمالك وحده. جلسة ساعتين باسم الحساب، تحمل جلسة المالك ليعود إليها، وشريط أحمر على كل صفحة
+ops.post('/as/:id', async (c) => {
+  const db = c.env.DB; const id = Number(c.req.param('id')); const me = c.get('user')!;
+  if (me.staff_role !== 'owner' || me.imp_by || id === me.id) return c.text('غير مصرح', 403);
+  const u = await db.prepare('SELECT id,role,staff_role,active,name,phone FROM users WHERE id=?').bind(id).first<any>();
+  if (!u || !u.active || u.staff_role === 'owner') return c.redirect('/admin/staff?err=save');
+  await createSession(c, id, { by: me.id, backSid: getCookie(c, 'sid') ?? '' });
+  await logActivity(db, me.id, 'user.impersonate', String(id), `${u.name} ${u.phone}`);
+  return c.redirect(u.role === 'partner' ? '/partner' : u.role === 'admin' ? '/admin' : '/account');
 });
 
 // ---------- الزاحف: إضافة المتصفح ----------
