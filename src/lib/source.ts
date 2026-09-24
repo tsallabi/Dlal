@@ -1,3 +1,4 @@
+import { junkAttr } from './attr-en';
 // ماذا تستلم الزبونة فعلًا؟ بعض إعلانات 1688 سليمة لكن عنوانها وحده لا يكفي:
 // حامل عرض يصل فارغًا والبضاعة في صورته للتوضيح، وزهرة «طبيعية المظهر» صناعية.
 // لا نُخفيها — صاحب المشروع طلب التوضيح لا الإخفاء (22/09/26) — بل نشرحها على الرف.
@@ -54,7 +55,8 @@ const ATTR_NOISE = new Set([
 export function attrValue(v: string | null | undefined): string | null {
   const t = String(v ?? '').trim().replace(/[:\uFF1A]\s*$/, '').trim();
   if (!t) return null;
-  return ATTR_NOISE.has(t.toLowerCase()) ? null : t;
+  // شظايا جدول المواصفات («non-returnable]»، «Capacity»، «Length (cm)») ليست لونًا ولا مقاسًا
+  return ATTR_NOISE.has(t.toLowerCase()) || junkAttr(t) ? null : t;
 }
 
 // وزن المورّد يأتي عادةً بالكيلوغرام، وبعضهم يكتبه بالغرام في نفس الحقل. ضربُ الغرامات

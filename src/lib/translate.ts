@@ -2,6 +2,7 @@
 export const hasCJK = (s: string | null | undefined) => /[一-鿿]/.test(s ?? '');
 
 // قاموس الألوان والمقاسات والكلمات المتكررة في متغيرات 1688
+import { enAttr, needsEnTr, junkAttr, sizeCase } from './attr-en';
 export const DICT: Record<string, string> = {
   黑色: 'أسود', 黑: 'أسود', 白色: 'أبيض', 白: 'أبيض', 米白: 'أبيض عاجي', 米色: 'بيج', 杏色: 'مشمشي', 卡其色: 'كاكي', 卡其: 'كاكي', 灰色: 'رمادي', 灰: 'رمادي', 深灰: 'رمادي غامق', 浅灰: 'رمادي فاتح',
   红色: 'أحمر', 红: 'أحمر', 酒红: 'عنابي', 酒红色: 'عنابي', 粉色: 'وردي', 粉红: 'وردي', 粉: 'وردي', 玫红: 'فوشيا', 玫红色: 'فوشيا', 橙色: 'برتقالي', 橘色: 'برتقالي', 黄色: 'أصفر', 黄: 'أصفر', 姜黄: 'خردلي',
@@ -147,7 +148,7 @@ export function cleanTitle(t: string): string {
 const TITLE_MODELS = ['@cf/meta/llama-4-scout-17b-16e-instruct', '@cf/meta/llama-3.3-70b-instruct-fp8-fast', '@cf/mistralai/mistral-small-3.1-24b-instruct', '@cf/meta/llama-3.1-8b-instruct-fp8'];
 const SHORT_MODELS = ['@cf/mistralai/mistral-small-3.1-24b-instruct', '@cf/meta/llama-4-scout-17b-16e-instruct', '@cf/meta/llama-3.3-70b-instruct-fp8-fast'];
 const SYS_TITLE = 'أنت مترجم لمتجر أزياء عربي. حوّل عنوان منتج من موقع 1688 (صيني محشو بكلمات مفتاحية) إلى عنوان منتج عربي قصير وطبيعي من 5 إلى 14 كلمة يصف المنتج للزبون. احذف عبارات مثل "تجارة خارجية"، "عبر الحدود"، "جديد 2025"، "بالجملة"، "موديل جديد". اذكر ما يميّز هذه القطعة تحديدًا (الخامة أو المقاس أو عدد القطع أو الاستعمال) ولا تكتفِ بوصف عام يصلح لعشرات المنتجات. أجب بالعنوان العربي فقط، بلا شرح ولا علامات اقتباس.';
-const SYS_ATTR = 'ترجم قيمة خاصية منتج (لون أو مقاس أو نمط) من الصينية إلى العربية بكلمة أو كلمتين كما تُكتب في متجر ملابس. احتفظ برموز المقاسات اللاتينية (S, M, L, XL, 2XL) والأرقام كما هي بلا تعريب. 均码 تعني "مقاس واحد". أجب بالترجمة فقط.';
+const SYS_ATTR = 'ترجم قيمة خاصية منتج (لون أو مقاس أو نمط) من الصينية أو الإنجليزية إلى العربية بكلمة أو كلمتين كما تُكتب في متجر ملابس. احتفظ برموز المقاسات اللاتينية (S, M, L, XL, 2XL) والأرقام كما هي بلا تعريب. 均码 تعني "مقاس واحد". أجب بالترجمة فقط.';
 const SYS_TEXT = 'ترجم النص التالي من الصينية إلى العربية بشكل طبيعي وقصير. أجب بالترجمة فقط.';
 // مسرد مصطلحات: كلمات صينية أخطأ فيها النموذج فعلًا على الرف الحي، تُمرَّر إليه في الطلب
 // بدل انتظار أن يصيبها من تلقائه. أضف هنا أي كلمة تتكرر خطأً — أرخص من إعادة الترجمة مرارًا.
@@ -214,10 +215,12 @@ export class Translator {
   async t(text: string | null | undefined, kind: 'text' | 'attr' | 'title' = 'text', hintEn?: string | null, extra?: string): Promise<string | null> {
     // النص المكسور (عربي ملتصق بلاتيني) يمرّ إلى الترجمة كما يمرّ الصيني: كلاهما لا يُقرأ.
     // بدون هذا كانت الدالة تُعيد «الرetro الأسود» كما هي لأنها بلا حرف صيني واحد.
-    if (!text || (!hasCJK(text) && !mixedScript(text))) return text ?? null;
+    // وقيمة الخاصية الإنجليزية («Navy blue»، «Female XL») تُترجم أيضًا: كانت تمرّ كما هي إلى منتقي اللون
+    const en = kind === 'attr' && needsEnTr(text);
+    if (!text || (!hasCJK(text) && !mixedScript(text) && !en)) return text ?? null;
     const k = norm(text);
     if (!extra && this.mem.has(k)) return this.mem.get(k)!;
-    const d = kind === 'attr' ? dictTranslate(k) : null;
+    const d = kind === 'attr' ? (en ? enAttr(k) : dictTranslate(k)) : null;
     if (d !== null) { this.mem.set(k, d); return d; }
     const row = extra ? null : await this.db.prepare('SELECT dst FROM translations WHERE src=?').bind(k).first<{ dst: string }>().catch(() => null);
     // الذاكرة قد تكون مسمومة: ترجمة مكسورة محفوظة تُعاد إلى الأبد فلا يتغيّر العنوان مهما
@@ -272,7 +275,7 @@ export async function sweepMashedTitles(db: D1Database, minTries = 2): Promise<n
 }
 
 // إعادة ترجمة ما بقي صينيًا أو ما تُرجم ترجمة رديئة (تكرار) — تُستخدم من الأدمن ومن /api/source/translate
-export async function retranslatePending(db: D1Database, ai: any, limit = 40): Promise<{ products: number; variants: number; tried: number; remaining: number; held: number; variantsLeft: number; released: number; swept: number }> {
+export async function retranslatePending(db: D1Database, ai: any, limit = 40): Promise<{ products: number; variants: number; tried: number; remaining: number; held: number; variantsLeft: number; released: number; swept: number; enFixed: number; enDropped: number; enLeft: number }> {
   const tr = new Translator(db, ai, limit + 60);
   // الأقل محاولةً أولًا: عنوان عصيّ على الترجمة لا يبتلع كل دفعة ويمنع بقية الكتالوج
   // العنوان المكسور («زippers»، «الكitchen») يدخل الطابور كما يدخله الصيني: كلاهما نص لا يُقرأ.
@@ -345,6 +348,7 @@ export async function retranslatePending(db: D1Database, ai: any, limit = 40): P
         OR color GLOB '*[\u0621-\u064A][a-zA-Z]*' OR color GLOB '*[a-zA-Z][\u0621-\u064A]*'
         OR size  GLOB '*[\u0621-\u064A][a-zA-Z]*' OR size  GLOB '*[a-zA-Z][\u0621-\u064A]*' LIMIT 120`).all<any>();
   for (const v of vs.results) { const cc = await tr.t(v.color, 'attr'); const sz = await tr.t(v.size, 'attr'); if (cc !== v.color || sz !== v.size) { await db.prepare('UPDATE variants SET color=?,size=? WHERE id=?').bind(cc, sz, v.id).run(); nv++; } }
+  const en = await fixEnglishVariants(db, tr);
   // كم بقي عليه نص لا يُقرأ (صيني أو مكسور) — ليعرف المُشغِّل متى يتوقف
   const left = await db.prepare(`SELECT COUNT(*) n,SUM(status='draft') d FROM products
      WHERE title_ar GLOB '*[一-龥]*' OR ${MASHED} OR ${NO_AR} OR ${BROKEN_SQL}`).first<{ n: number; d: number }>();
@@ -354,5 +358,40 @@ export async function retranslatePending(db: D1Database, ai: any, limit = 40): P
         OR size  GLOB '*[\u0621-\u064A][a-zA-Z]*' OR size  GLOB '*[a-zA-Z][\u0621-\u064A]*'`).first<{ n: number }>();
   const released = await releaseHeldDrafts(db);
   const swept = await sweepMashedTitles(db);
-  return { products: n, variants: nv, tried, remaining: left?.n ?? 0, held: left?.d ?? 0, variantsLeft: vLeft?.n ?? 0, released, swept };
+  return { products: n, variants: nv, tried, remaining: left?.n ?? 0, held: left?.d ?? 0, variantsLeft: vLeft?.n ?? 0, released, swept, enFixed: en.fixed, enDropped: en.dropped, enLeft: await englishVariantsLeft(db) };
+}
+
+// قيم ألوان ومقاسات إنجليزية: قيمةً مميّزة لا سطرًا (القيمة الواحدة على مئات الأسطر)، والقاموس أولًا ثم النموذج.
+// الشظيّة (رأس عمود أو صفة دعائية) تُحذف من المنتقي، وما لا يحتاج شيئًا («XXL») أو عجز عنه النموذج
+// ثلاثًا يُسجَّل في attr_seen فلا يعود إلى رأس الدفعة التالية.
+const EN_SQL = (f: string) => `${f} GLOB '*[A-Za-z][A-Za-z][A-Za-z]*' AND ${f} NOT GLOB '*[ء-ي]*' AND ${f} NOT GLOB '*[一-龥]*'
+   AND ${f} NOT IN (SELECT src FROM attr_seen WHERE tries >= 3)`;
+export async function fixEnglishVariants(db: D1Database, tr: Translator, limit = 100): Promise<{ fixed: number; dropped: number }> {
+  let fixed = 0, dropped = 0;
+  // شظايا عربية قديمة من الترجمة: «جميع المقاسات متوفرة»، «حجم المادة: حرير الحليب 230 جرام…»
+  for (const f of ['color', 'size'] as const) {
+    const r = await db.prepare(`UPDATE variants SET ${f}=NULL WHERE ${f} IN ('جميع المقاسات متوفرة','جميع المقاسات','المقاسات متوفرة') OR (${f} LIKE '%:%' AND length(${f}) > 20)`).run();
+    dropped += r.meta?.changes ?? 0;
+  }
+  for (const f of ['color', 'size'] as const) {
+    const { results } = await db.prepare(`SELECT ${f} v, COUNT(*) n FROM variants WHERE ${EN_SQL(f)} GROUP BY ${f} ORDER BY n DESC LIMIT ?`).bind(limit).all<{ v: string; n: number }>();
+    for (const { v } of results) {
+      if (junkAttr(v)) { await db.prepare(`UPDATE variants SET ${f}=NULL WHERE ${f}=?`).bind(v).run(); dropped++; continue; }
+      const up = sizeCase(v);   // «Xxl» ⟵ «XXL»
+      if (up) { await db.prepare(`UPDATE variants SET ${f}=? WHERE ${f}=?`).bind(up, v).run(); fixed++; continue; }
+      if (!needsEnTr(v)) { await db.prepare("INSERT INTO attr_seen(src,tries) VALUES(?,99) ON CONFLICT(src) DO UPDATE SET tries=99").bind(v).run(); continue; }
+      const calls = tr.aiCalls;
+      const out = await tr.t(v, 'attr');
+      if (out && out !== v && /[\u0600-\u06FF]/.test(out) && !needsEnTr(out)) { await db.prepare(`UPDATE variants SET ${f}=? WHERE ${f}=?`).bind(out.slice(0, 60), v).run(); fixed++; }
+      // محاولة تُعدّ فقط إن سُئل النموذج فعلًا: نفاد ميزانية الدفعة ليس عجزًا عن القيمة
+      else if (tr.aiCalls > calls) await db.prepare("INSERT INTO attr_seen(src,tries) VALUES(?,1) ON CONFLICT(src) DO UPDATE SET tries=tries+1,at=datetime('now')").bind(v).run();
+    }
+  }
+  return { fixed, dropped };
+}
+// كم قيمة إنجليزية بقيت على الرف (منتجات نشطة) — يجب أن تصل إلى صفر
+export async function englishVariantsLeft(db: D1Database): Promise<number> {
+  const r = await db.prepare(`SELECT COUNT(*) n FROM variants v JOIN products p ON p.id=v.product_id WHERE p.status='active'
+     AND ((${EN_SQL('v.color')}) OR (${EN_SQL('v.size')}))`).first<{ n: number }>();
+  return r?.n ?? 0;
 }

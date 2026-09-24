@@ -11,6 +11,7 @@ import { getProvider } from '../lib/source-providers';
 import { runServerJobs } from '../lib/crawl';
 import { liveState } from '../lib/crawl-live';
 import { settleLinkRequests } from '../lib/link-requests';
+import { fixEnglishVariants, englishVariantsLeft, Translator } from '../lib/translate';
 import { retranslatePending, releaseHeldDrafts, diagnoseTitle, hasCJK, dropCJKWords, dictTranslate, mixedScript, dropMixedWords, goodTitle, sweepMashedTitles, brokenTitle, BROKEN_SQL } from '../lib/translate';
 
 const api = new Hono<Env>();
@@ -419,7 +420,7 @@ api.post('/source/stats', async (c) => {
        OR (SELECT COUNT(*) FROM variants v WHERE v.product_id=p.id) = 0
        OR p.weight_g IS NULL)`).first<any>();
   const { results: jobs } = await db.prepare('SELECT id,name,type,query,runner,active,max_pages,max_new,interval_hours,last_run_at,last_summary FROM crawl_jobs ORDER BY id').all<any>();
-  return c.json({ totals: { products: tot?.n ?? 0, active: tot?.a ?? 0, from1688: tot?.s ?? 0, providerCalls: src?.n ?? 0, outOfStock: tot?.oos ?? 0, chineseTitles: cn?.n ?? 0, chineseVisible: cn?.a ?? 0, heldDraft: tot?.dr ?? 0, needEnrich: thin?.n ?? 0, mashedTitles: broken?.t ?? 0, englishTitles: broken?.e ?? 0, mashedVariants: broken?.v ?? 0, brokenTitles: broken?.b ?? 0 }, categories: cats, jobs });
+  return c.json({ totals: { products: tot?.n ?? 0, active: tot?.a ?? 0, from1688: tot?.s ?? 0, providerCalls: src?.n ?? 0, outOfStock: tot?.oos ?? 0, chineseTitles: cn?.n ?? 0, chineseVisible: cn?.a ?? 0, heldDraft: tot?.dr ?? 0, needEnrich: thin?.n ?? 0, mashedTitles: broken?.t ?? 0, englishTitles: broken?.e ?? 0, mashedVariants: broken?.v ?? 0, brokenTitles: broken?.b ?? 0, englishVariants: await englishVariantsLeft(db) }, categories: cats, jobs });
 });
 
 // لماذا يرفض النظام ترجمة عناوين بعينها؟ يعيد الردّ الخام وحكم كل بوابة على أول N عنوان عالق
@@ -468,11 +469,16 @@ api.post('/source/translate', async (c) => {
   if (!tokenOk(c)) return c.json({ error: 'رمز غير صحيح' }, 401);
   const b = await c.req.json<{ limit?: number; sweepFrom?: number }>().catch(() => ({} as any));
   // إطلاق المسودات وكنس العناوين المكسورة لا يحتاجان نموذجًا: يعملان حتى بلا Workers AI (النسخة المحلية)
-  if (!c.env.AI) return c.json({
-    error: 'لا يوجد Workers AI',
-    released: await releaseHeldDrafts(c.env.DB),
-    swept: await sweepMashedTitles(c.env.DB, Math.max(0, b.sweepFrom ?? 2)),
-  }, 200);
+  // وكذلك قيم المتغيّرات الإنجليزية: القاموس يترجم أغلبها ويحذف الشظايا بلا نموذج
+  if (!c.env.AI) {
+    const en = await fixEnglishVariants(c.env.DB, new Translator(c.env.DB, null, 0));
+    return c.json({
+      error: 'لا يوجد Workers AI',
+      released: await releaseHeldDrafts(c.env.DB),
+      swept: await sweepMashedTitles(c.env.DB, Math.max(0, b.sweepFrom ?? 2)),
+      enFixed: en.fixed, enDropped: en.dropped, enLeft: await englishVariantsLeft(c.env.DB),
+    }, 200);
+  }
   return c.json(await retranslatePending(c.env.DB, c.env.AI, Math.min(60, b.limit ?? 30)));
 });
 // تشخيص صفحة 1688 مفتوحة في متصفح المستخدم: تُرسل الإضافة ما وجدته فعلًا لنضبط القارئ على البنية الحقيقية

@@ -1866,6 +1866,48 @@ await page.goto(BASE + '/request');
 const rqAll = ((await page.locator('.lr-list').textContent()) || '').replace(/\s+/g, ' ');
 expect(/المنتج لا يُشحن إلى ليبيا/.test(rqAll) && (rqAll.match(/جاهز للشراء/g) || []).length >= 2, 'الزبونة ترى سبب الاعتذار وطلبيها الجاهزين');
 await shot(page, 'request-by-link');
+// ---------- قيم الألوان والمقاسات الإنجليزية (٢٤/٠٩/٢٦): ١٬٤٩٧ منتجًا على الرف الحي كان منتقيها «Navy blue» و«Female XL» ----------
+// وشظايا جدول المواصفات («non-returnable]»، «Capacity») ظهرت ألوانًا. نستورد كما تصل من 1688 ونفتح الصفحة كالزبونة.
+const enOffer = '86' + String(Date.now()).slice(-10), enTag = uniqTag();
+const enImp = await extCall('/api/import', { category_id: 1, page_url: 'ext:stock', items: [{ offerId: enOffer, url: `https://detail.1688.com/offer/${enOffer}.html`,
+  title: `ألوان ${enTag}`, priceCny: 30, images: ['https://cbu01.alicdn.com/img/ibank/en1.jpg', 'https://cbu01.alicdn.com/img/ibank/en2.jpg'], minQty: 1, inStock: true, weightG: 300,
+  variants: [{ color: 'Navy blue', size: 'Female XL', inStock: true }, { color: 'Wine red', size: 'M [recommendation 40-50kg ]', inStock: true },
+    { color: 'non-returnable]', size: 'Female XL', inStock: true }, { color: 'K06 black-green', size: 'Capacity', inStock: true }] }] });
+expect(enImp.imported === 1, `عيّنة الألوان الإنجليزية دخلت (جديد ${enImp.imported})`);
+const openEn = async () => {
+  await page.goto(BASE + '/search?q=' + encodeURIComponent(enTag)); await page.locator('.card .t').first().click(); await page.waitForLoadState('networkidle');
+  return { colors: await page.locator('.chips[data-opt=color] .chip').allTextContents(), sizes: await page.locator('.chips[data-opt=size] .chip').allTextContents() };
+};
+const enChips = await openEn();
+const enAll = [...enChips.colors, ...enChips.sizes].join('، ');
+expect(enChips.colors.includes('كحلي') && enChips.colors.includes('نبيتي') && enChips.colors.includes('K06 أسود وأخضر'), `الألوان بالعربية في منتقي اللون (${enChips.colors.join('، ')})`);
+expect(enChips.sizes.includes('XL نسائي') && enChips.sizes.includes('M (40-50 كغ)'), `المقاسات بالعربية مع رموزها (${enChips.sizes.join('، ')})`);
+expect(!/[A-Za-z]{3,}/.test(enAll.replace(/K06/g, '')) && !/non-returnable|Capacity/i.test(enAll), `لا شظايا ولا كلمة إنجليزية في المنتقي (${enAll})`);
+// «نبيتي» لا يتوفر إلا بمقاس M والمختار تلقائيًا XL: كان النقر عليه لا يفعل شيئًا بلا أي رسالة.
+// الآن يُختار وينتقل المقاس وحده إلى ما يتوفر معه، كما في شي إن
+expect(((await page.locator('#sizeLbl').textContent()) || '') === 'XL نسائي', 'المقاس المختار تلقائيًا XL نسائي');
+await page.locator('.chips[data-opt=color] .chip', { hasText: 'نبيتي' }).click();
+const enPick = { c: (await page.locator('#colorLbl').textContent()) || '', s: (await page.locator('#sizeLbl').textContent()) || '', id: await page.locator('#variantId').inputValue() };
+expect(enPick.c === 'نبيتي' && enPick.s === 'M (40-50 كغ)' && !!enPick.id, `النقر على لون غير متوفر بالمقاس المختار يختاره وينقل المقاس (${enPick.c} · ${enPick.s} · متغيّر ${enPick.id})`);
+// ما دخل الرف قبل الإصلاح: نزرع القيم الإنجليزية القديمة في القاعدة المحلية وحدها (كما هي على الحي) ونشغّل دفعة الإصلاح
+if (/localhost|127\.0\.0\.1/.test(BASE)) {
+  const { execFileSync } = await import('node:child_process');
+  const d1 = (sql) => execFileSync('npx', ['wrangler', 'd1', 'execute', 'dlal-db', '--local', '-c', 'wrangler.local.toml', '--command', sql], { stdio: 'pipe' });
+  const enPid = `(SELECT id FROM products WHERE source_offer_id='${enOffer}')`;
+  d1(`UPDATE variants SET color='Navy blue' WHERE product_id=${enPid} AND color='كحلي'; UPDATE variants SET size='Female XL' WHERE product_id=${enPid} AND size='XL نسائي';
+      INSERT INTO variants(product_id,color,size,in_stock) VALUES(${enPid},'non-returnable]','L',1),(${enPid},'Main picture','L',1);
+      DELETE FROM attr_seen WHERE src IN ('Navy blue','Female XL')`);
+  const legacy = await openEn();
+  expect(legacy.colors.includes('Navy blue'), `العيّنة القديمة ظاهرة بالإنجليزية قبل الإصلاح (${legacy.colors.join('، ')})`);
+  const enStats0 = await page.evaluate(async (b) => (await (await fetch(b + '/api/source/stats', { method: 'POST', headers: { 'content-type': 'application/json', 'x-import-token': 'dev-import-token' }, body: '{}' })).json()).totals, BASE);
+  expect(enStats0.englishVariants >= 2, `الإحصاء يعدّ الأسطر الإنجليزية على الرف (${enStats0.englishVariants})`);
+  const enFix = await page.evaluate(async (b) => (await fetch(b + '/api/source/translate', { method: 'POST', headers: { 'content-type': 'application/json', 'x-import-token': 'dev-import-token' }, body: '{}' })).json(), BASE);
+  expect(enFix.enFixed >= 2 && enFix.enDropped >= 1 && enFix.enLeft < enStats0.englishVariants, `دفعة الإصلاح بلا نموذج: ترجمت ${enFix.enFixed} قيمة وحذفت ${enFix.enDropped} شظيّة، بقي ${enFix.enLeft} من ${enStats0.englishVariants}`);
+  const fixedEn = await openEn();
+  const fixedAll = [...fixedEn.colors, ...fixedEn.sizes].join('، ');
+  expect(fixedEn.colors.includes('كحلي') && fixedEn.sizes.includes('XL نسائي') && !/Navy|Female|non-returnable|Main picture/i.test(fixedAll), `بعد الإصلاح الصفحة نفسها بالعربية (${fixedAll})`);
+  await shot(page, 'variants-arabic');
+}
 if (stockJob) await extCall('/api/crawl/report', { job_id: stockJob.id, started_at: new Date().toISOString(), status: 'ok', checked: 0 });
 await page.goto(BASE + '/logout');
 

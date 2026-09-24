@@ -62,7 +62,12 @@ const proxyImg = (u) => (!u ? u : /(^|\.)(alicdn\.com|1688\.com|taobao\.com|tbcd
       const sl = $('#sizeLbl'); if (sl) sl.textContent = sel.size || '';
       if (m && m.image_url) $('#mainImg').src = proxyImg(m.image_url);
     };
-    opts.forEach(g => $$('.chip', g).forEach(ch => ch.addEventListener('click', () => { if (ch.classList.contains('off')) return; sel[g.dataset.opt] = ch.dataset.val; refresh(); })));
+    // لون لا يتوفر مع المقاس المختار (أو العكس) لا يُتجاهل بصمت: نختاره وننقل الخاصية الأخرى إلى ما يتوفر معه
+    opts.forEach(g => $$('.chip', g).forEach(ch => ch.addEventListener('click', () => {
+      const k = g.dataset.opt, other = k === 'color' ? 'size' : 'color';
+      if (ch.classList.contains('off')) { const alt = variants.find(v => v[k] === ch.dataset.val && v.in_stock); if (!alt) return; if (alt[other]) sel[other] = alt[other]; }
+      sel[k] = ch.dataset.val; refresh();
+    })));
     // اختيار افتراضي
     opts.forEach(g => { const first = variants.find(v => v.in_stock && v[g.dataset.opt]); if (first) sel[g.dataset.opt] = first[g.dataset.opt]; });
     refresh();

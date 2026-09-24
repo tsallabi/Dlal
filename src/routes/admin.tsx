@@ -11,6 +11,7 @@ import { fingerprint, sameProduct } from '../lib/dedupe';
 import { loadSettings, computePrice } from '../lib/pricing';
 import { requireRole } from '../lib/auth';
 import { attrValue, notRetail, kindOf } from '../lib/source';
+import { junkAttr } from '../lib/attr-en';  // الشظيّة تُحذف قبل الترجمة وإلا صارت «غير قابل للإرجاع» لونًا عربيًا
 import { requirePerm, logActivity } from '../lib/perm';
 import { settleLinkRequests, LINK_SOURCES, LINK_STATUS } from '../lib/link-requests';
 import { validPixel, validVerify, bustMetaCache } from '../lib/meta';
@@ -245,7 +246,7 @@ admin.post('/import/json', async (c) => {
 export async function importProducts(db: D1Database, arr: any[], categoryId: number | null, byUserId: number | null, pageUrl: string, ai?: any) {
   const tr = new Translator(db, ai);
   // ترجمة قيم المتغيرات (ألوان/مقاسات): قاموس فوري ثم الذاكرة ثم الذكاء الاصطناعي
-  const trVariants = async (vs: any[]) => { for (const v of vs ?? []) { if (v.color) v.color = (await tr.t(String(v.color), 'attr', v.colorEn)) ?? v.color; if (v.size) v.size = (await tr.t(String(v.size), 'attr', v.sizeEn)) ?? v.size; } return vs ?? []; };
+  const trVariants = async (vs: any[]) => { for (const v of vs ?? []) { if (junkAttr(v.color)) v.color = null; if (junkAttr(v.size)) v.size = null; if (v.color) v.color = (await tr.t(String(v.color), 'attr', v.colorEn)) ?? v.color; if (v.size) v.size = (await tr.t(String(v.size), 'attr', v.sizeEn)) ?? v.size; } return vs ?? []; };
   const s = await loadSettings(db);
   // الحد الفاصل بين التجزئة والجملة: فوقه لا تصل البضاعة للرف. قابل للضبط من /admin/pricing
   const maxRetail = Math.max(2, parseInt(s.retail_max_moq ?? '') || 10);
