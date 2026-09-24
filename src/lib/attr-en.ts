@@ -20,7 +20,7 @@ const COLORS: Record<string, string> = {
   turquoise: 'فيروزي', teal: 'أزرق مخضر', cyan: 'سماوي', coral: 'مرجاني', peach: 'خوخي', tan: 'جملي فاتح', 'rose gold': 'ذهبي وردي',
   rosewood: 'خشب الورد', 'red sandalwood': 'خشب الصندل الأحمر', 'black walnut': 'خشب الجوز', walnut: 'خشب الجوز', 'classic gray': 'رمادي كلاسيكي', 'classic grey': 'رمادي كلاسيكي',
   transparent: 'شفاف', clear: 'شفاف', multicolor: 'متعدد الألوان', colorful: 'متعدد الألوان', 'mixed colors': 'ألوان مشكلة', random: 'لون عشوائي', 'random color': 'لون عشوائي',
-  lined: 'مبطّن', 'fleece-lined': 'مبطّن بالفرو', 'fleece lined': 'مبطّن بالفرو', 'lilac purple': 'ليلكي', 'jujube red': 'أحمر عنابي', 'dark blue': 'أزرق غامق', 'deep blue': 'أزرق غامق', 'light blue': 'أزرق فاتح', 'as shown in picture': 'كما في الصورة', 'as shown in the picture': 'كما في الصورة', 'as shown in the figure': 'كما في الصورة', 'real shot images': 'كما في الصورة', 'real shot': 'كما في الصورة',
+  bordeaux: 'عنابي', 'bordeaux red': 'عنابي', 'bean red': 'أحمر طوبي', 'aqua blue': 'أزرق مائي', aqua: 'أزرق مائي', lined: 'مبطّن', 'fleece-lined': 'مبطّن بالفرو', 'fleece lined': 'مبطّن بالفرو', 'lilac purple': 'ليلكي', 'jujube red': 'أحمر عنابي', 'dark blue': 'أزرق غامق', 'deep blue': 'أزرق غامق', 'light blue': 'أزرق فاتح', 'as shown in picture': 'كما في الصورة', 'as shown in the picture': 'كما في الصورة', 'as shown in the figure': 'كما في الصورة', 'real shot images': 'كما في الصورة', 'real shot': 'كما في الصورة',
   printed: 'مطبوع', floral: 'مزهّر', striped: 'مخطط', plaid: 'كاروهات', 'dusty pink': 'وردي باهت',
   'as picture': 'كما في الصورة', 'as shown': 'كما في الصورة', 'picture color': 'كما في الصورة', 'image color': 'كما في الصورة', 'photo color': 'كما في الصورة',
   'main picture': 'كما في الصورة', 'main picture model': 'كما في الصورة', 'main picture style': 'كما في الصورة', 'same as picture': 'كما في الصورة', 'as the picture': 'كما في الصورة',
@@ -92,6 +92,8 @@ export function enAttr(raw: string): string | null {
   const szn = t.match(/^size\s*(\d{2,3}(?:\.\d)?)$/i); if (szn) return add(`مقاس ${szn[1]}`);   // «Size 36»
   // «44-45 recommended 43-44 feet»: مقاس حذاء وتحته مقاس القدم المناسب
   const shoe = t.match(/^(\d{2}-\d{2})\s*(?:\[\s*)?recommended\s+(\d{2}-\d{2})\s*(feet|foot)?\s*\]?$/i);
+  const shoe2 = t.match(/^(\d{2}-\d{2})\s*[(\[（]\s*(\d{2}-\d{2})\s*(feet|foot)\s*recommended\s*[)\]）]$/i);   // «36-37 (35-36 feet recommended)»
+  if (shoe2) return add(`${shoe2[1]} (يناسب قدم ${shoe2[2]})`);
   if (shoe) return add(`${shoe[1]} (يناسب قدم ${shoe[2]})`);
   // «Blue1»، «Blue 2»: لون ورقم تصميم
   const num = low.match(/^([a-z][a-z ]*?)\s*(\d{1,2})$/);

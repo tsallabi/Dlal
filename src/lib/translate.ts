@@ -391,6 +391,17 @@ async function revertBadEnglish(db: D1Database): Promise<number> {
   let n = 0;
   for (const { src, dst, old } of results) {
     if (!needsEnTr(src)) continue;
+    // القاموس يغطي القيمة الآن وترجمة النموذج مختلفة («Bordeaux Red» ⟵ «بورجوازي أحمر»): القاموس يغلب على الرف أيضًا
+    const d = enAttr(src);
+    if (d && d !== dst && !needsEnTr(d)) {
+      for (const f of ['color', 'size'] as const) {
+        n += (await db.prepare(`UPDATE variants SET ${f}=? WHERE ${f}=?`).bind(d, dst).run()).meta?.changes ?? 0;
+        if (!/^[A-Za-z]{0,3}\d{1,5}[A-Za-z]?\s/.test(src)) n += (await db.prepare(`UPDATE variants SET ${f}=substr(${f},1,length(${f})-length(?)) || ? WHERE ${f} LIKE ? AND length(${f})-length(?) BETWEEN 2 AND 10
+           AND substr(${f},1,length(${f})-length(?)-1) NOT GLOB '*[^A-Za-z0-9]*'`).bind(dst, d, '% ' + dst, dst, dst).run()).meta?.changes ?? 0;
+      }
+      await db.prepare("DELETE FROM translations WHERE src=? AND kind='attr'").bind(src).run();
+      continue;
+    }
     const bad = !!old || !enOk(src, dst) || /^[A-Za-z]{0,3}\d{1,5}[A-Za-z]?\s*[-–]?\s+/.test(src);
     if (!bad) continue;
     if (/[\u0621-\u064A]/.test(dst)) for (const f of ['color', 'size'] as const) {
