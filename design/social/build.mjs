@@ -16,6 +16,8 @@ const BASE = `*{margin:0;padding:0;box-sizing:border-box}body{font-family:Cairo,
 const plane = `<svg viewBox="0 0 24 24" width="30" height="30"><path fill="currentColor" d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5z"/></svg>`;
 const ship = `<svg viewBox="0 0 24 24" width="30" height="30"><path fill="currentColor" d="M20 21c-1.4 0-2.8-.5-4-1.3-2.4 1.7-5.6 1.7-8 0-1.2.8-2.6 1.3-4 1.3H2v2h2c1.4 0 2.7-.3 4-1 2.5 1.3 5.5 1.3 8 0 1.3.7 2.6 1 4 1h2v-2h-2zM3.9 19H4c1.6 0 3-.9 4-2 1 1.1 2.4 2 4 2s3-.9 4-2c1 1.1 2.4 2 4 2h.1l1.9-6.7c.1-.5-.1-1-.6-1.2L20 10.6V6c0-1.1-.9-2-2-2h-3V1H9v3H6c-1.1 0-2 .9-2 2v4.6l-1.3.5c-.5.2-.7.7-.6 1.2L3.9 19zM6 6h12v3.97L12 8 6 9.97V6z"/></svg>`;
 const tag = `<svg viewBox="0 0 24 24" width="28" height="28"><path fill="currentColor" d="M21.4 11.6 12.4 2.6A2 2 0 0 0 11 2H4a2 2 0 0 0-2 2v7c0 .6.2 1.1.6 1.4l9 9c.4.4.9.6 1.4.6s1-.2 1.4-.6l7-7c.4-.4.6-.9.6-1.4s-.2-1-.6-1.4zM5.5 7A1.5 1.5 0 1 1 7 5.5 1.5 1.5 0 0 1 5.5 7z"/></svg>`;
+// رابط لا رقم: الغلاف صورة ثابتة، وعدد المنتجات يتغيّر مع كل دفعة استيراد — و«اطلب برابط» يجعل كل 1688 متاحًا
+const link = `<svg viewBox="0 0 24 24" width="28" height="28"><path fill="currentColor" d="M3.9 12a3.1 3.1 0 0 1 3.1-3.1h4V7H7a5 5 0 0 0 0 10h4v-1.9H7A3.1 3.1 0 0 1 3.9 12zM8 13h8v-2H8v2zm9-6h-4v1.9h4a3.1 3.1 0 0 1 0 6.2h-4V17h4a5 5 0 0 0 0-10z"/></svg>`;
 const box = `<svg viewBox="0 0 24 24" width="28" height="28"><path fill="currentColor" d="M21 16.5c0 .4-.2.7-.5.9l-7.9 4.4c-.2.1-.4.2-.6.2s-.4-.1-.6-.2l-7.9-4.4c-.3-.2-.5-.5-.5-.9v-9c0-.4.2-.7.5-.9l7.9-4.4c.2-.1.4-.2.6-.2s.4.1.6.2l7.9 4.4c.3.2.5.5.5.9v9zM12 4.2 6 7.5l6 3.3 6-3.3-6-3.3z"/></svg>`;
 
 // ---------- البروفايل 720×720 (يُعرض دائرة) ----------
@@ -66,7 +68,7 @@ ${bird}
     <span class="chip">${plane} جوًّا 12–18 يومًا</span>
     <span class="chip">${ship} بحرًا 30–45 يومًا</span>
     <span class="chip">${tag} شامل الشحن والجمارك</span>
-    <span class="chip">${box} ${N} منتج</span>
+    <span class="chip">${link} اطلب أي منتج برابط</span>
   </div>
   <div class="pay">ادفع محليًا: معاملات · سداد · إدفعلي · موبي كاش</div>
   <div class="url">hudhude.com</div>
