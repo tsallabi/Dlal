@@ -1872,7 +1872,7 @@ const enOffer = '86' + String(Date.now()).slice(-10), enTag = uniqTag();
 const enImp = await extCall('/api/import', { category_id: 1, page_url: 'ext:stock', items: [{ offerId: enOffer, url: `https://detail.1688.com/offer/${enOffer}.html`,
   title: `ألوان ${enTag}`, priceCny: 30, images: ['https://cbu01.alicdn.com/img/ibank/en1.jpg', 'https://cbu01.alicdn.com/img/ibank/en2.jpg'], minQty: 1, inStock: true, weightG: 300,
   variants: [{ color: 'Navy blue', size: 'Female XL', inStock: true }, { color: 'Wine red', size: 'M [recommendation 40-50kg ]', inStock: true },
-    { color: 'non-returnable]', size: 'Female XL', inStock: true }, { color: 'K06 black-green', size: 'Capacity', inStock: true }] }] });
+    { color: 'non-returnable]', size: 'Female XL', inStock: true }, { color: 'K06 black-green', size: 'Capacity', inStock: true }, { color: '2008 double short - black', size: 'Female XL', inStock: true }] }] });
 expect(enImp.imported === 1, `عيّنة الألوان الإنجليزية دخلت (جديد ${enImp.imported})`);
 const openEn = async () => {
   await page.goto(BASE + '/search?q=' + encodeURIComponent(enTag)); await page.locator('.card .t').first().click(); await page.waitForLoadState('networkidle');
@@ -1880,7 +1880,7 @@ const openEn = async () => {
 };
 const enChips = await openEn();
 const enAll = [...enChips.colors, ...enChips.sizes].join('، ');
-expect(enChips.colors.includes('كحلي') && enChips.colors.includes('نبيتي') && enChips.colors.includes('K06 أسود وأخضر'), `الألوان بالعربية في منتقي اللون (${enChips.colors.join('، ')})`);
+expect(enChips.colors.includes('كحلي') && enChips.colors.includes('نبيتي') && enChips.colors.includes('K06 أسود وأخضر') && enChips.colors.includes('2008 نصف كم وشورت - أسود'), `الألوان بالعربية في منتقي اللون (${enChips.colors.join('، ')})`);
 expect(enChips.sizes.includes('XL نسائي') && enChips.sizes.includes('M (40-50 كغ)'), `المقاسات بالعربية مع رموزها (${enChips.sizes.join('، ')})`);
 expect(!/[A-Za-z]{3,}/.test(enAll.replace(/K06/g, '')) && !/non-returnable|Capacity/i.test(enAll), `لا شظايا ولا كلمة إنجليزية في المنتقي (${enAll})`);
 // «نبيتي» لا يتوفر إلا بمقاس M والمختار تلقائيًا XL: كان النقر عليه لا يفعل شيئًا بلا أي رسالة.
@@ -1900,7 +1900,7 @@ if (/localhost|127\.0\.0\.1/.test(BASE)) {
       INSERT INTO variants(product_id,color,size,in_stock) VALUES(${enPid},'قميص قصير','L',1),(${enPid},'2012 شورت قصير','L',1),(${enPid},'أحمر','XL【European size in stock】',1),(${enPid},'بورجوازي أحمر','L',1),(${enPid},'أحمر','Xl',1);
       INSERT OR REPLACE INTO translations(src,dst,kind) VALUES('Bordeaux Red','بورجوازي أحمر','attr');
       INSERT OR REPLACE INTO translations(src,dst,kind) VALUES('double short-coffee','شورت قصير','attr');
-      INSERT OR REPLACE INTO translations(src,dst,kind) VALUES('2011 double short-coffee','قميص قصير','attr')`);
+      INSERT OR REPLACE INTO translations(src,dst,kind) VALUES('2011 lace trim tulle','قميص قصير','attr')`);
   const legacy = await openEn();
   expect(legacy.colors.includes('Navy blue'), `العيّنة القديمة ظاهرة بالإنجليزية قبل الإصلاح (${legacy.colors.join('، ')})`);
   const enStats0 = await page.evaluate(async (b) => (await (await fetch(b + '/api/source/stats', { method: 'POST', headers: { 'content-type': 'application/json', 'x-import-token': 'dev-import-token' }, body: '{}' })).json()).totals, BASE);
@@ -1913,8 +1913,10 @@ if (/localhost|127\.0\.0\.1/.test(BASE)) {
   // أول تشغيل حي: النموذج أسقط رقم التصميم («2011 double short-coffee» ⟵ «قميص قصير»). الفاشل يعود إلى أصله
   expect(fixedEn.colors.includes('عنابي') && !fixedEn.colors.includes('بورجوازي أحمر'), `القاموس يغلب ترجمة النموذج على الرف: «Bordeaux Red» ⟵ «عنابي» لا «بورجوازي أحمر» (${fixedEn.colors.join('، ')})`);
   expect(fixedEn.sizes.includes('XL') && !fixedEn.sizes.includes('Xl') && !fixedEn.sizes.some(x => /European/.test(x)), `القاموس بلا حرف عربي يُقبل: «XL【European size in stock】» ⟵ «XL» (${fixedEn.sizes.join('، ')})`);
-  expect(!fixedEn.colors.some(x => /قميص قصير|شورت قصير/.test(x)) && fixedEn.colors.includes('2011 double short-coffee') && fixedEn.colors.includes('2012 double short-coffee'), `الترجمة الفاشلة أُعيدت إلى أصلها لتُترجم من جديد (${fixedEn.colors.join('، ')})`);
-  d1(`DELETE FROM variants WHERE product_id=${enPid} AND color IN ('2011 double short-coffee','2012 double short-coffee')`);
+  expect(!fixedEn.colors.includes('قميص قصير') && fixedEn.colors.includes('2011 lace trim tulle'), `الترجمة الفاشلة أُعيدت إلى أصلها لتُترجم من جديد (${fixedEn.colors.join('، ')})`);
+  // بيجامات 477/478/495: «2012 شورت قصير» من «double short-coffee» — القاموس صار يعرف الطقم فيغلب ولو أمامه رقم التصميم
+  expect(!fixedEn.colors.includes('2012 شورت قصير') && fixedEn.colors.includes('2012 نصف كم وشورت - بني قهوة'), `القاموس يصحّح طقم البيجامة على الرف: «2012 نصف كم وشورت - بني قهوة» (${fixedEn.colors.join('، ')})`);
+  d1(`DELETE FROM variants WHERE product_id=${enPid} AND color IN ('2011 lace trim tulle','2012 نصف كم وشورت - بني قهوة')`);
   await shot(page, 'variants-arabic');
 }
 if (stockJob) await extCall('/api/crawl/report', { job_id: stockJob.id, started_at: new Date().toISOString(), status: 'ok', checked: 0 });

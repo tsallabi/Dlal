@@ -20,12 +20,13 @@ const COLORS: Record<string, string> = {
   turquoise: 'فيروزي', teal: 'أزرق مخضر', cyan: 'سماوي', coral: 'مرجاني', peach: 'خوخي', tan: 'جملي فاتح', 'rose gold': 'ذهبي وردي',
   rosewood: 'خشب الورد', 'red sandalwood': 'خشب الصندل الأحمر', 'black walnut': 'خشب الجوز', walnut: 'خشب الجوز', 'classic gray': 'رمادي كلاسيكي', 'classic grey': 'رمادي كلاسيكي',
   transparent: 'شفاف', clear: 'شفاف', multicolor: 'متعدد الألوان', colorful: 'متعدد الألوان', 'mixed colors': 'ألوان مشكلة', random: 'لون عشوائي', 'random color': 'لون عشوائي',
-  bordeaux: 'عنابي', 'bordeaux red': 'عنابي', 'bean red': 'أحمر طوبي', 'aqua blue': 'أزرق مائي', aqua: 'أزرق مائي', lined: 'مبطّن', 'fleece-lined': 'مبطّن بالفرو', 'fleece lined': 'مبطّن بالفرو', 'lilac purple': 'ليلكي', 'jujube red': 'أحمر عنابي', 'dark blue': 'أزرق غامق', 'deep blue': 'أزرق غامق', 'light blue': 'أزرق فاتح', 'as shown in picture': 'كما في الصورة', 'as shown in the picture': 'كما في الصورة', 'as shown in the figure': 'كما في الصورة', 'real shot images': 'كما في الصورة', 'real shot': 'كما في الصورة',
+  'fog blue': 'أزرق ضبابي', bordeaux: 'عنابي', 'bordeaux red': 'عنابي', 'bean red': 'أحمر طوبي', 'aqua blue': 'أزرق مائي', aqua: 'أزرق مائي', lined: 'مبطّن', 'fleece-lined': 'مبطّن بالفرو', 'fleece lined': 'مبطّن بالفرو', 'lilac purple': 'ليلكي', 'jujube red': 'أحمر عنابي', 'dark blue': 'أزرق غامق', 'deep blue': 'أزرق غامق', 'light blue': 'أزرق فاتح', 'as shown in picture': 'كما في الصورة', 'as shown in the picture': 'كما في الصورة', 'as shown in the figure': 'كما في الصورة', 'real shot images': 'كما في الصورة', 'real shot': 'كما في الصورة',
   printed: 'مطبوع', floral: 'مزهّر', striped: 'مخطط', plaid: 'كاروهات', 'dusty pink': 'وردي باهت',
   'as picture': 'كما في الصورة', 'as shown': 'كما في الصورة', 'picture color': 'كما في الصورة', 'image color': 'كما في الصورة', 'photo color': 'كما في الصورة',
   'main picture': 'كما في الصورة', 'main picture model': 'كما في الصورة', 'main picture style': 'كما في الصورة', 'same as picture': 'كما في الصورة', 'as the picture': 'كما في الصورة',
   image: 'كما في الصورة', picture: 'كما في الصورة', photo: 'كما في الصورة',
 };
+const SETS: Record<string, string> = { 'double short': 'نصف كم وشورت', 'short long': 'نصف كم وبنطلون طويل', 'double long': 'كم طويل وبنطلون طويل', 'long short': 'كم طويل وشورت' };
 const SHADE: Record<string, string> = { light: 'فاتح', dark: 'غامق', deep: 'غامق', pale: 'باهت', bright: 'فاتح' };
 const WHO: [RegExp, string][] = [[/^(men'?s|male|man'?s|mens)\s+/i, 'رجالي'], [/^(women'?s|female|ladies|lady'?s|womens)\s+/i, 'نسائي'], [/^(kids'?|children'?s|child)\s+/i, 'أطفال']];
 
@@ -75,6 +76,10 @@ export function enAttr(raw: string): string | null {
   // لونان معًا: «black-green»، «black and white»
   const two = low.split(/\s*(?:-|&|\/|\band\b)\s*/).filter(Boolean);
   if (two.length === 2 && one(two[0]) && one(two[1])) return add(`${one(two[0])} و${one(two[1])}`);
+  // طقم البيجامة: «double short-pink» = 双短 نصف كم وشورت، «short long» = 短长 نصف كم وبنطلون طويل (٢٤/٠٩/٢٦:
+  // النموذج أعطاها «قميص قصير» و«قصير جداً» وضاع اللون)
+  const set = low.match(/^(double short|short long|double long|long short)\s*[-–]?\s*(.+)$/);
+  if (set && one(set[2].trim())) return add(`${SETS[set[1]]} - ${one(set[2].trim())}`);
   // رمز طراز ثم لون: «B72 black»، «K06 black-green» — الرمز يبقى، واللون يُترجم
   const code = t.match(/^([A-Za-z]{0,3}\d{1,5}[A-Za-z]?)\s+(.+)$/);
   if (code) { const rest = enAttr(code[2]); if (rest && !needsEnTr(rest)) return add(`${code[1].toUpperCase()} ${rest}`); }
