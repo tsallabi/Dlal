@@ -16,6 +16,9 @@ https.createServer({ key: fx('key.pem'), cert: fx('cert.pem') }, (req, res) => {
   // تحمل كتلة «看了又看» فيها روابط ثلاثة منتجات أخرى — مفعّلة ما دام /tmp/fx-reco موجودًا
   const reco = fs.existsSync('/tmp/fx-reco');
   const rid = (u.match(/offer\/(9102\d{5})/) || [])[1];
+  // ترتيب فتح الإضافة للصفحات (يقرؤه discover.mjs ليثبت أن المنتجات الجديدة تُفتح أولًا في الدفعة)
+  const oid = (u.match(/offer\/(\d+)\.html/) || [])[1];
+  if (reco && oid) fs.appendFileSync('/tmp/fx-hits', oid + '\n');
   const block = (from) => '<div class="recommend"><h3>看了又看</h3>' + [1, 2, 3].map(k => `<a href="//detail.1688.com/offer/${910200000 + ((Number(from) + k) % 1000) || 910200001}.html">x</a>`).join('') + '</div>';
   if (reco && rid) {
     const n = Number(rid) % 1000;

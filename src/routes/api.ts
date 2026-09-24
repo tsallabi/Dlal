@@ -84,15 +84,29 @@ api.get('/import/queue', async (c) => {
   // فيبقى الشريط ناقصًا إلى الأبد لو حُسبت في المجموع)
   const v = (c.req.query('v') ?? '').split('.').map(Number);
   const canDiscover = (v[0] ?? 0) > 1 || ((v[0] ?? 0) === 1 && (v[1] ?? 0) >= 7);
-  const per = Math.max(0, Math.min(100, parseInt((await c.env.DB.prepare("SELECT value FROM settings WHERE key='discover_per_batch'").first<{ value: string }>())?.value ?? '') || 0));
-  const fresh = canDiscover && per ? (await c.env.DB.prepare(`SELECT d.offer_id id,d.category_id FROM discovered_offers d
-     WHERE d.status='new' AND d.tries < 2 AND NOT EXISTS (SELECT 1 FROM products p WHERE p.source='1688' AND p.source_offer_id=d.offer_id)
-     ORDER BY (d.from_offer='request') DESC, d.tries, d.found_at LIMIT ?`).bind(per).all<{ id: string; category_id: number | null }>()).results : [];
+  const fresh = canDiscover ? await freshOffers(c.env.DB, await discoverPer(c.env.DB)) : [];
   const total = Math.min(results.length, job?.max_new || 100) + fresh.length;
   await c.env.DB.prepare(`UPDATE crawler_live SET started_at=datetime('now'),finished_at=NULL,status='running',total=?,done=0,gain_img=0,gain_var=0,gain_wt=0,gone=0,
       pages_read=0,pages_linked=0,links_new=0,gain_new=0,last_offer=NULL,last_at=datetime('now') WHERE id=1`).bind(total).run();
   return c.json({ ids: results.map(r => r.source_offer_id), fresh });
 });
+
+// الدفعة نفسها تستورد ما اكتشفته (الإضافة 1.7.1): كانت الروابط تنتظر الدفعة التالية (ساعة) وتُستورد في آخرها
+// بعد مئة منتج إثراء، فإن أُغلق كروم قبل النهاية لم يدخل المتجر منها شيء. `taken` = ما أخذته الدفعة من حصتها في بدايتها.
+api.get('/crawl/fresh', async (c) => {
+  if (!tokenOk(c)) return c.json({ error: 'رمز غير صحيح' }, 401);
+  const taken = Math.max(0, parseInt(c.req.query('taken') ?? '0') || 0);
+  const fresh = await freshOffers(c.env.DB, Math.max(0, (await discoverPer(c.env.DB)) - taken));
+  if (fresh.length) await c.env.DB.prepare("UPDATE crawler_live SET total=total+? WHERE id=1 AND status='running'").bind(fresh.length).run();
+  return c.json({ fresh });
+});
+const discoverPer = async (db: D1Database) => Math.max(0, Math.min(100, parseInt((await db.prepare("SELECT value FROM settings WHERE key='discover_per_batch'").first<{ value: string }>())?.value ?? '') || 0));
+async function freshOffers(db: D1Database, n: number) {
+  if (n <= 0) return [];
+  return (await db.prepare(`SELECT d.offer_id id,d.category_id FROM discovered_offers d
+     WHERE d.status='new' AND d.tries < 2 AND NOT EXISTS (SELECT 1 FROM products p WHERE p.source='1688' AND p.source_offer_id=d.offer_id)
+     ORDER BY (d.from_offer='request') DESC, d.tries, d.found_at LIMIT ?`).bind(n).all<{ id: string; category_id: number | null }>()).results;
+}
 
 api.post('/import/check', async (c) => {
   if (!tokenOk(c)) return c.json({ error: 'رمز غير صحيح' }, 401);

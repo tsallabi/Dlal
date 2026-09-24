@@ -64,11 +64,31 @@ async function runJob(job) {
       const q = await api('/api/import/queue?v=' + VERSION);
       const ids = (q.ids || []).slice(0, job.max_new || 100);
       const fresh = q.fresh || [];   // منتجات جديدة اكتُشفت روابطها في صفحات الدفعات السابقة
-      const total = ids.length + fresh.length;
+      let total = ids.length + fresh.length;
       await log(`فحص المخزون: ${ids.length} منتج` + (fresh.length ? ` + ${fresh.length} جديد مكتشف` : ''));
       // روابط المنتجات الأخرى في الصفحة → الخادم (ولو صفرًا: هذا ما يثبت هل تعرضها 1688 لزائر غير مسجّل)
       const harvest = (from, r) => api('/api/crawl/discover', { method: 'POST', body: JSON.stringify({ from, ids: r?.links || [] }) }).catch(() => {});
-      for (const id of ids) {
+      // اكتشاف مجاني: نفتح صفحة المنتج الجديد (تفتح بلا حساب) ونستورده منها في قسم الصفحة التي وُجد فيها.
+      // 1.7.1: الجديد **أولًا** — كان بعد مئة منتج إثراء، فإن أُغلق كروم في منتصف الدفعة (مرتان من ست يوم ٢٤/٠٩) لم يدخل منه شيء
+      const importFresh = async (list) => { for (const f of list) {
+        await chrome.storage.local.set({ status: `منتج جديد مكتشف: ${rep.checked + 1} من ${total}`, progress: { done: rep.checked, total, at: Date.now() } });
+        const r = await within(openAndAsk(`https://detail.1688.com/offer/${f.id}.html`, { type: 'extractDetail' }, tabRef), PRODUCT_MS);
+        if (r?.blocked) {
+          rep.status = 'blocked';
+          rep.note = r.blocked === 'login' ? `1688 طلب تسجيل دخول لعرض صفحة المنتج ${f.id} — لم تعد تفتح لزائر غير مسجّل` : 'كابتشا/حجب عند ' + f.id;
+          return;
+        }
+        if (r?.timeout || r?.error) { if (tabRef.id) { chrome.tabs.remove(tabRef.id).catch(() => {}); tabRef.id = null; } }
+        if (r?.item && r.item.priceCny) {
+          const res = await api('/api/import', { method: 'POST', body: JSON.stringify({ category_id: f.category_id ?? null, page_url: 'ext:discover', items: [r.item] }) });
+          rep.imported += res.imported || 0;
+        } else await api('/api/crawl/discover/fail', { method: 'POST', body: JSON.stringify({ offerId: f.id }) }).catch(() => {});
+        if (!r?.timeout && !r?.error) await harvest(f.id, r);
+        rep.checked++;
+        await sleep(pace(9000, 15000));
+      } };
+      if (fresh.length) await importFresh(fresh);
+      if (rep.status === 'ok') for (const id of ids) {
         // سطر الحالة في النافذة يتحرّك مع كل منتج (لا يُكتب في السجل حتى لا يُغرقه ١٠٠ سطر)
         await chrome.storage.local.set({ status: `فحص المخزون والإثراء: ${rep.checked + 1} من ${total}`, progress: { done: rep.checked, total, at: Date.now() } });
         const r = await within(openAndAsk(`https://detail.1688.com/offer/${id}.html`, { type: 'extractDetail' }, tabRef), PRODUCT_MS);
@@ -100,23 +120,10 @@ async function runJob(job) {
         rep.checked++;
         await sleep(pace(9000, 15000));
       }
-      // اكتشاف مجاني: نفتح صفحة المنتج الجديد (تفتح بلا حساب) ونستورده منها في قسم الصفحة التي وُجد فيها
-      if (rep.status === 'ok') for (const f of fresh) {
-        await chrome.storage.local.set({ status: `منتج جديد مكتشف: ${rep.checked + 1} من ${total}`, progress: { done: rep.checked, total, at: Date.now() } });
-        const r = await within(openAndAsk(`https://detail.1688.com/offer/${f.id}.html`, { type: 'extractDetail' }, tabRef), PRODUCT_MS);
-        if (r?.blocked) {
-          rep.status = 'blocked';
-          rep.note = r.blocked === 'login' ? `1688 طلب تسجيل دخول لعرض صفحة المنتج ${f.id} — لم تعد تفتح لزائر غير مسجّل` : 'كابتشا/حجب عند ' + f.id;
-          break;
-        }
-        if (r?.timeout || r?.error) { if (tabRef.id) { chrome.tabs.remove(tabRef.id).catch(() => {}); tabRef.id = null; } }
-        if (r?.item && r.item.priceCny) {
-          const res = await api('/api/import', { method: 'POST', body: JSON.stringify({ category_id: f.category_id ?? null, page_url: 'ext:discover', items: [r.item] }) });
-          rep.imported += res.imported || 0;
-        } else await api('/api/crawl/discover/fail', { method: 'POST', body: JSON.stringify({ offerId: f.id }) }).catch(() => {});
-        if (!r?.timeout && !r?.error) await harvest(f.id, r);
-        rep.checked++;
-        await sleep(pace(9000, 15000));
+      // وما اكتُشف في صفحات هذه الدفعة يُستورد قبل نهايتها بدل انتظار الدفعة التالية (ساعة)
+      if (rep.status === 'ok') {
+        const more = (await api('/api/crawl/fresh?taken=' + fresh.length).catch(() => ({})))?.fresh || [];
+        if (more.length) { total += more.length; await log(`${more.length} منتج جديد اكتُشف في هذه الدفعة — أستورده الآن`); await importFresh(more); }
       }
     } else {
       const newIds = [];

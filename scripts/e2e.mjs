@@ -1700,6 +1700,12 @@ expect(!!fr1 && (qNew.fresh || []).some(f => f.id === d2), `الإضافة ${ext
 expect(fr1?.category_id === 1, `وبقسم الصفحة التي وُجدا فيها (قسم ${fr1?.category_id})`);
 const lvD = await extCall('/api/crawl/live');
 expect(lvD.total >= (qNew.fresh || []).length && lvD.total <= (qNew.ids || []).length + (qNew.fresh || []).length, `حجم الدفعة يشمل المنتجات الجديدة (${lvD.total})`);
+// 1.7.1: ما اكتُشف أثناء الدفعة يُستورد قبل نهايتها — المسار يعطي ما بقي من حصة الدفعة فقط ويكبّر الشريط به
+const frMore = await extCall('/api/crawl/fresh?taken=0');
+const lvD1 = await extCall('/api/crawl/live');
+expect((frMore.fresh || []).some(f => f.id === d1) && lvD1.total === lvD.total + (frMore.fresh || []).length, `الدفعة نفسها تستلم الجديد المكتشف أثناءها، والشريط يكبر به (${(frMore.fresh || []).length} · ${lvD.total}⟵${lvD1.total})`);
+const frFull = await extCall('/api/crawl/fresh?taken=100');
+expect(!(frFull.fresh || []).length, 'ولا شيء بعد أن أخذت الدفعة حصتها كاملة (discover_per_batch)');
 // الإضافة فتحت صفحة d1 فقرأتها واستوردتها، وصفحة d2 لم تُحمَّل مرتين
 const rD = await extCall('/api/import', { category_id: fr1?.category_id ?? 1, page_url: 'ext:discover', items: [{ offerId: d1, url: `https://detail.1688.com/offer/${d1}.html`, title: `مكتشف ${liveTag}`, priceCny: 22,
   images: ['https://cbu01.alicdn.com/img/ibank/d1a.jpg', 'https://cbu01.alicdn.com/img/ibank/d1b.jpg'], variants: [{ color: 'أزرق', inStock: true }], weightG: 180, minQty: 1, inStock: true }] });

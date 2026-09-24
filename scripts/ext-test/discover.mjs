@@ -1,5 +1,6 @@
 // الاكتشاف المجاني بالإضافة الحقيقية: دفعتان على صفحات 1688 وهمية تحمل توصيات «看了又看».
-// الأولى تثري منتجين قائمين وتلتقط روابط ثلاثة منتجات جديدة، والثانية تفتحها وتستوردها — بلا حساب ولا مزوّد.
+// الأولى تثري منتجين قائمين وتلتقط روابط ثلاثة منتجات جديدة **وتستوردها في الدفعة نفسها** (1.7.1)، والثانية
+// تفتح ما اكتُشف في صفحات الأولى **قبل** الإثراء — بلا حساب ولا مزوّد.
 // يحتاج: الموقع محليًا على 8787، و`node scripts/ext-test/server.mjs` على 443. يُعيد كل ما غيّره.
 import { chromium } from 'playwright';
 import path from 'node:path'; import fs from 'node:fs';
@@ -51,28 +52,35 @@ try {
     console.log(`  [${label}] ${Math.round((Date.now() - t0) / 1000)}s · ${txt.slice(0, 220)}`);
     return txt;
   };
-  // الدفعة الأولى: إثراء منتجين قائمين، وصفحتاهما تحملان روابط ٩١٠٢٠٠٠٠١–٣
+  // الدفعة الأولى: إثراء منتجين قائمين، وصفحتاهما تحملان روابط ٩١٠٢٠٠٠٠١–٣ — تُستورد قبل نهاية الدفعة نفسها
+  try { fs.unlinkSync('/tmp/fx-hits'); } catch {}
   const t1 = await batch('الأولى');
   const found = rows("SELECT offer_id,status,category_id,from_offer FROM discovered_offers WHERE offer_id LIKE '9102%' ORDER BY offer_id");
-  expect(NEW.every(id => found.some(f => f.offer_id === id && f.status === 'new')), `الإضافة التقطت روابط المنتجات الثلاثة من صفحات الإثراء (${found.map(f => f.offer_id + ':' + f.status).join('، ')})`);
+  expect(NEW.every(id => found.some(f => f.offer_id === id)), `الإضافة التقطت روابط المنتجات الثلاثة من صفحات الإثراء (${found.map(f => f.offer_id + ':' + f.status).join('، ')})`);
   expect(found.every(f => f.from_offer && f.category_id !== null), `وحُفظت بقسم الصفحة التي وُجدت فيها (${[...new Set(found.map(f => f.category_id))].join('،')})`);
-  expect(/اكتشاف مجاني: 3 رابط منتج جديد في 2 من 2 صفحة/.test(t1), 'الشريط يقول: ٣ روابط جديدة في صفحتين من صفحتين');
-  await adm.screenshot({ path: `${OUT}/ext-discover-1.png`, fullPage: false });
-  // الدفعة الثانية: تفتح الروابط الثلاثة وتستوردها
-  sql(`UPDATE crawl_jobs SET run_now=1 WHERE id=${job.id}`);
-  const t2 = await batch('الثانية');
   const got = rows("SELECT source_offer_id o,status,category_id,title_ar,min_qty,weight_g,(SELECT COUNT(*) FROM product_images i WHERE i.product_id=p.id) imgs FROM products p WHERE source_offer_id LIKE '9102%' ORDER BY o");
   console.log('  ', JSON.stringify(got));
-  expect(NEW.every(id => got.some(g => g.o === id)), `الدفعة الثانية استوردت المنتجات الثلاثة من صفحاتها (${got.map(g => g.o).join('، ')})`);
+  expect(NEW.every(id => got.some(g => g.o === id)), `الدفعة الأولى نفسها استوردت المنتجات الثلاثة التي اكتشفتها — لا تنتظر ساعة الدفعة التالية (${got.map(g => g.o).join('، ')})`);
+  expect(/اكتشاف مجاني: 6 رابط منتج جديد في 5 من 5 صفحة/.test(t1), 'الشريط يقول: ٦ روابط جديدة في ٥ صفحات من ٥ (صفحتا الإثراء + صفحات الجديد الثلاث)');
+  await adm.screenshot({ path: `${OUT}/ext-discover-1.png`, fullPage: false });
   const a = got.find(g => g.o === '910200001');
   expect(a && a.status === 'active' && a.imgs === 2 && a.weight_g === 450 && /مصباح مكتب/.test(a.title_ar), `المنتج الجديد على الرف كاملًا: عنوان وصورتان ووزن ٤٥٠ غ (${a?.status})`);
   const lot = got.find(g => g.o === '910200003');
   expect(lot && lot.status === 'hidden' && lot.min_qty === 5, `ومنتج الجملة (أقل طلب ٥) دخل مخفيًا لا على الرف (${lot?.status})`);
-  expect(/منتجات جديدة \+3/.test(t2), 'الشريط يعدّ «منتجات جديدة +3»');
+  expect(/منتجات جديدة \+3/.test(t1), 'الشريط يعدّ «منتجات جديدة +3» في الدفعة الأولى');
   const st = rows("SELECT status,COUNT(*) n FROM discovered_offers WHERE offer_id IN ('910200001','910200002','910200003') GROUP BY status");
   expect(st.length === 1 && st[0].status === 'imported' && st[0].n === 3, `وخرجت من طابور الاكتشاف «مستوردة» (${JSON.stringify(st)})`);
   const snow = rows("SELECT COUNT(*) n FROM discovered_offers WHERE offer_id IN ('910200004','910200005','910200006') AND status='new'")[0].n;
   expect(snow === 3, `وصفحاتها الجديدة أضافت روابط أخرى للطابور (${snow})`);
+  // الدفعة الثانية: ما اكتُشف في صفحات الأولى يُفتح **أولًا** — لو أُغلق كروم بعد دقائق يكون الجديد قد دخل
+  try { fs.unlinkSync('/tmp/fx-hits'); } catch {}
+  sql(`UPDATE crawl_jobs SET run_now=1 WHERE id=${job.id}`);
+  const t2 = await batch('الثانية');
+  const hits = (fs.existsSync('/tmp/fx-hits') ? fs.readFileSync('/tmp/fx-hits', 'utf8') : '').trim().split('\n').filter(Boolean);
+  console.log('   ترتيب الفتح:', hits.join(' '));
+  expect(['910200004', '910200005', '910200006'].every(id => hits.slice(0, 3).includes(id)) && hits.length > 3, `الدفعة الثانية فتحت المنتجات الجديدة الثلاثة قبل صفحات الإثراء (${hits.slice(0, 5).join('، ')})`);
+  const got2 = rows("SELECT COUNT(*) n FROM products WHERE source_offer_id IN ('910200004','910200005','910200006')")[0].n;
+  expect(got2 === 3 && /منتجات جديدة \+3/.test(t2), `واستوردتها (${got2}) والشريط يعدّها`);
   await adm.goto(BASE + '/admin/crawler'); await adm.locator('#discover').scrollIntoViewIfNeeded();
   const card = ((await adm.locator('#discover').textContent()) || '').replace(/\s+/g, ' ');
   expect(/أضافت [3-9]\d* منتجًا جديدًا/.test(card), `بطاقة الاكتشاف تقول ما أُضيف في ٢٤ ساعة (${(card.match(/آخر ٢٤ ساعة:[^·]*·[^·]*·[^·]*/) || [''])[0]})`);
@@ -86,6 +94,7 @@ try {
   try { const pg = ctx.pages().find(p => p.url().includes('popup.html')); if (pg) console.log('--- سجل الإضافة:\n' + (await pg.locator('#log').textContent())); } catch {}
   // قاعدة المشروع: أعد ما غيّرته
   try { fs.unlinkSync('/tmp/fx-reco'); } catch {}
+  try { fs.unlinkSync('/tmp/fx-hits'); } catch {}
   sql(`UPDATE crawl_jobs SET active=${job.active},max_new=${job.max_new ?? 'NULL'},run_now=${job.run_now},runner='${job.runner}' WHERE id=${job.id}`);
   sql(`UPDATE settings SET value='${per}' WHERE key='discover_per_batch'`);
   if (!process.env.KEEP) clean();
