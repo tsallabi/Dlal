@@ -101,6 +101,10 @@ const render = async (html, name, waitImg) => {
   await p.screenshot({ path: `${OUT}/${name}.png` });
   await p.close();
 };
+// أوراق معاينة للمرشّحين: أول صور كل منتج جنبًا إلى جنب، لاختيار الصورة بالعين (بلا نص صيني، ومحتشمة)
+for (const c of D.candidates ?? []) await render(`<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0;width:1080px;height:1350px;display:grid;grid-template-columns:1fr 1fr;gap:6px;background:#333}
+div{background:#fff center/contain no-repeat;position:relative}b{position:absolute;top:8px;right:8px;background:#B05A20;color:#fff;font:700 40px Arial;padding:2px 16px;border-radius:10px}</style></head><body>
+${c.imgs.map((u, k) => `<div style="background-image:url('${img(u)}')"><b>${k}</b></div>`).join('')}</body></html>`, `sheet-${c.id}`);
 await render(introPost, '00-intro');
 for (const [i, p] of D.products.entries()) await render(productPost(p), `${String(i + 1).padStart(2, '0')}-${p.slug}`, img(p.img));
 await render(linkPost, '07-order-by-link');
