@@ -43,6 +43,8 @@ export function junkAttr(v: string | null | undefined): boolean {
   const t = String(v ?? '').trim();
   if (!t) return false;
   if (JUNK.has(bare(t))) return true;
+  // «detail.1688.com»، «694844693951.html?sp»: رابط المورّد التصق بجدول المواصفات
+  if (/1688\.com|\.html?\b|https?:|www\./i.test(t)) return true;
   // «Specifications (length*width)»، «Parameters»، «المواصفات (الطول * العرض)»: رأس جدول لا خيار
   if (/^(size\s+)?(specifications?|parameters?|product parameters)\b/i.test(t) || /^(ال)?مواصفات/.test(t)) return true;
   // «Weight: S: 530g XXL: 600g» و«حجم المادة: حرير الحليب 230 جرام…» — وصف لا قيمة
@@ -55,9 +57,26 @@ const KEEP = /^(x{0,6}s|x{0,7}l|m|[2-9]xl|x{0,6}l|cm|mm|kg|ml|mah|usb|led|lcd|hd
 export function needsEnTr(v: string | null | undefined): boolean {
   const t = String(v ?? '');
   if (!t || /[؀-ۿ]/.test(t) || /[一-鿿]/.test(t)) return false;
-  return (t.match(/[A-Za-z][A-Za-z'-]*/g) ?? []).some(w => w.replace(/[-']/g, '').length >= 3 && !KEEP.test(w.replace(/'/g, '')));
+  // كلمة ملتصقة برقم رمزُ طراز («PPA17»، «MJL925»، «Jltx02–fc0003») لا إنجليزية — إلا إن كانت لونًا («Blue1») أو «5customized»
+  return t.split(/\s+/).some(tok => {
+    const words = tok.match(/[A-Za-z][A-Za-z'-]*/g) ?? [];
+    if (/\d/.test(tok)) return words.some(w => !!COLORS[w.toLowerCase()] || /^customi[sz]ed$/i.test(w));
+    return words.some(w => w.replace(/[-']/g, '').length >= 3 && !KEEP.test(w.replace(/'/g, '')));
+  });
 }
 
+const VARIANT_WORD: Record<string, string> = { 'new model': 'موديل جديد', 'new style': 'موديل جديد', 'upgraded version': 'نسخة مطوّرة', 'upgraded': 'نسخة مطوّرة', regular: 'عادي', 'regular model': 'موديل عادي', standard: 'قياسي', 'already made': 'جاهز', 'high quality version': 'نسخة عالية الجودة' };
+// أطول بداية لونية في القيمة ثم ما بعدها: «Yellow and black leopard print» ⟵ {أصفر وأسود، leopard print}
+function leadColor(t: string, one: (c: string) => string | null): { c: string; rest: string } | null {
+  const words = t.replace(/[-–]\s*\(/g, ' (').replace(/(\S)([\[【(（])/g, '$1 $2').replace(/[-–](?=[A-Za-z]{1,4}\d)/g, ' ').replace(/\s*[-–]\s*$/, '').split(/\s+/);
+  for (let k = Math.min(5, words.length - 1); k >= 1; k--) {
+    const ph = words.slice(0, k).join(' ').toLowerCase().replace(/\s+colou?r$/, '').replace(/[-–]$/, '').trim();
+    const both = ph.match(/^(.+?) and (.+)$/);
+    const c = one(ph) ?? (both && one(both[1]) && one(both[2]) ? `${one(both[1])} و${one(both[2])}` : null);
+    if (c) return { c, rest: words.slice(k).join(' ').replace(/^colou?r\s+/i, '').replace(/^[\[【(（]\s*(.*?)\s*[\]】)）]$/, '$1').trim() };
+  }
+  return null;
+}
 const kgRange = (s: string) => { const m = s.match(/(\d+(?:\.\d+)?)\s*[-~–]\s*(\d+(?:\.\d+)?)\s*(kg|jin|斤)?/i); return m ? ` (${m[1]}-${m[2]}${m[3] && /kg/i.test(m[3]) ? ' كغ' : ''})` : ''; };
 const SIZE_TOKEN = /\b(XXS|XS|S|M|L|XL|XXL|XXXL|XXXXL|XXXXXL|[2-7]XL)\b/i;
 
@@ -81,8 +100,9 @@ export function enAttr(raw: string): string | null {
   const set = low.match(/^(double short|short long|double long|long short)\s*[-–]?\s*(.+)$/);
   if (set && one(set[2].trim())) return add(`${SETS[set[1]]} - ${one(set[2].trim())}`);
   // رمز طراز ثم لون: «B72 black»، «K06 black-green» — الرمز يبقى، واللون يُترجم
-  const code = t.match(/^([A-Za-z]{0,3}\d{1,5}[A-Za-z]?)\s+(.+)$/);
-  if (code) { const rest = enAttr(code[2]); if (rest && !needsEnTr(rest)) return add(`${code[1].toUpperCase()} ${rest}`); }
+  // و«2333 # Wine red»، «1609#apricot»، «Ybl-t218 navy»، «JEPJ navy blue»
+  const code = t.match(/^([A-Za-z]{0,4}\d{1,6}[A-Za-z]?|[A-Za-z]{1,4}[-–][A-Za-z]?\d{1,5}|[A-Z]{2,5})\s*(?:#\s*|\s+)(.+)$/);
+  if (code && code[2] !== t) { const rest = enAttr(code[2]); if (rest && !needsEnTr(rest)) return add(`${code[1].toUpperCase()} ${rest}`); }
   // المقاسات
   if (/^(one size( fits all)?|free size|all yards|all code|average size|universal|one size fits most)\b/i.test(low)) return add('مقاس واحد' + kgRange(low));
   if (/^large size$/.test(low)) return add('مقاس كبير');
@@ -103,6 +123,31 @@ export function enAttr(raw: string): string | null {
   // «Blue1»، «Blue 2»: لون ورقم تصميم
   const num = low.match(/^([a-z][a-z ]*?)\s*(\d{1,2})$/);
   if (num && one(num[1])) return add(`${one(num[1])} ${num[2]}`);
+  // «and yellow»: شظيّة من «Black and yellow» قُطّعت عند الفاصلة
+  const andc = low.match(/^and\s+(.+)$/); if (andc && one(andc[1])) return add(one(andc[1])!);
+  const cust = low.match(/^(\d{1,3})\s*customi[sz]ed$/); if (cust) return add(`تصميم خاص ${cust[1]}`);   // «5customized»
+  // «M pure cotton 210g 40-50kg»، «Lpure cotton…»: المقاس ملتصق أحيانًا
+  const cot = t.match(/^(XXS|XS|S|M|L|XL|XXL|XXXL|[2-7]XL)\s*pure cotton\s*(\d+)\s*g\s*(\d+(?:\.\d+)?-\d+(?:\.\d+)?)\s*(kg)?$/i);
+  if (cot) return add(`${cot[1].toUpperCase()} قطن خالص ${cot[2]} غ (${cot[3]}${cot[4] ? ' كغ' : ''})`);
+  // لون ثم وصف: «Apricot 9cm»، «Off-white 4cm high heel»، «Khaki leopard print»، «Navy blue A-line skirt»، «Royal Blue-Z142»
+  const lead = leadColor(t, one);
+  if (lead) {
+    const { c, rest } = lead, r = rest.toLowerCase();
+    let m: RegExpMatchArray | null;
+    if ((m = r.match(/^(\d+(?:\.\d+)?)\s*cm$/))) return add(`${c} ${m[1]} سم`);
+    if ((m = rest.match(/^(\d+(?:\.\d+)?)\s*cm\s+([A-Za-z]{0,4}\d[\w-]*)$/i))) return add(`${c} ${m[1]} سم ${m[2].toUpperCase()}`);   // «Off-white 5.5 cm 6102-1»
+    // «new model»، «[Upgraded Version]»، «(regular)» تُترجم ولا تُحذف: «Navy blue» و«Navy blue new model» خياران مختلفان في المنتج نفسه
+    if (VARIANT_WORD[r]) return add(`${c} ${VARIANT_WORD[r]}`);
+    if ((m = r.match(/^(\d+(?:\.\d+)?)\s*cm\s+high[- ]heels?$/))) return add(`${c} كعب ${m[1]} سم`);
+    if (/^(with )?(lining|lined)$/.test(r)) return add(`${c} مبطّن`);
+    if (/^(with )?(fleece[- ]lined|fleece lining|velvet lining)$/.test(r)) return add(`${c} مبطّن بالفرو`);
+    if (/^(with rhinestones?|\(?rhinestone style\)?)$/.test(r)) return add(`${c} مرصّع بالستراس`);
+    if (/^leopard( print)?$/.test(r)) return add(`نمري ${c}`);
+    if (/^a-line skirt$/.test(r)) return add(`تنورة قصة A ${c}`);
+    if (/^a-line dress$/.test(r)) return add(`فستان قصة A ${c}`);
+    if ((m = r.match(/^with (.+?) (lettering|letters|words|print)$/)) && one(m[1])) return add(`${c} بكتابة ${one(m[1])}`);
+    if ((m = rest.match(/^([A-Za-z]{0,4}[-–]?\d[\w–-]*)$/))) return add(`${c} ${m[1].toUpperCase()}`);
+  }
   return null;
 }
 

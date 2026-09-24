@@ -1872,7 +1872,8 @@ const enOffer = '86' + String(Date.now()).slice(-10), enTag = uniqTag();
 const enImp = await extCall('/api/import', { category_id: 1, page_url: 'ext:stock', items: [{ offerId: enOffer, url: `https://detail.1688.com/offer/${enOffer}.html`,
   title: `ألوان ${enTag}`, priceCny: 30, images: ['https://cbu01.alicdn.com/img/ibank/en1.jpg', 'https://cbu01.alicdn.com/img/ibank/en2.jpg'], minQty: 1, inStock: true, weightG: 300,
   variants: [{ color: 'Navy blue', size: 'Female XL', inStock: true }, { color: 'Wine red', size: 'M [recommendation 40-50kg ]', inStock: true },
-    { color: 'non-returnable]', size: 'Female XL', inStock: true }, { color: 'K06 black-green', size: 'Capacity', inStock: true }, { color: '2008 double short - black', size: 'Female XL', inStock: true }] }] });
+    { color: 'non-returnable]', size: 'Female XL', inStock: true }, { color: 'K06 black-green', size: 'Capacity', inStock: true }, { color: '2008 double short - black', size: 'Female XL', inStock: true },
+    { color: '2333 # Wine red', size: 'Female XL', inStock: true }, { color: 'Navy blue new model', size: 'Female XL', inStock: true }] }] });
 expect(enImp.imported === 1, `عيّنة الألوان الإنجليزية دخلت (جديد ${enImp.imported})`);
 const openEn = async () => {
   await page.goto(BASE + '/search?q=' + encodeURIComponent(enTag)); await page.locator('.card .t').first().click(); await page.waitForLoadState('networkidle');
@@ -1881,12 +1882,13 @@ const openEn = async () => {
 const enChips = await openEn();
 const enAll = [...enChips.colors, ...enChips.sizes].join('، ');
 expect(enChips.colors.includes('كحلي') && enChips.colors.includes('نبيتي') && enChips.colors.includes('K06 أسود وأخضر') && enChips.colors.includes('2008 نصف كم وشورت - أسود'), `الألوان بالعربية في منتقي اللون (${enChips.colors.join('، ')})`);
+expect(enChips.colors.includes('2333 نبيتي') && enChips.colors.includes('كحلي موديل جديد') && enChips.colors.includes('كحلي'), `رقم التصميم بعلامة # والموديل الجديد يبقى خيارًا مستقلًا عن «كحلي» (${enChips.colors.join('، ')})`);
 expect(enChips.sizes.includes('XL نسائي') && enChips.sizes.includes('M (40-50 كغ)'), `المقاسات بالعربية مع رموزها (${enChips.sizes.join('، ')})`);
 expect(!/[A-Za-z]{3,}/.test(enAll.replace(/K06/g, '')) && !/non-returnable|Capacity/i.test(enAll), `لا شظايا ولا كلمة إنجليزية في المنتقي (${enAll})`);
 // «نبيتي» لا يتوفر إلا بمقاس M والمختار تلقائيًا XL: كان النقر عليه لا يفعل شيئًا بلا أي رسالة.
 // الآن يُختار وينتقل المقاس وحده إلى ما يتوفر معه، كما في شي إن
 expect(((await page.locator('#sizeLbl').textContent()) || '') === 'XL نسائي', 'المقاس المختار تلقائيًا XL نسائي');
-await page.locator('.chips[data-opt=color] .chip', { hasText: 'نبيتي' }).click();
+await page.locator('.chips[data-opt=color] .chip[data-val="نبيتي"]').click();
 const enPick = { c: (await page.locator('#colorLbl').textContent()) || '', s: (await page.locator('#sizeLbl').textContent()) || '', id: await page.locator('#variantId').inputValue() };
 expect(enPick.c === 'نبيتي' && enPick.s === 'M (40-50 كغ)' && !!enPick.id, `النقر على لون غير متوفر بالمقاس المختار يختاره وينقل المقاس (${enPick.c} · ${enPick.s} · متغيّر ${enPick.id})`);
 // ما دخل الرف قبل الإصلاح: نزرع القيم الإنجليزية القديمة في القاعدة المحلية وحدها (كما هي على الحي) ونشغّل دفعة الإصلاح

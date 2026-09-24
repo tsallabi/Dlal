@@ -428,6 +428,8 @@ export async function fixEnglishVariants(db: D1Database, tr: Translator, limit =
   // ما يئس منه النموذج قد يغطيه القاموس بعد توسيعه — مجانًا
   const { results: gaveUp } = await db.prepare('SELECT src FROM attr_seen WHERE tries BETWEEN 3 AND 98 LIMIT 300').all<{ src: string }>();
   for (const { src } of gaveUp) {
+    // رمز طراز بحت («PPA17»، «MJL925») صار يُعرف أنه لا يحتاج ترجمة: لا يُعدّ إنجليزيًا بعد اليوم
+    if (!needsEnTr(src)) { await db.prepare('UPDATE attr_seen SET tries=99 WHERE src=?').bind(src).run(); continue; }
     const d = enAttr(src);
     if (!d || d === src || needsEnTr(d)) continue;
     for (const f of ['color', 'size'] as const) fixed += (await db.prepare(`UPDATE variants SET ${f}=? WHERE ${f}=?`).bind(d.slice(0, 60), src).run()).meta?.changes ? 1 : 0;
