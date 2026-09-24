@@ -36,6 +36,8 @@ export type User = {
 export type Variables = {
   user: User | null;
   cartCount: number;
+  trackN?: number;   // عدد نتائج البحث — يسجّله listPage ويقرؤه متتبّع الزيارات
+  vid?: string;      // معرّف الزائر (كوكي vid) — يُضبط قبل بناء الصفحة
 };
 
 export type Env = { Bindings: Bindings; Variables: Variables };

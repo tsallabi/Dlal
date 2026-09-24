@@ -363,3 +363,15 @@ document.addEventListener('click', e => {
     });
   });
 })();
+
+// «هل واجهت الزبونة مشكلة؟»: أخطاء جافاسكربت تُرسل للخادم (حتى 3 لكل صفحة) فتظهر في «حركة الزوار»
+(function () {
+  var sent = 0;
+  function send(m) {
+    if (sent >= 3 || !m || /^\/(admin|partner)/.test(location.pathname)) return;
+    sent++;
+    try { navigator.sendBeacon('/t/e', new Blob([JSON.stringify({ m: String(m).slice(0, 180), p: location.pathname })], { type: 'application/json' })); } catch (e) {}
+  }
+  window.addEventListener('error', function (e) { send(e.message); });
+  window.addEventListener('unhandledrejection', function (e) { send('Promise: ' + (e.reason && e.reason.message || e.reason)); });
+})();

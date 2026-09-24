@@ -1,6 +1,8 @@
 import { Hono } from 'hono';
 import type { Env } from './types';
 import { loadUser } from './lib/auth';
+import analytics from './routes/admin-analytics';
+import { track, pageKind, trackPath, trackable, visitorId } from './lib/track';
 import { cartCount } from './lib/db';
 import store from './routes/store';
 import auth from './routes/auth';
@@ -56,6 +58,12 @@ app.use('*', async (c, next) => {
     const head = metaHead(await metaSettings(c.env.DB));
     if (head) html = html.replace('</head>', head + '</head>');
   }
+  // حركة الزوار: كل صفحة زبونة تُفتح (أو تفشل) تُسجَّل — الموظفون والروبوتات مستثنون داخل track
+  if (c.req.method === 'GET' && trackPath(path)) {
+    const st = c.res.status;
+    if (st >= 400) track(c, 'error', st === 404 ? 'صفحة غير موجودة (404)' : `خطأ في الخادم (${st})`, st, path);
+    else if (st === 200) { const k = pageKind(new URL(c.req.url)); track(c, k.kind, k.ref, k.kind === 'search' ? c.get('trackN') ?? null : null); }
+  }
   // شريط «ادخل باسمه» فوق كل صفحة: المالك يرى دائمًا أنه يعمل بحساب غيره، وكل ما يفعله يُحفظ باسم ذلك الحساب
   const u = c.get('user');
   if (u?.imp_by) {
@@ -70,8 +78,18 @@ app.use('*', async (c, next) => {
 app.use('*', async (c, next) => {
   const user = await loadUser(c);
   c.set('user', user);
+  const path0 = new URL(c.req.url).pathname;
+  if (c.req.method === 'GET' && trackPath(path0) && trackable(c)) c.set('vid', visitorId(c));
   c.set('cartCount', user ? await cartCount(c) : 0);
   await next();
+});
+
+// أخطاء جافاسكربت عند الزبونة (public/app.js يرسل حتى 3 لكل صفحة): «هل واجهتهم مشكلة؟»
+app.post('/t/e', async (c) => {
+  const b = await c.req.json<{ m?: string; p?: string }>().catch(() => ({} as any));
+  const m = String(b.m ?? '').slice(0, 180);
+  if (m && !/extension:\/\/|ResizeObserver|Script error/i.test(m)) track(c, 'error', 'جافاسكربت: ' + m, null, String(b.p ?? '/').slice(0, 200));
+  return c.body(null, 204);
 });
 
 // الاسم القديم لملف الإضافة (قبل هدهدي): رابط محفوظ عند صاحب المشروع يبقى يعمل
@@ -80,6 +98,7 @@ app.route('/', img);
 app.route('/api/partner/v1', partnerApi);   // قبل /api: واجهة شركات الشحن برمزها لا برمز الاستيراد
 app.route('/api', api);
 app.route('/admin/api1688', api1688Admin);
+app.route('/admin', analytics);
 app.route('/admin', adminOps);
 app.route('/admin', admin);
 app.route('/account', account);
@@ -120,6 +139,7 @@ export default {
         // طلبات لم تصل API شركة الشحن (خادمها معطّل أو بطيء): تُعاد بمهلة متزايدة
         try { const n = await retryDispatch(env.DB, 'https://hudhude.com'); if (n) console.log('partner dispatch retried', n); } catch (e: any) { console.error('partner dispatch', e?.message ?? e); }
         try { const n = await moveMediaToR2(env.DB, env.MEDIA); if (n) console.log('media moved to R2', n); } catch (e: any) { console.error('media to R2', e?.message ?? e); }
+        try { await env.DB.prepare("DELETE FROM visits WHERE created_at < datetime('now','-90 days')").run(); } catch (e: any) { console.error('visits cleanup', e?.message ?? e); }
         // طلبات «اطلبي برابط» التي نُشر منتجها بعد ترجمته (كان مسودة لحظة الاستيراد)
         await settleLinkRequests(env.DB);
         if (!s.src_key) return;

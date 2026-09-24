@@ -16,7 +16,7 @@ import { requirePerm, logActivity } from '../lib/perm';
 import { settleLinkRequests, LINK_SOURCES, LINK_STATUS } from '../lib/link-requests';
 import { validPixel, validVerify, bustMetaCache } from '../lib/meta';
 import { setOrderStatus, markOrderPaid } from '../lib/orders';
-import { RATE_KEYS, RATE_AR, PP_KEY, syncPricingPartner, pricingPartnerId, attemptDispatch, moveMediaToR2 } from '../lib/partner';
+import { RATE_KEYS, RATE_AR, PP_KEY, syncPricingPartner, pricingPartnerId, attemptDispatch, moveMediaToR2, partnerBalance } from '../lib/partner';
 import { Translator, hasCJK, hasArabic, enTitle, goodTitle, retranslatePending, releaseHeldDrafts, BROKEN_SQL } from '../lib/translate';
 
 const admin = new Hono<Env>();
@@ -740,6 +740,7 @@ admin.get('/partners', async (c) => {
   const rows = await db.prepare(`SELECT p.*,(SELECT COUNT(*) FROM orders o WHERE o.partner_id=p.id AND o.status IN ('paid','purchasing','purchased','at_warehouse')) AS active_orders,(SELECT COUNT(*) FROM users u WHERE u.partner_id=p.id) AS staff,
       (SELECT status FROM partner_dispatch d WHERE d.partner_id=p.id ORDER BY d.id DESC LIMIT 1) AS last_dispatch FROM partners p ORDER BY p.id`).all<any>();
   const log = await db.prepare('SELECT d.id,d.status,d.http_status,d.attempts,d.error,d.created_at,d.sent_at,o.code,p.name FROM partner_dispatch d JOIN orders o ON o.id=d.order_id JOIN partners p ON p.id=d.partner_id ORDER BY d.id DESC LIMIT 30').all<any>();
+  const bal = await Promise.all(rows.results.map(async (p: any) => ({ p, b: await partnerBalance(db, p.id), log: (await db.prepare('SELECT kind,amount_lyd,note,created_at FROM partner_ledger WHERE partner_id=? ORDER BY id DESC LIMIT 5').bind(p.id).all<any>()).results })));
   const med = await db.prepare("SELECT SUM(r2_key IS NOT NULL) r2,SUM(data IS NOT NULL) d1,SUM(url IS NOT NULL) ext,COALESCE(SUM(bytes),0) b FROM order_media").first<any>();
   // المعاينة: ?preview=ID يحسب الأسعار كما لو اختير هذا الشريك، دون حفظ شيء
   const pv = Number(c.req.query('preview') ?? 0) || 0;
@@ -795,6 +796,16 @@ admin.get('/partners', async (c) => {
           <button class="btn dark" onclick="return confirm('تسعير الرف كله بأسعار هذا الشريك الآن؟')">اعتمد أسعار «{pvp.name}» للرف وأعد التسعير</button></form>}
       </div>}
 
+      <div class="card-box" id="ledger"><h3>💰 الحساب مع كل شريك</h3>
+        <p style="font-size:13px;color:#666;margin-top:0">المستحقات من لقطة أسعار الشريك يوم دفع كل طلب. سجّل هنا ما تدفعه للشريك وما يسلّمه لك من تحصيل «الدفع عند الاستلام» — يظهر الرصيد نفسه في «لوحتي» عنده.</p>
+        {bal.map(({ p, b, log }) => <div class="ledger-row">
+          <b>{p.name}</b>
+          <div class="ledger-nums"><span>مستحقاته <b>{fmt(b.dues)}</b></span><span>دفعنا له <b>{fmt(b.paid)}</b></span><span class="lg-to">له علينا <b>{fmt(b.toPartner)}</b></span><span>حصّل عند الاستلام <b>{fmt(b.cod)}</b></span><span>سلّمنا <b>{fmt(b.got)}</b></span><span class="lg-us">لنا عليه <b>{fmt(b.toUs)}</b></span><span class="lg-net">الصافي: <b>{b.net >= 0 ? `له ${fmt(b.net)}` : `لنا ${fmt(-b.net)}`}</b></span></div>
+          <form method="post" action={`/admin/partners/${p.id}/ledger`} class="inline" style="gap:6px"><select name="kind"><option value="payout">دفعنا له</option><option value="collect">سلّمنا تحصيلًا</option></select><input type="number" step="0.01" min="0.01" name="amount" placeholder="المبلغ د.ل" style="width:120px" required /><input type="text" name="note" placeholder="ملاحظة (رقم الحوالة…)" /><button class="btn sm dark">تسجيل</button></form>
+          {log.length > 0 && <small class="lg-log">{log.map((l: any) => `${l.kind === 'payout' ? 'دفعنا' : 'سلّمنا'} ${fmt(l.amount_lyd)}${l.note ? ` (${l.note})` : ''} · ${timeAgo(l.created_at)}`).join(' — ')}</small>}
+        </div>)}
+      </div>
+
       <div class="card-box media-store"><h3>صور مراحل الطلبات</h3>
         <p style="font-size:13px;margin:0">في R2 (<code>hudhude-media</code>): <b class="m-r2">{med?.r2 ?? 0}</b> · في قاعدة البيانات: <b class="m-d1">{med?.d1 ?? 0}</b> · روابط خارجية: {med?.ext ?? 0} · الحجم {Math.round((med?.b ?? 0) / 1024)} ك.ب
           {!c.env.MEDIA && <b style="color:#8c2121"> — R2 غير مربوط بالموقع: الصور تُحفظ في القاعدة.</b>}</p>
@@ -833,6 +844,15 @@ admin.post('/partners/pricing', async (c) => {
   if (id) await syncPricingPartner(db);
   await logActivity(db, c.get('user')!.id, 'partners.pricing', String(id), '');
   return c.redirect(`/admin/partners?ok=1&repriced=${await repriceAll(db)}`);
+});
+admin.post('/partners/:id/ledger', async (c) => {
+  const f = await c.req.parseBody(); const db = c.env.DB; const id = Number(c.req.param('id'));
+  const amt = Math.round((parseFloat(latinDigits(String(f.amount ?? ''))) || 0) * 100) / 100;
+  const kind = f.kind === 'collect' ? 'collect' : 'payout';
+  if (amt <= 0) return c.redirect('/admin/partners?err=' + encodeURIComponent('اكتب مبلغًا أكبر من صفر') + '#ledger');
+  await db.prepare('INSERT INTO partner_ledger(partner_id,kind,amount_lyd,note,by_user_id) VALUES(?,?,?,?,?)').bind(id, kind, amt, f.note ? String(f.note).slice(0, 200) : null, c.get('user')!.id).run();
+  await logActivity(db, c.get('user')!.id, 'partner.ledger', String(id), `${kind} ${amt}`);
+  return c.redirect('/admin/partners?ok=1#ledger');
 });
 admin.post('/partners/media-to-r2', async (c) => {
   let n = 0, k = 0;

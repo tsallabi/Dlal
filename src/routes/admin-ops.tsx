@@ -21,7 +21,7 @@ import { retranslatePending } from '../lib/translate';
 const ops = new Hono<Env>();
 ops.use('*', requireRole('admin'));
 
-const shell = async (c: Context<Env>, active: string, title: string, body: any) => {
+export const shell = async (c: Context<Env>, active: string, title: string, body: any) => {
   const db = c.env.DB;
   const k = await db.batch([
     db.prepare("SELECT COUNT(*) n FROM orders WHERE status='pending_payment'"),
@@ -368,7 +368,8 @@ ops.post('/customers/:id/toggle', requirePerm('customers.manage'), async (c) => 
 // ---------- الموظفون والصلاحيات ----------
 ops.use('/staff*', requirePerm('staff.manage'));
 ops.get('/staff', async (c) => {
-  const rows = await c.env.DB.prepare("SELECT u.id,u.name,u.phone,u.role,u.staff_role,u.partner_id,u.active,u.last_login_at,p.name AS partner FROM users u LEFT JOIN partners p ON p.id=u.partner_id WHERE u.role IN ('admin','partner') AND u.phone NOT GLOB 'deleted-*' ORDER BY u.role,u.id").all<any>();
+  const rows = await c.env.DB.prepare("SELECT u.id,u.name,u.phone,u.role,u.staff_role,u.partner_id,u.active,u.last_login_at,p.name AS partner FROM users u LEFT JOIN partners p ON p.id=u.partner_id WHERE u.role IN ('admin','partner') AND u.phone NOT GLOB 'deleted-*' AND u.pending_approval=0 ORDER BY u.role,u.id").all<any>();
+  const pending = await c.env.DB.prepare("SELECT u.id,u.name,u.phone,u.created_at,p.name partner,a.name added FROM users u LEFT JOIN partners p ON p.id=u.partner_id LEFT JOIN users a ON a.id=u.added_by WHERE u.pending_approval=1 AND u.phone NOT GLOB 'deleted-*' ORDER BY u.id").all<any>();
   const partners = await c.env.DB.prepare('SELECT id,name FROM partners').all<any>();
   const me = c.get('user')!;
   const owner = me.staff_role === 'owner' && !me.imp_by;
@@ -379,6 +380,13 @@ ops.get('/staff', async (c) => {
       <div class="two staff-grid">
         <div>
           <p style="font-size:13px;color:#555;margin:0 0 10px">اضغط <b>«تعديل»</b> لتغيير الاسم أو الهاتف (اسم الدخول) أو كلمة المرور أو الدور أو الشركة — تستطيع تحويل الحساب نفسه إلى موظف آخر. {owner && <>و<b>«ادخل باسمه»</b> يفتح الموقع كما يراه ذلك الموظف لتجرّبه بنفسك، ثم «عودة إلى حسابي» من الشريط الأحمر أعلى الصفحة.</>}</p>
+          {pending.results.length > 0 && <div class="card-box pending-staff" id="pending"><h3>⏳ موظفون أضافتهم شركات الشحن — بانتظار موافقتك ({pending.results.length})</h3>
+            {pending.results.map((p: any) => <div class="inline" style="justify-content:space-between;border-bottom:1px solid var(--line);padding:6px 0" data-phone={p.phone}>
+              <span><b>{p.name}</b> <span dir="ltr">{p.phone}</span> · {p.partner} <small>· أضافه {p.added ?? '—'} {timeAgo(p.created_at)}</small></span>
+              <span class="inline" style="gap:6px"><form method="post" action={`/admin/staff/${p.id}/approve`}><button class="btn sm ok">قبول</button></form>
+                <form method="post" action={`/admin/staff/${p.id}/reject`}><button class="btn sm ghost" style="color:#d3262b">رفض</button></form></span>
+            </div>)}
+          </div>}
           <div class="staff-list">
             {rows.results.map(u => (
               <details class="staff-row" data-phone={u.phone}>
@@ -482,6 +490,28 @@ ops.post('/staff/:id/delete', async (c) => {
   try { await db.prepare('DELETE FROM users WHERE id=?').bind(id).run(); }
   catch { await db.prepare("UPDATE users SET active=0,phone='deleted-'||id,name=name||' (محذوف)' WHERE id=?").bind(id).run(); }
   await logActivity(db, me.id, 'staff.delete', String(id), `${u.name} ${u.phone}`);
+  return c.redirect('/admin/staff?ok=1');
+});
+
+// طلبات شركات الشحن لإضافة موظفين: القبول يفعّل الحساب، والرفض يحذفه (لم يدخل قط فلا أثر له)
+ops.post('/staff/:id/approve', async (c) => {
+  const db = c.env.DB; const id = Number(c.req.param('id'));
+  const u = await db.prepare('SELECT id,name,added_by FROM users WHERE id=? AND pending_approval=1').bind(id).first<any>();
+  if (u) {
+    await db.prepare('UPDATE users SET active=1,pending_approval=0 WHERE id=?').bind(id).run();
+    if (u.added_by) await notify(db, u.added_by, 'قُبل الموظف ✓', `${u.name} يستطيع الدخول الآن`, '/partner/team');
+    await logActivity(db, c.get('user')!.id, 'staff.approve', String(id), u.name);
+  }
+  return c.redirect('/admin/staff?ok=1');
+});
+ops.post('/staff/:id/reject', async (c) => {
+  const db = c.env.DB; const id = Number(c.req.param('id'));
+  const u = await db.prepare('SELECT id,name,added_by FROM users WHERE id=? AND pending_approval=1').bind(id).first<any>();
+  if (u) {
+    try { await db.prepare('DELETE FROM users WHERE id=?').bind(id).run(); } catch { await db.prepare("UPDATE users SET phone='deleted-'||id,pending_approval=0 WHERE id=?").bind(id).run(); }
+    if (u.added_by) await notify(db, u.added_by, 'لم يُقبل الموظف', `طلب إضافة ${u.name} رُفض من إدارة هدهدي`, '/partner/team');
+    await logActivity(db, c.get('user')!.id, 'staff.reject', String(id), u.name);
+  }
   return c.redirect('/admin/staff?ok=1');
 });
 

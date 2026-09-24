@@ -13,7 +13,7 @@ auth.get('/login', async (c) => {
     <Layout {...b} title="تسجيل الدخول">
       <form class="form" method="post">
         <h1>تسجيل الدخول</h1>
-        <Flash type="err" msg={c.req.query('err') === 'disabled' ? 'هذا الحساب معطّل. تواصلي مع الدعم.' : c.req.query('err') ? 'رقم الهاتف أو كلمة المرور غير صحيحة' : undefined} />
+        <Flash type="err" msg={c.req.query('err') === 'pending' ? 'حسابك بانتظار موافقة إدارة هدهدي — ستتمكن من الدخول فور قبوله.' : c.req.query('err') === 'disabled' ? 'هذا الحساب معطّل. تواصلي مع الدعم.' : c.req.query('err') ? 'رقم الهاتف أو كلمة المرور غير صحيحة' : undefined} />
         <input type="hidden" name="next" value={c.req.query('next') ?? '/'} />
         <label>رقم الهاتف</label><input type="tel" name="phone" placeholder="09xxxxxxxx" required autofocus />
         <label>كلمة المرور</label><input type="password" name="password" required />
@@ -29,8 +29,10 @@ auth.post('/login', async (c) => {
   const phone = normPhone(String(f.phone ?? ''));
   // والرقم كما كُتب أيضًا: حسابات أُنشئت قبل توحيد الصيغة محفوظة بـ218… (ترحيل 0034 يوحّدها)
   const raw = String(f.phone ?? '').replace(/\D/g, '');
-  const u = await c.env.DB.prepare('SELECT id,password_hash,active FROM users WHERE phone IN (?,?) ORDER BY phone=? DESC LIMIT 1').bind(phone, raw, phone).first<{ id: number; password_hash: string; active: number }>();
-  if (!u || !u.active || !(await verifyPassword(String(f.password), u.password_hash))) return c.redirect(`/login?err=${u && !u.active ? 'disabled' : 1}&next=${encodeURIComponent(String(f.next ?? '/'))}`);
+  const u = await c.env.DB.prepare('SELECT id,password_hash,active,pending_approval FROM users WHERE phone IN (?,?) ORDER BY phone=? DESC LIMIT 1').bind(phone, raw, phone).first<{ id: number; password_hash: string; active: number; pending_approval: number }>();
+  const pwOk = !!u && await verifyPassword(String(f.password), u.password_hash);
+  // موظف أضافه الشريك ولم يقبله صاحب المشروع بعد: كلمة مروره صحيحة، فنقول له السبب بدل «غير صحيحة»
+  if (!u || !pwOk || !u.active) return c.redirect(`/login?err=${u && pwOk && u.pending_approval ? 'pending' : u && !u.active ? 'disabled' : 1}&next=${encodeURIComponent(String(f.next ?? '/'))}`);
   await createSession(c, u.id);
   c.executionCtx.waitUntil(c.env.DB.prepare("UPDATE users SET last_login_at=datetime('now') WHERE id=?").bind(u.id).run());
   const next = String(f.next ?? '/');

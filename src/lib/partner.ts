@@ -238,3 +238,16 @@ export async function createInvoice(db: D1Database, orderId: number, partnerId: 
   await db.prepare('UPDATE partner_invoices SET number=? WHERE id=?').bind(number, id).run();
   return { ok: true as const, id, number, total };
 }
+
+// الحساب مع الشريك: مستحقاته (لقطة كل طلب جارٍ أو مسلَّم) ناقص ما دفعناه، وما حصّله من الزبائن عند الاستلام
+// (70% من طلبات العربون) ناقص ما سلّمه لنا. يُعرض في «لوحتي» عند الشريك وفي /admin/partners عندنا بالأرقام نفسها.
+export async function partnerBalance(db: D1Database, pid: number) {
+  const [d, l, cod] = await db.batch([
+    db.prepare(`SELECT COALESCE(SUM(json_extract(partner_fees_json,'$.total')),0) total FROM orders WHERE partner_id=? AND status NOT IN ('pending_payment','cancelled','refunded')`).bind(pid),
+    db.prepare("SELECT COALESCE(SUM(CASE WHEN kind='payout' THEN amount_lyd END),0) paid, COALESCE(SUM(CASE WHEN kind='collect' THEN amount_lyd END),0) got FROM partner_ledger WHERE partner_id=?").bind(pid),
+    db.prepare("SELECT COALESCE(SUM(total_lyd*0.7),0) v FROM orders WHERE partner_id=? AND status='delivered' AND payment_method='cod_deposit'").bind(pid),
+  ]);
+  const r2 = (v: number) => Math.round(v * 100) / 100;
+  const dues = (d.results[0] as any).total, paid = (l.results[0] as any).paid, got = (l.results[0] as any).got, codv = (cod.results[0] as any).v;
+  return { dues: r2(dues), paid: r2(paid), toPartner: r2(dues - paid), cod: r2(codv), got: r2(got), toUs: r2(codv - got), net: r2(dues - paid - (codv - got)) };
+}

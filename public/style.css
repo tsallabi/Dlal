@@ -1004,3 +1004,40 @@ body{background:#fff}
 .staff-edit{display:grid;grid-template-columns:1fr;gap:4px;padding:10px 12px;max-width:520px}
 .staff-edit button{justify-self:start;margin-top:6px}
 .staff-acts{gap:8px;padding:0 12px 12px;flex-wrap:wrap}
+/* «لوحتي» للشريك: بطاقات أرقام، أشرطة المراحل بلون واحد (القرفة)، الحساب بيننا، الشحنات القريبة من الوصول */
+.pd{display:flex;flex-direction:column;gap:14px}
+.pd-tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
+.pd-tile{display:flex;flex-direction:column;gap:2px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px;color:var(--ink);text-decoration:none;box-shadow:var(--shadow)}
+.pd-tile b{font-size:28px;line-height:1.1;font-weight:800}
+.pd-tile span{font-size:13px;font-weight:700;color:#444}
+.pd-tile small{font-size:11.5px;color:#777}
+.pd-tile:hover{border-color:var(--brand)}
+.pd-tile.warn{border-color:#e6b24b;background:#fffaf0}.pd-tile.warn small{color:#8a5a00;font-weight:700}
+.pd-tile.bad{border-color:#e7a3a3;background:#fff5f5}.pd-tile.bad b{color:#a51d1d}
+.pd-tile.ok b{color:#0f6b3d}
+.pd-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
+@media(max-width:900px){.pd-grid{grid-template-columns:minmax(0,1fr)}}
+.pd-grid>.card-box{margin:0}
+.pd-money td:last-child,.pd-money th:last-child{text-align:left;white-space:nowrap}
+.pd-money .pd-sum th{background:#faf6f2}
+.pd-money .pd-net th{background:#f3ede6;font-size:15px}
+.pd-note{display:block;color:#777;margin-top:8px;line-height:1.6}
+.pd-bars{display:flex;flex-direction:column;gap:6px}
+.pd-bar{display:grid;grid-template-columns:130px minmax(0,1fr) 36px;align-items:center;gap:8px;color:var(--ink);text-decoration:none;font-size:13px;padding:2px 0}
+.pd-bar:hover .pd-bl{color:var(--brand)}
+.pd-bt{height:14px;background:#f1ece6;border-radius:4px;overflow:hidden}
+.pd-bt i{display:block;height:100%;background:var(--brand);border-radius:0 4px 4px 0}
+.pd-bar b{text-align:left}
+.pd-near td{background:#fffaf0}
+.pd-red{color:#a51d1d;font-weight:700}
+.pd-empty{color:#0f6b3d;margin:0;font-size:14px}
+/* الحساب مع كل شريك في /admin/partners */
+.ledger-row{border-top:1px solid var(--line);padding:10px 0;display:flex;flex-direction:column;gap:6px}
+.ledger-nums{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px;color:#555}
+.ledger-nums b{color:var(--ink)}.ledger-nums .lg-net b{color:var(--brand)}
+.lg-log{color:#777}
+/* حركة الزوار */
+.an .an-fun{grid-template-columns:130px minmax(0,1fr) 44px;position:relative;padding-bottom:12px}
+.an .an-conv{position:absolute;bottom:-2px;inset-inline-start:138px;font-size:11px;color:#777}
+.an .pd-bl small{color:#8c2121;font-weight:600}
+.an .pd-tile{cursor:default}.an a.pd-tile[href]{cursor:pointer}

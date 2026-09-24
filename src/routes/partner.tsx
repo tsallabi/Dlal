@@ -6,7 +6,7 @@ import { PartnerShell } from '../views/dash';
 import { Flash } from '../views/layout';
 import { fmt, imgUrl, timeAgo, notify } from '../lib/db';
 import { setOrderStatus } from '../lib/orders';
-import { requireRole } from '../lib/auth';
+import { requireRole, normPhone, hashPassword } from '../lib/auth';
 import { PARTNER_FLOW } from '../types';
 import { loadSettings } from '../lib/pricing';
 import { saveMedia, mediaResponse, deleteMedia, createInvoice, newSecret, testDispatch, RATE_KEYS, RATE_AR, feeMargin, syncPricingPartner, pricingPartnerId } from '../lib/partner';
@@ -67,8 +67,108 @@ const OrderCard = (o: any, extra?: any) => (
   </div>
 );
 
-// ---------- بانتظار الشراء ----------
+// ---------- لوحتي: نظرة عامة على كل شيء (طلب صاحب المشروع ٢٤/٠٩/٢٦) ----------
+// كم يُسمح لكل مرحلة من الأيام قبل أن يُعدّ الطلب «عالقًا» فيها
+const STAGE_SLA: Record<string, number> = { purchasing: 3, purchased: 10, at_warehouse: 7, consolidated: 7, shipped: 25, arrived: 5, customs: 10, ready: 4 };
+const daysSince = (t?: string | null) => t ? Math.floor((Date.now() - new Date(t.replace(' ', 'T') + (t.includes('Z') ? '' : 'Z')).getTime()) / 86400000) : 0;
+const money = (v: number) => fmt(Math.round((v || 0) * 100) / 100);
 partner.get('/', async (c) => {
+  const x = await ctx(c); const db = x.db; const pid = x.pid;
+  const stuckSql = Object.entries(STAGE_SLA).map(([st, d]) => `(status='${st}' AND updated_at < datetime('now','-${d} days'))`).join(' OR ');
+  const LIVE = "status NOT IN ('pending_payment','cancelled','refunded')";
+  const LATE = "status='paid' AND paid_at < datetime('now','-2 days')";
+  const [late, stuck, ships, transit, dues, ledger, cod, inv, ev, month, lateN, stuckN] = await Promise.all([
+    db.prepare(`SELECT code,paid_at,ship_city FROM orders WHERE partner_id=? AND ${LATE} ORDER BY paid_at LIMIT 12`).bind(pid).all<any>(),
+    db.prepare(`SELECT code,status,updated_at,ship_city FROM orders WHERE partner_id=? AND (${stuckSql}) ORDER BY updated_at LIMIT 12`).bind(pid).all<any>(),
+    db.prepare('SELECT status,COUNT(*) n FROM shipments WHERE partner_id=? GROUP BY status').bind(pid).all<any>(),
+    db.prepare("SELECT s.code,s.method,s.shipped_at,s.tracking_no,(SELECT COUNT(*) FROM orders o WHERE o.shipment_id=s.id) n FROM shipments s WHERE s.partner_id=? AND s.status='shipped' ORDER BY s.shipped_at").bind(pid).all<any>(),
+    db.prepare(`SELECT COALESCE(SUM(json_extract(partner_fees_json,'$.total')),0) total,
+        COALESCE(SUM(CASE WHEN status='delivered' THEN json_extract(partner_fees_json,'$.total') END),0) done,
+        SUM(partner_fees_json IS NULL) nosnap FROM orders WHERE partner_id=? AND ${LIVE}`).bind(pid).first<any>(),
+    db.prepare("SELECT COALESCE(SUM(CASE WHEN kind='payout' THEN amount_lyd END),0) paid, COALESCE(SUM(CASE WHEN kind='collect' THEN amount_lyd END),0) got FROM partner_ledger WHERE partner_id=?").bind(pid).first<any>(),
+    // الدفع عند الاستلام: الشريك يحصّل 70% من الزبونة عند التسليم (العربون 30% دُفع لنا) — تلك لنا عنده
+    db.prepare("SELECT COALESCE(SUM(total_lyd*0.7),0) v, COUNT(*) n FROM orders WHERE partner_id=? AND status='delivered' AND payment_method='cod_deposit'").bind(pid).first<any>(),
+    db.prepare('SELECT COUNT(*) n, COALESCE(SUM(total_lyd),0) v FROM partner_invoices WHERE partner_id=?').bind(pid).first<any>(),
+    db.prepare("SELECT e.status,e.note,e.created_at,o.code FROM order_events e JOIN orders o ON o.id=e.order_id WHERE o.partner_id=? ORDER BY e.id DESC LIMIT 12").bind(pid).all<any>(),
+    db.prepare("SELECT COUNT(*) n FROM orders WHERE partner_id=? AND status='delivered' AND updated_at >= date('now','start of month')").bind(pid).first<any>(),
+    db.prepare(`SELECT COUNT(*) n FROM orders WHERE partner_id=? AND ${LATE}`).bind(pid).first<{ n: number }>(),
+    db.prepare(`SELECT COUNT(*) n FROM orders WHERE partner_id=? AND (${stuckSql})`).bind(pid).first<{ n: number }>(),
+  ]);
+  const nLate = lateN?.n ?? 0, nStuck = stuckN?.n ?? 0;
+  const n = (st: string) => x.counts[st] ?? 0;
+  const shipN = Object.fromEntries(ships.results.map((r: any) => [r.status, r.n]));
+  const eta = (m: string) => m === 'sea' ? 40 : 15;   // أيام تقريبية للوصول
+  const owedToYou = (dues?.total ?? 0) - (ledger?.paid ?? 0);
+  const owedToUs = (cod?.v ?? 0) - (ledger?.got ?? 0);
+  const pipeline = PARTNER_FLOW.filter(st => st !== 'delivered').map(st => ({ st, n: n(st) }));
+  const maxP = Math.max(1, ...pipeline.map(p => p.n));
+  const Tile = (p: { v: any; l: string; sub?: any; href?: string; tone?: string }) => (
+    <a class={`pd-tile ${p.tone ?? ''}`} href={p.href ?? '#'}><b>{p.v}</b><span>{p.l}</span>{p.sub && <small>{p.sub}</small>}</a>);
+  return shell(c, x, 'home', 'لوحتي', (
+    <div class="pd">
+      <div class="pd-tiles">
+        <Tile v={n('paid')} l="بانتظار الشراء" sub={nLate ? `⚠ ${nLate} متأخرة أكثر من يومين` : 'لا متأخر'} href="/partner/queue" tone={nLate ? 'warn' : ''} />
+        <Tile v={nStuck} l="عالقة في مرحلتها" sub="تجاوزت المدة المعتادة" href="#stuck" tone={nStuck ? 'bad' : 'ok'} />
+        <Tile v={n('purchasing') + n('purchased')} l="قيد الشراء" href="/partner/purchasing" />
+        <Tile v={n('at_warehouse') + n('consolidated')} l="في مخزن الصين" sub={`${n('consolidated')} مضمومة لشحنة`} href="/partner/warehouse" />
+        <Tile v={n('shipped')} l="في الطريق إلى ليبيا" sub={`${transit.results.length} شحنة`} href="#transit" />
+        <Tile v={n('arrived') + n('customs') + n('ready')} l="وصلت ليبيا" sub={`${n('customs')} في الجمارك · ${n('ready')} جاهزة للتسليم`} href="/partner/delivery" />
+        <Tile v={n('delivered')} l="وصلت للزبون" sub={`${month?.n ?? 0} هذا الشهر`} href="/partner/all" tone="ok" />
+        <Tile v={(shipN.open ?? 0) + (shipN.shipped ?? 0) + (shipN.arrived ?? 0) + (shipN.customs ?? 0) + (shipN.released ?? 0)} l="الشحنات" sub={`${shipN.open ?? 0} مفتوحة · ${shipN.shipped ?? 0} في الطريق · ${shipN.released ?? 0} مكتملة`} href="/partner/shipments" />
+      </div>
+
+      <div class="pd-grid">
+        <div class="card-box pd-money"><h3>💰 الحساب بيننا</h3>
+          <table class="tbl">
+            <tr><td>مستحقاتكم عن كل الطلبات الجارية والمسلَّمة</td><td>{money(dues?.total)}</td></tr>
+            <tr><td>منها عن طلبات سُلِّمت</td><td>{money(dues?.done)}</td></tr>
+            <tr><td>ما دفعته هدهدي لكم</td><td>− {money(ledger?.paid)}</td></tr>
+            <tr class="pd-sum"><th>المتبقي لكم علينا</th><th>{money(owedToYou)}</th></tr>
+            <tr><td>حصّلتم من الزبائن عند الاستلام ({cod?.n ?? 0} طلب)</td><td>{money(cod?.v)}</td></tr>
+            <tr><td>ما سلّمتموه لنا منه</td><td>− {money(ledger?.got)}</td></tr>
+            <tr class="pd-sum"><th>المتبقي لنا عليكم</th><th>{money(owedToUs)}</th></tr>
+            <tr class="pd-net"><th>الصافي</th><th>{owedToYou - owedToUs >= 0 ? `لكم ${money(owedToYou - owedToUs)}` : `لنا ${money(owedToUs - owedToYou)}`}</th></tr>
+          </table>
+          <small class="pd-note">المستحقات بأسعاركم يوم دفع كل طلب ({RATE_AR.fee_commission_pct.ar} والنقل والشحن والتوصيل + ثمن البضاعة الذي تدفعونه للمورد). فواتيركم المرفوعة: {inv?.n ?? 0} بقيمة {money(inv?.v)}.{(dues?.nosnap ?? 0) > 0 && ` ${dues.nosnap} طلبًا قديمًا بلا لقطة أسعار.`}</small>
+        </div>
+
+        <div class="card-box"><h3>📦 الطلبات حسب المرحلة</h3>
+          <div class="pd-bars">{pipeline.map(p => (
+            <a class="pd-bar" href={`/partner/all?status=${p.st}`} title={`${STAGE_AR(p.st)}: ${p.n} طلب`}>
+              <span class="pd-bl">{STAGE_AR(p.st)}</span>
+              <span class="pd-bt"><i style={`width:${p.n ? Math.max(3, Math.round(p.n / maxP * 100)) : 0}%`}></i></span>
+              <b>{p.n}</b>
+            </a>))}</div>
+        </div>
+      </div>
+
+      <div class="card-box" id="transit"><h3>✈️ في الطريق إلى ليبيا — ما قارب الوصول</h3>
+        {transit.results.length === 0 ? <p class="pd-empty">لا شحنات في الطريق الآن.</p> :
+          <div class="tbl-wrap"><table class="tbl"><tr><th>الشحنة</th><th>الطريقة</th><th>الطلبات</th><th>شُحنت منذ</th><th>الوصول المتوقع</th><th>التتبع</th></tr>
+            {transit.results.map((t: any) => { const d = daysSince(t.shipped_at); const left = eta(t.method) - d; return (
+              <tr class={left <= 3 ? 'pd-near' : ''}><td><b>{t.code}</b></td><td>{t.method === 'sea' ? '🚢 بحري' : '✈️ جوي'}</td><td>{t.n}</td><td>{d} يوم</td>
+                <td>{left <= 0 ? <b class="pd-red">تجاوزت الموعد بـ{-left} يوم</b> : left <= 3 ? <b>⏳ خلال {left} أيام</b> : `بعد ~${left} يومًا`}</td><td dir="ltr">{t.tracking_no ?? '—'}</td></tr>); })}
+          </table></div>}
+      </div>
+
+      <div class="card-box" id="stuck"><h3>⚠ طلبات متأخرة أو عالقة ({nLate + nStuck})</h3>
+        {nLate + nStuck > late.results.length + stuck.results.length && <p class="pd-note" style="margin:0 0 6px">الأقدم أولًا — {late.results.length + stuck.results.length} من {nLate + nStuck}. {nLate > late.results.length && <a href="/partner/queue">كل المدفوعة بانتظار الشراء ←</a>}</p>}
+        {nLate + nStuck === 0 ? <p class="pd-empty">لا شيء متأخر — ممتاز ✓</p> :
+          <div class="tbl-wrap"><table class="tbl"><tr><th>الطلب</th><th>المرحلة</th><th>منذ</th><th>المعتاد</th><th>المدينة</th></tr>
+            {late.results.map((o: any) => <tr><td><a class="po-link" href={`/partner/order/${o.code}`}>{o.code}</a></td><td>مدفوع ولم يبدأ شراؤه</td><td class="pd-red">{daysSince(o.paid_at)} يوم</td><td>يومان</td><td>{o.ship_city}</td></tr>)}
+            {stuck.results.map((o: any) => <tr><td><a class="po-link" href={`/partner/order/${o.code}`}>{o.code}</a></td><td>{STAGE_AR(o.status)}</td><td class="pd-red">{daysSince(o.updated_at)} يوم</td><td>{STAGE_SLA[o.status]} أيام</td><td>{o.ship_city}</td></tr>)}
+          </table></div>}
+      </div>
+
+      <div class="card-box"><h3>🕒 آخر الحركات</h3>
+        <ul class="po-ev">{ev.results.map((e: any) => <li><a class="po-link" href={`/partner/order/${e.code}`}>{e.code}</a> — <b>{STAGE_AR(e.status)}</b> · {timeAgo(e.created_at)}{e.note ? <small> · {e.note}</small> : null}</li>)}</ul>
+      </div>
+    </div>
+  ));
+});
+
+// ---------- بانتظار الشراء ----------
+partner.get('/queue', async (c) => {
   const x = await ctx(c);
   const orders = await ordersWithItems(x.db, x.pid, ['paid']);
   return shell(c, x, 'queue', `بانتظار الشراء (${orders.length})`, (
@@ -169,8 +269,10 @@ partner.get('/delivery', async (c) => {
 // ---------- كل الطلبات ----------
 partner.get('/all', async (c) => {
   const x = await ctx(c);
-  const rows = await x.db.prepare('SELECT o.code,o.status,o.ship_city,o.updated_at,u.name FROM orders o JOIN users u ON u.id=o.user_id WHERE o.partner_id=? ORDER BY o.id DESC LIMIT 300').bind(x.pid).all<any>();
-  return shell(c, x, 'all', 'كل الطلبات', (
+  // من بطاقات «لوحتي»: ?status=shipped يعرض طلبات تلك المرحلة وحدها
+  const st = c.req.query('status'); const one = st && ORDER_STATUS[st] ? st : null;
+  const rows = await x.db.prepare(`SELECT o.code,o.status,o.ship_city,o.updated_at,u.name FROM orders o JOIN users u ON u.id=o.user_id WHERE o.partner_id=? ${one ? 'AND o.status=?' : ''} ORDER BY o.id DESC LIMIT 300`).bind(...(one ? [x.pid, one] : [x.pid])).all<any>();
+  return shell(c, x, 'all', one ? `الطلبات: ${STAGE_AR(one)} (${rows.results.length})` : 'كل الطلبات', (
     <div class="tbl-wrap"><table class="tbl"><tr><th>الطلب</th><th>الزبونة</th><th>المدينة</th><th>الحالة</th><th>آخر تحديث</th></tr>{rows.results.map(o => <tr><td><a href={`/partner/order/${o.code}`} class="po-link">{o.code}</a></td><td>{o.name}</td><td>{o.ship_city}</td><td><span class={`status ${ORDER_STATUS[o.status]?.color}`}>{ORDER_STATUS[o.status]?.ar}</span></td><td>{timeAgo(o.updated_at)}</td></tr>)}</table></div>
   ));
 });
@@ -193,7 +295,7 @@ partner.post('/order/:code/status', async (c) => {
   if (!ORDER_STATUS[st]) return c.text('حالة غير صالحة', 400);
   await setStatus(c.env.DB, c.req.param('code'), st, c.get('user')!.id);
   const back: Record<string, string> = { purchasing: '/partner/purchasing', purchased: '/partner/purchasing', at_warehouse: '/partner/warehouse', delivered: '/partner/delivery' };
-  return c.redirect((back[st] ?? '/partner') + '?ok=1');
+  return c.redirect((back[st] ?? '/partner/queue') + '?ok=1');
 });
 
 partner.post('/item/:id/purchased', async (c) => {
@@ -214,7 +316,7 @@ partner.post('/item/:id/unavailable', async (c) => {
     db.prepare("UPDATE products SET in_stock=0,last_checked_at=datetime('now') WHERE id=?").bind(it.product_id),   // يُخفى فورًا من الموقع
   ]);
   await notify(db, it.user_id, `منتج غير متوفر في طلبك ${it.code}`, `"${it.title_ar}" نفد عند المورد. سيتواصل معك فريق هدهدي لاختيار بديل أو استرجاع قيمته.`, `/orders/${it.code}`);
-  return c.redirect('/partner?ok=1');
+  return c.redirect('/partner/queue?ok=1');
 });
 
 partner.post('/item/:id/inspect', async (c) => {
@@ -419,6 +521,42 @@ partner.post('/rates', async (c) => {
   const s = await loadSettings(x.db);
   if (pricingPartnerId(s) === x.pid) { await syncPricingPartner(x.db); await x.db.prepare("INSERT INTO settings(key,value) VALUES('reprice_needed','1') ON CONFLICT(key) DO UPDATE SET value='1'").run(); }
   return c.redirect('/partner/rates?ok=1' + pq2(x));
+});
+
+// ---------- موظفو الشركة: الشريك يضيف، وصاحب المشروع يقبل أو يرفض ----------
+partner.get('/team', async (c) => {
+  const x = await ctx(c);
+  const { results } = await x.db.prepare("SELECT id,name,phone,active,pending_approval,last_login_at,created_at FROM users WHERE role='partner' AND partner_id=? AND phone NOT GLOB 'deleted-*' ORDER BY pending_approval DESC,id").bind(x.pid).all<any>();
+  const err: Record<string, string> = { phone: 'هذا الرقم مسجّل لحساب آخر', pw: 'كلمة المرور 6 أحرف على الأقل', name: 'اكتب الاسم ورقم هاتف صحيحًا' };
+  return shell(c, x, 'team', `موظفو ${x.p.name}`, (
+    <>
+      <Flash msg={c.req.query('ok') ? 'أُرسل الطلب ✓ — يستطيع الموظف الدخول فور موافقة إدارة هدهدي' : undefined} />
+      {c.req.query('err') && <div class="flash err">{err[c.req.query('err')!] ?? 'تعذّر الحفظ'}</div>}
+      <div class="card-box"><div class="tbl-wrap"><table class="tbl team-tbl"><tr><th>الاسم</th><th>الهاتف (اسم الدخول)</th><th>الحالة</th><th>آخر دخول</th></tr>
+        {results.map((u: any) => <tr><td>{u.name}</td><td dir="ltr">{u.phone}</td>
+          <td>{u.pending_approval ? <span class="status gray">⏳ بانتظار موافقة هدهدي</span> : u.active ? <span class="status green">نشط</span> : <span class="status red">معطّل</span>}</td>
+          <td>{u.last_login_at ? timeAgo(u.last_login_at) : '—'}</td></tr>)}
+      </table></div></div>
+      <form method="post" action={`/partner/team${pq(x)}`} class="card-box po-rates"><h3>+ إضافة موظف لشركتكم</h3>
+        <p style="font-size:13px;color:#555;margin-top:0">يرى الموظف طلبات شركتكم فقط ويعمل عليها. يبقى الحساب موقوفًا حتى توافق عليه إدارة هدهدي.</p>
+        <div class="inline"><label style="min-width:120px">الاسم</label><input type="text" name="name" required /></div>
+        <div class="inline"><label style="min-width:120px">الهاتف</label><input type="tel" name="phone" placeholder="09xxxxxxxx" dir="ltr" required /></div>
+        <div class="inline"><label style="min-width:120px">كلمة المرور</label><input type="text" name="password" minlength={6} required /></div>
+        <button class="btn dark">إرسال للموافقة</button>
+      </form>
+    </>
+  ));
+});
+partner.post('/team', async (c) => {
+  const x = await ctx(c); const f = await c.req.parseBody(); const db = x.db;
+  const name = String(f.name ?? '').trim().slice(0, 80); const phone = normPhone(String(f.phone ?? '')); const pw = String(f.password ?? '');
+  if (!name || phone.length < 9) return c.redirect('/partner/team?err=name' + pq2(x));
+  if (pw.length < 6) return c.redirect('/partner/team?err=pw' + pq2(x));
+  if (await db.prepare('SELECT 1 FROM users WHERE phone=?').bind(phone).first()) return c.redirect('/partner/team?err=phone' + pq2(x));
+  await db.prepare("INSERT INTO users(phone,name,password_hash,role,partner_id,active,pending_approval,added_by) VALUES(?,?,?,'partner',?,0,1,?)").bind(phone, name, await hashPassword(pw), x.pid, x.u.id).run();
+  const { results: owners } = await db.prepare("SELECT id FROM users WHERE role='admin' AND staff_role='owner' AND active=1").all<{ id: number }>();
+  for (const o of owners) await notify(db, o.id, `${x.p.name} يطلب إضافة موظف`, `${name} (${phone}) — بانتظار موافقتك`, '/admin/staff#pending');
+  return c.redirect('/partner/team?ok=1' + pq2(x));
 });
 
 // ---------- ربط API ----------

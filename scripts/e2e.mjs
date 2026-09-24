@@ -554,7 +554,7 @@ const rc2 = await page.goto(BASE + '/admin/orders'); expect(rc2.status() === 403
 
 // ---------- موظف شاهين ----------
 await login(page, '0920000000', 'partner123');
-await page.goto(BASE + '/partner');
+await page.goto(BASE + '/partner/queue');
 expect(await has(page, orderCode), 'الطلب المدفوع بماي باي يظهر مباشرة في قائمة شاهين');
 await shot(page, 'partner-queue');
 const card = page.locator('.card-box', { hasText: orderCode });
@@ -2377,6 +2377,98 @@ await mp.screenshot({ path: `${OUT}/${String(++n).padStart(2, '0')}-mobile-order
   expect(await row('0920000098').count() === 0, 'حذف الموظف يزيله من القائمة');
   await login(page, '0920000098', 'temp998');
   expect(page.url().includes('/login'), 'والمحذوف لا يستطيع الدخول');
+}
+
+// ---------- «لوحتي» للشريك، والحساب بيننا، وموظفون يضيفهم الشريك بموافقة المالك (٢٤/٠٩/٢٦) ----------
+{
+  const { execFileSync } = await import('node:child_process');
+  const d1q = (sql) => JSON.parse(execFileSync('npx', ['wrangler', 'd1', 'execute', 'dlal-db', '--local', '-c', 'wrangler.local.toml', '--json', '--command', sql], { stdio: 'pipe' }).toString())[0].results;
+  const numIn = async (loc) => num((await loc.textContent()) || '');
+  const ledgerNote = 'e2e-ledger-' + Date.now();
+  try {
+    await login(page, '0920000000', 'partner123');
+    await page.goto(BASE + '/partner');
+    expect(await page.locator('.pd-tile').count() >= 8, `«لوحتي» تعرض بطاقات الإحصاءات (${await page.locator('.pd-tile').count()})`);
+    const qN = await numIn(page.locator('.pd-tile', { hasText: 'بانتظار الشراء' }).locator('b'));
+    await page.goto(BASE + '/partner/queue');
+    const qTitle = await page.locator('h2.dash-title').textContent();
+    expect(num(qTitle) === qN, `بطاقة «بانتظار الشراء» تطابق القائمة نفسها (${qN} = ${num(qTitle)})`);
+    await page.goto(BASE + '/partner');
+    for (const t of ['الحساب بيننا', 'الطلبات حسب المرحلة', 'في الطريق إلى ليبيا', 'طلبات متأخرة أو عالقة', 'آخر الحركات'])
+      expect(await has(page, t), `«لوحتي» فيها قسم «${t}»`);
+    const paidBefore = await numIn(page.locator('.pd-money tr', { hasText: 'ما دفعته هدهدي لكم' }).locator('td').nth(1));
+    await shot(page, 'partner-dashboard');
+    // المالك يسجّل دفعة للشريك ⟵ تظهر في «لوحتي» عنده
+    await login(page, '0910000000', 'admin123');
+    await page.goto(BASE + '/admin/partners#ledger');
+    const lf = page.locator('.ledger-row', { hasText: 'شاهين' }).locator('form');
+    await lf.locator('select[name=kind]').selectOption('payout'); await lf.locator('input[name=amount]').fill('125.5'); await lf.locator('input[name=note]').fill(ledgerNote);
+    await lf.locator('button').click(); await page.waitForLoadState('networkidle');
+    expect(await has(page, ledgerNote), 'الأدمن يسجّل دفعة لشريك في «الحساب مع كل شريك»');
+    await login(page, '0920000000', 'partner123'); await page.goto(BASE + '/partner');
+    const paidAfter = await numIn(page.locator('.pd-money tr', { hasText: 'ما دفعته هدهدي لكم' }).locator('td').nth(1));
+    expect(Math.abs(paidAfter - paidBefore - 125.5) < 0.01, `الدفعة تظهر في «الحساب بيننا» عند الشريك (${paidBefore} ⟵ ${paidAfter})`);
+    // بطاقة المرحلة تفتح طلبات تلك المرحلة وحدها
+    await page.locator('.pd-bar', { hasText: 'وصل مخزن الصين' }).click(); await page.waitForLoadState('networkidle');
+    expect(page.url().includes('status=at_warehouse') && await has(page, 'الطلبات: وصل مخزن الصين'), 'شريط المرحلة يفتح طلباتها وحدها');
+    // موظفو الشركة: الشريك يضيف ⟵ ينتظر ⟵ المالك يقبل أو يرفض
+    await page.goto(BASE + '/partner/team');
+    for (const [nm, ph] of [['موظف مقترح أول', '0920000066'], ['موظف مقترح ثانٍ', '0920000067']]) {
+      await page.fill('form[action^="/partner/team"] input[name=name]', nm); await page.fill('form[action^="/partner/team"] input[name=phone]', ph);
+      await page.fill('form[action^="/partner/team"] input[name=password]', 'team666'); await page.click('form[action^="/partner/team"] button'); await page.waitForLoadState('networkidle');
+    }
+    expect((await page.locator('.team-tbl tr', { hasText: '0920000066' }).textContent()).includes('بانتظار موافقة'), 'الموظف الذي يضيفه الشريك يبقى بانتظار موافقة هدهدي');
+    await shot(page, 'partner-team');
+    await login(page, '0920000066', 'team666');
+    expect(await has(page, 'بانتظار موافقة إدارة هدهدي'), 'دخوله قبل القبول يقول له إن حسابه بانتظار الموافقة');
+    await login(page, '0910000000', 'admin123'); await page.goto(BASE + '/admin/staff');
+    expect(await page.locator('#pending [data-phone="0920000066"]').count() === 1, 'المالك يرى طلب الموظف في «بانتظار موافقتك»');
+    await page.locator('#pending [data-phone="0920000066"] button:has-text("قبول")').click(); await page.waitForLoadState('networkidle');
+    await page.locator('#pending [data-phone="0920000067"] button:has-text("رفض")').click(); await page.waitForLoadState('networkidle');
+    await login(page, '0920000066', 'team666'); await page.goto(BASE + '/partner');
+    expect(page.url().endsWith('/partner') && await has(page, 'لوحتي'), 'بعد القبول يدخل الموظف لوحة شركته');
+    await login(page, '0920000067', 'team666');
+    expect(page.url().includes('/login') && !(await has(page, 'بانتظار موافقة')), 'المرفوض لا يدخل');
+  } finally {
+    d1q(`DELETE FROM partner_ledger WHERE note='${ledgerNote}'`);
+    d1q("DELETE FROM sessions WHERE user_id IN (SELECT id FROM users WHERE phone IN ('0920000066','0920000067'))");
+    d1q("DELETE FROM notifications WHERE user_id IN (SELECT id FROM users WHERE phone IN ('0920000066','0920000067'))");
+    d1q("DELETE FROM users WHERE phone IN ('0920000066','0920000067')");
+  }
+}
+
+// ---------- حركة الزوار: الصفحات، البحث، المشاكل، السلة، والتذكير (٢٤/٠٩/٢٦) ----------
+// زائر حقيقي بمتصفح جوال (كوكي hh_track: الفحوص الآلية بلا متصفح ظاهر لا تُحسب زوارًا عمدًا)
+{
+  const tq = 'قزقز' + String(Date.now()).slice(-5);   // بحث لن يجد شيئًا
+  const tx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, locale: 'ar' });
+  await tx.addCookies([{ name: 'hh_track', value: '1', url: BASE }]);
+  const tp = await tx.newPage();
+  await tp.goto(BASE + '/login'); await tp.fill('input[name=phone]', PHONE); await tp.fill('input[name=password]', 'secret456'); await tp.click('button:has-text("دخول")'); await tp.waitForLoadState('networkidle');
+  await tp.goto(BASE + '/c/bags');
+  await tp.goto(BASE + '/search?q=' + encodeURIComponent(tq));
+  await tp.goto(BASE + '/p/e2e-missing-' + tq);
+  await tp.goto(BASE + '/c/bags'); await tp.locator('.card .t').first().click(); await tp.waitForLoadState('networkidle');
+  await tp.click('#addForm button[type=submit]'); await tp.waitForLoadState('networkidle');
+  await tp.goto(BASE + '/checkout'); await tp.waitForLoadState('networkidle');
+  await tx.close();
+  await login(page, '0910000000', 'admin123');
+  await page.goto(BASE + '/admin/analytics?p=day');
+  expect(await has(page, 'مسار الشراء') && await has(page, 'من أين يزوروننا'), 'صفحة «حركة الزوار» تفتح بمسار الشراء والدول والمدن');
+  expect(await page.locator('.card-box', { hasText: 'بحثوا ولم يجدوا' }).textContent().then(t => t.includes(tq)), 'البحث الذي لم يجد شيئًا يظهر في «بحثوا ولم يجدوا»');
+  expect(await page.locator('#errors').textContent().then(t => t.includes('/p/e2e-missing-' + tq)), 'الصفحة المفقودة التي فتحها الزائر تظهر في «مشاكل واجهت الزوار»');
+  const recentRow = page.locator('.card-box', { hasText: 'آخر الزوار' }).locator('tr', { hasText: 'منى التجريبية' }).first();
+  expect(await recentRow.count() === 1 && (await recentRow.textContent()).includes('صفحة الدفع'), 'الزبونة في «آخر الزوار» وأبعد خطوة لها «صفحة الدفع»');
+  const abRow = page.locator('#abandoned tr', { hasText: PHONE });
+  expect(await abRow.count() === 1, 'سلتها (بضاعة بلا طلب) في «سلال متروكة»');
+  expect((await abRow.locator('a:has-text("واتساب")').getAttribute('href')).startsWith('https://wa.me/218' + PHONE.slice(1)), 'زر واتساب يفتح محادثة مع رقمها الليبي برسالة جاهزة');
+  await abRow.locator('button:has-text("إشعار")').click(); await page.waitForLoadState('networkidle');
+  expect(await has(page, 'أُرسل التذكير'), 'زر «إشعار» يرسل التذكير');
+  await shot(page, 'admin-analytics');
+  await page.goto(BASE + '/admin/analytics?p=day'); await page.locator('.card-box', { hasText: 'آخر الزوار' }).locator('tr', { hasText: 'منى التجريبية' }).first().locator('a').click(); await page.waitForLoadState('networkidle');
+  expect(await has(page, 'أضاف للسلة') && await has(page, tq), 'مسار الزائر يعرض كل صفحاته بالترتيب (البحث، الإضافة للسلة…)');
+  await login(page, PHONE, 'secret456'); await page.goto(BASE + '/account/notifications').catch(() => {});
+  expect(await has(page, 'سلتك تنتظرك'), 'الزبونة تستلم التذكير في إشعاراتها');
 }
 
 // ---------- D1 يرفض نمط LIKE فوق 50 بايتًا (المحلي لا يرفضه فلا يراه أي فحص آخر) — ٢٤/٠٩/٢٦ ----------

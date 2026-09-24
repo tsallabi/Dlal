@@ -11,6 +11,7 @@ import type { ProductRow } from '../lib/db';
 import { KIND_NOTE, type ListingKind } from '../lib/source';
 import { loadSettings, computePrice, shipRates, seaOn } from '../lib/pricing';
 import { partnerDelivery, pricingPartnerId, mediaResponse } from '../lib/partner';
+import { track } from '../lib/track';
 import type { ShipMode, Settings } from '../lib/pricing';
 import { checkCoupon } from '../lib/coupons';
 import { loadMyPay } from '../lib/mypay';
@@ -239,6 +240,7 @@ async function listPage(c: Context<Env>, opts: { title: string; where: string; b
   if (color && !colorList.some(x => x.color === color)) colorList.unshift({ color, n: 0 });
   const tiles = await catTiles(db);
   const total = cnt?.n ?? 0;
+  if (opts.q !== undefined) c.set('trackN', total);   // بحث بلا نتائج = ما تريده الزبونة ولا نملكه
   const pages = Math.ceil(total / per);
   // رابط فلتر: تغيير الفلتر يُعيد إلى الصفحة الأولى عمدًا — وإلا وقعت الزبونة في صفحة 9 فارغة
   const link = (k: string, v: string | null) => { const u = new URL(c.req.url); if (v) u.searchParams.set(k, v); else u.searchParams.delete(k); u.searchParams.delete('page'); return u.pathname + u.search; };
@@ -686,6 +688,7 @@ store.post('/cart/add', async (c) => {
     `INSERT INTO cart_items(user_id,product_id,variant_id,qty) VALUES(?,?,?,?)
      ON CONFLICT(user_id,product_id,variant_id) DO UPDATE SET qty=qty+excluded.qty`,
   ).bind(u.id, pid, vid, Math.max(qty, p.min_qty)).run();
+  track(c, 'cart', p.slug, Math.max(qty, p.min_qty), `/p/${p.slug}`);
   if (quick) {
     const n = await c.env.DB.prepare('SELECT COALESCE(SUM(qty),0) n FROM cart_items WHERE user_id=?').bind(u.id).first<{ n: number }>();
     return c.json({ ok: true, count: n?.n ?? 0 });
