@@ -20,7 +20,7 @@ const COLORS: Record<string, string> = {
   turquoise: 'فيروزي', teal: 'أزرق مخضر', cyan: 'سماوي', coral: 'مرجاني', peach: 'خوخي', tan: 'جملي فاتح', 'rose gold': 'ذهبي وردي',
   rosewood: 'خشب الورد', 'red sandalwood': 'خشب الصندل الأحمر', 'black walnut': 'خشب الجوز', walnut: 'خشب الجوز', 'classic gray': 'رمادي كلاسيكي', 'classic grey': 'رمادي كلاسيكي',
   transparent: 'شفاف', clear: 'شفاف', multicolor: 'متعدد الألوان', colorful: 'متعدد الألوان', 'mixed colors': 'ألوان مشكلة', random: 'لون عشوائي', 'random color': 'لون عشوائي',
-  'lilac purple': 'ليلكي', 'jujube red': 'أحمر عنابي', 'dark blue': 'أزرق غامق', 'deep blue': 'أزرق غامق', 'light blue': 'أزرق فاتح', 'as shown in picture': 'كما في الصورة', 'as shown in the picture': 'كما في الصورة', 'as shown in the figure': 'كما في الصورة', 'real shot images': 'كما في الصورة', 'real shot': 'كما في الصورة',
+  lined: 'مبطّن', 'fleece-lined': 'مبطّن بالفرو', 'fleece lined': 'مبطّن بالفرو', 'lilac purple': 'ليلكي', 'jujube red': 'أحمر عنابي', 'dark blue': 'أزرق غامق', 'deep blue': 'أزرق غامق', 'light blue': 'أزرق فاتح', 'as shown in picture': 'كما في الصورة', 'as shown in the picture': 'كما في الصورة', 'as shown in the figure': 'كما في الصورة', 'real shot images': 'كما في الصورة', 'real shot': 'كما في الصورة',
   printed: 'مطبوع', floral: 'مزهّر', striped: 'مخطط', plaid: 'كاروهات', 'dusty pink': 'وردي باهت',
   'as picture': 'كما في الصورة', 'as shown': 'كما في الصورة', 'picture color': 'كما في الصورة', 'image color': 'كما في الصورة', 'photo color': 'كما في الصورة',
   'main picture': 'كما في الصورة', 'same as picture': 'كما في الصورة', 'as the picture': 'كما في الصورة',
@@ -98,3 +98,18 @@ export function enAttr(raw: string): string | null {
 
 // «Xxl»، «xl»: رمز مقاس لاتيني صحيح لكن بحروف مختلطة — يُوحَّد كبيرًا ولا يحتاج ترجمة
 export const sizeCase = (v: string): string | null => /^(x{0,6}[sl]|m|[2-9]xl)$/i.test(v.trim()) && v.trim() !== v.trim().toUpperCase() ? v.trim().toUpperCase() : null;
+
+// اللون في الأصل يجب أن يبقى في الترجمة: النموذج كان يُسقطه («double short-coffee» ⟵ «قميص قصير»)
+const GUARD: Record<string, string[]> = {
+  black: ['أسود'], white: ['أبيض'], pink: ['وردي', 'زهري'], blue: ['أزرق', 'كحلي', 'سماوي'], red: ['أحمر', 'نبيتي', 'عنابي'], green: ['أخضر', 'زيتي'],
+  brown: ['بني'], purple: ['بنفسجي', 'ليلكي', 'أرجواني'], violet: ['بنفسجي'], yellow: ['أصفر'], orange: ['برتقالي'], gray: ['رمادي'], grey: ['رمادي'],
+  beige: ['بيج'], khaki: ['كاكي'], silver: ['فضي'], gold: ['ذهبي'], golden: ['ذهبي'], navy: ['كحلي', 'بحري'], apricot: ['مشمشي'],
+  burgundy: ['عنابي', 'بورغندي', 'برغندي', 'خمري', 'نبيتي', 'أحمر'], champagne: ['شامبانيا', 'شمبانيا'], coffee: ['قهوة', 'قهوي', 'بني'], camel: ['جملي', 'بني'],
+};
+// كلمة عربية بصيغتها الأساسية: بلا «ال» ولا تاء التأنيث، والمؤنث اللوني إلى مذكّره (سوداء ⟵ أسود)
+const FEM: Record<string, string> = { سوداء: 'أسود', بيضاء: 'أبيض', حمراء: 'أحمر', خضراء: 'أخضر', زرقاء: 'أزرق', صفراء: 'أصفر' };
+const base = (w: string) => { const x = w.replace(/^(و?ب?ال|ال)(?=..)/, ''); return FEM[x] ?? x.replace(/ة$/, ''); };
+export function colorsKept(src: string, out: string): boolean {
+  const low = src.toLowerCase(), have = new Set(out.split(/[\s\-–/+،,()]+/).map(base));
+  return Object.entries(GUARD).filter(([c]) => new RegExp(`(^|[^a-z])${c}([^a-z]|$)`).test(low)).every(([, ok]) => ok.some(w => have.has(w)));
+}

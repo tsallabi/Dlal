@@ -2,7 +2,7 @@
 export const hasCJK = (s: string | null | undefined) => /[一-鿿]/.test(s ?? '');
 
 // قاموس الألوان والمقاسات والكلمات المتكررة في متغيرات 1688
-import { enAttr, needsEnTr, junkAttr, sizeCase } from './attr-en';
+import { enAttr, needsEnTr, junkAttr, sizeCase, colorsKept } from './attr-en';
 export const DICT: Record<string, string> = {
   黑色: 'أسود', 黑: 'أسود', 白色: 'أبيض', 白: 'أبيض', 米白: 'أبيض عاجي', 米色: 'بيج', 杏色: 'مشمشي', 卡其色: 'كاكي', 卡其: 'كاكي', 灰色: 'رمادي', 灰: 'رمادي', 深灰: 'رمادي غامق', 浅灰: 'رمادي فاتح',
   红色: 'أحمر', 红: 'أحمر', 酒红: 'عنابي', 酒红色: 'عنابي', 粉色: 'وردي', 粉红: 'وردي', 粉: 'وردي', 玫红: 'فوشيا', 玫红色: 'فوشيا', 橙色: 'برتقالي', 橘色: 'برتقالي', 黄色: 'أصفر', 黄: 'أصفر', 姜黄: 'خردلي',
@@ -149,6 +149,12 @@ const TITLE_MODELS = ['@cf/meta/llama-4-scout-17b-16e-instruct', '@cf/meta/llama
 const SHORT_MODELS = ['@cf/mistralai/mistral-small-3.1-24b-instruct', '@cf/meta/llama-4-scout-17b-16e-instruct', '@cf/meta/llama-3.3-70b-instruct-fp8-fast'];
 const SYS_TITLE = 'أنت مترجم لمتجر أزياء عربي. حوّل عنوان منتج من موقع 1688 (صيني محشو بكلمات مفتاحية) إلى عنوان منتج عربي قصير وطبيعي من 5 إلى 14 كلمة يصف المنتج للزبون. احذف عبارات مثل "تجارة خارجية"، "عبر الحدود"، "جديد 2025"، "بالجملة"، "موديل جديد". اذكر ما يميّز هذه القطعة تحديدًا (الخامة أو المقاس أو عدد القطع أو الاستعمال) ولا تكتفِ بوصف عام يصلح لعشرات المنتجات. أجب بالعنوان العربي فقط، بلا شرح ولا علامات اقتباس.';
 const SYS_ATTR = 'ترجم قيمة خاصية منتج (لون أو مقاس أو نمط) من الصينية أو الإنجليزية إلى العربية بكلمة أو كلمتين كما تُكتب في متجر ملابس. احتفظ برموز المقاسات اللاتينية (S, M, L, XL, 2XL) والأرقام كما هي بلا تعريب. 均码 تعني "مقاس واحد". أجب بالترجمة فقط.';
+// قيم الخيارات الإنجليزية ركيكة (ترجمة آلية من الصينية): النموذج الصغير بالتعليمة العامة أعطى «Black A-line skirt» ⟵ «تنجيد أسود»
+const SYS_ATTR_EN = 'أنت تترجم اسم خيار (لون أو مقاس أو طراز) لمنتج في متجر ملابس عربي. النص إنجليزي ركيك مترجم آليًا من الصينية. ترجمه إلى عربية طبيعية قصيرة من كلمة إلى ست كلمات. القواعد: اذكر اللون دائمًا إن وُجد، واحتفظ بكل رقم ورمز مقاس (S, M, XL, 2XL) كما هو، ولا تضف معلومة غير موجودة. أمثلة: "Black A-line skirt" = تنورة قصة A سوداء · "Pure white camisole" = قميص داخلي أبيض · "lined" = مبطّن · "Height 35" = ارتفاع 35 · "Store gift box" = علبة هدية · "Large size [grades 3-6]" = مقاس كبير (الصفوف 3-6). أجب بالترجمة فقط.';
+export async function translateEnAttr(ai: any, text: string): Promise<string | null> {
+  if (!ai || !text) return null;
+  return await llm(ai, SYS_ATTR_EN, text.slice(0, 120), TITLE_MODELS);
+}
 const SYS_TEXT = 'ترجم النص التالي من الصينية إلى العربية بشكل طبيعي وقصير. أجب بالترجمة فقط.';
 // مسرد مصطلحات: كلمات صينية أخطأ فيها النموذج فعلًا على الرف الحي، تُمرَّر إليه في الطلب
 // بدل انتظار أن يصيبها من تلقائه. أضف هنا أي كلمة تتكرر خطأً — أرخص من إعادة الترجمة مرارًا.
@@ -234,7 +240,7 @@ export class Translator {
     const fallback = hintEn && !hasCJK(hintEn) ? hintEn.slice(0, 200) : text;
     if (this.aiCalls >= this.maxAi) return fallback;
     this.aiCalls++;
-    let out = await translateZhAr(this.ai, k, kind, hintEn, extra);
+    let out = en ? await translateEnAttr(this.ai, k) : await translateZhAr(this.ai, k, kind, hintEn, extra);
     if (!out) return fallback;
     // مقاس لاتيني داخل القيمة (مثل "加大码XL") يبقى كما هو حتى لو عرّبه النموذج
     if (kind === 'attr' && !en) { const sz = k.match(/(?<![A-Za-z'])(XXS|XS|S|M|L|XL|XXL|XXXL|[2-6]XL)(?![A-Za-z])/i); if (sz && !new RegExp(`\\b${sz[1]}\\b`, 'i').test(out)) { const rest = dictTranslate(k.replace(sz[1], '').replace(/码/g, '').trim()); out = rest ? `${rest} ${sz[1].toUpperCase()}` : sz[1].toUpperCase(); } }
@@ -369,7 +375,7 @@ export async function retranslatePending(db: D1Database, ai: any, limit = 40): P
 // ترجمة قيمة إنجليزية مقبولة: فيها حرف عربي، وكل رقم في الأصل باقٍ فيها كما هو
 // (أول تشغيل حي أعطى «Women's black» ⟵ «S»، و«1.38inch» ⟵ «38 سم»)
 export function enOk(src: string, out: string): boolean {
-  if (!/[\u0621-\u064A]/.test(out)) return false;
+  if (!/[\u0621-\u064A]/.test(out) || !colorsKept(src, out)) return false;
   const nums = (x: string): string[] => x.match(/\d+(?:\.\d+)?/g) ?? [];
   const o = nums(out);
   return nums(src).every(n => o.includes(n));
@@ -377,11 +383,12 @@ export function enOk(src: string, out: string): boolean {
 // ما كتبته ترجمة فاشلة قبل هذه الحراسة يعود إلى أصله ثم يُعاد بالقواعد الجديدة. «S»/«M» لا تُعاد:
 // تشترك مع مقاسات حقيقية فتفسدها. ذاكرة الترجمة الفاشلة تُحذف.
 async function revertBadEnglish(db: D1Database): Promise<number> {
-  const { results } = await db.prepare("SELECT src,dst FROM translations WHERE kind='attr' AND src GLOB '*[A-Za-z][A-Za-z][A-Za-z]*' AND src NOT GLOB '*[一-龥]*' LIMIT 500").all<{ src: string; dst: string }>();
+  // وما ترجمه النموذج الصغير بالتعليمة الصينية قبل SYS_ATTR_EN («Black A-line skirt» ⟵ «تنجيد أسود») يُعاد مرة واحدة
+  const { results } = await db.prepare("SELECT src,dst,created_at<'2026-09-24 13:40:00' old FROM translations WHERE kind='attr' AND src GLOB '*[A-Za-z][A-Za-z][A-Za-z]*' AND src NOT GLOB '*[一-龥]*' LIMIT 500").all<{ src: string; dst: string; old: number }>();
   let n = 0;
-  for (const { src, dst } of results) {
+  for (const { src, dst, old } of results) {
     if (!needsEnTr(src)) continue;
-    const bad = !enOk(src, dst) || /^[A-Za-z]{0,3}\d{1,5}[A-Za-z]?\s*[-–]?\s+/.test(src);
+    const bad = !!old || !enOk(src, dst) || /^[A-Za-z]{0,3}\d{1,5}[A-Za-z]?\s*[-–]?\s+/.test(src);
     if (!bad) continue;
     if (/[\u0621-\u064A]/.test(dst)) for (const f of ['color', 'size'] as const) n += (await db.prepare(`UPDATE variants SET ${f}=? WHERE ${f}=?`).bind(src, dst).run()).meta?.changes ?? 0;
     await db.prepare("DELETE FROM translations WHERE src=? AND kind='attr'").bind(src).run();
