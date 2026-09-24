@@ -20,7 +20,7 @@ const COLORS: Record<string, string> = {
   turquoise: 'فيروزي', teal: 'أزرق مخضر', cyan: 'سماوي', coral: 'مرجاني', peach: 'خوخي', tan: 'جملي فاتح', 'rose gold': 'ذهبي وردي',
   rosewood: 'خشب الورد', 'red sandalwood': 'خشب الصندل الأحمر', 'black walnut': 'خشب الجوز', walnut: 'خشب الجوز', 'classic gray': 'رمادي كلاسيكي', 'classic grey': 'رمادي كلاسيكي',
   transparent: 'شفاف', clear: 'شفاف', multicolor: 'متعدد الألوان', colorful: 'متعدد الألوان', 'mixed colors': 'ألوان مشكلة', random: 'لون عشوائي', 'random color': 'لون عشوائي',
-  'fog blue': 'أزرق ضبابي', bordeaux: 'عنابي', 'bordeaux red': 'عنابي', 'bean red': 'أحمر طوبي', 'aqua blue': 'أزرق مائي', aqua: 'أزرق مائي', lined: 'مبطّن', 'fleece-lined': 'مبطّن بالفرو', 'fleece lined': 'مبطّن بالفرو', 'lilac purple': 'ليلكي', 'jujube red': 'أحمر عنابي', 'dark blue': 'أزرق غامق', 'deep blue': 'أزرق غامق', 'light blue': 'أزرق فاتح', 'as shown in picture': 'كما في الصورة', 'as shown in the picture': 'كما في الصورة', 'as shown in the figure': 'كما في الصورة', 'real shot images': 'كما في الصورة', 'real shot': 'كما في الصورة',
+  'fog blue': 'أزرق ضبابي', 'earthy brown': 'بني ترابي', 'turquoise green': 'أخضر فيروزي', 'strawberry red': 'أحمر فراولة', bordeaux: 'عنابي', 'bordeaux red': 'عنابي', 'bean red': 'أحمر طوبي', 'aqua blue': 'أزرق مائي', aqua: 'أزرق مائي', lined: 'مبطّن', 'fleece-lined': 'مبطّن بالفرو', 'fleece lined': 'مبطّن بالفرو', 'lilac purple': 'ليلكي', 'jujube red': 'أحمر عنابي', 'dark blue': 'أزرق غامق', 'deep blue': 'أزرق غامق', 'light blue': 'أزرق فاتح', 'as shown in picture': 'كما في الصورة', 'as shown in the picture': 'كما في الصورة', 'as shown in the figure': 'كما في الصورة', 'real shot images': 'كما في الصورة', 'real shot': 'كما في الصورة',
   printed: 'مطبوع', floral: 'مزهّر', striped: 'مخطط', plaid: 'كاروهات', 'dusty pink': 'وردي باهت',
   'as picture': 'كما في الصورة', 'as shown': 'كما في الصورة', 'picture color': 'كما في الصورة', 'image color': 'كما في الصورة', 'photo color': 'كما في الصورة',
   'main picture': 'كما في الصورة', 'main picture model': 'كما في الصورة', 'main picture style': 'كما في الصورة', 'same as picture': 'كما في الصورة', 'as the picture': 'كما في الصورة',
@@ -65,7 +65,8 @@ export function needsEnTr(v: string | null | undefined): boolean {
   });
 }
 
-const VARIANT_WORD: Record<string, string> = { 'new model': 'موديل جديد', 'new style': 'موديل جديد', 'upgraded version': 'نسخة مطوّرة', 'upgraded': 'نسخة مطوّرة', regular: 'عادي', 'regular model': 'موديل عادي', standard: 'قياسي', 'already made': 'جاهز', 'high quality version': 'نسخة عالية الجودة' };
+const GARMENT: Record<string, string> = { dress: 'فستان', shawl: 'شال', skirt: 'تنورة', coat: 'معطف', jacket: 'جاكيت', shirt: 'قميص', pants: 'بنطلون', trousers: 'بنطلون', scarf: 'وشاح', hat: 'قبعة', bag: 'حقيبة' };
+const VARIANT_WORD: Record<string, string> = { 'silver fox fleece': 'مبطّن بفرو ناعم', 'silver fox velvet': 'مبطّن بفرو ناعم', 'fleece style': 'مبطّن بالفرو', 'fleece': 'مبطّن بالفرو', 'spring and autumn': 'ربيعي وخريفي', 'suit style': 'بدلة', 'regular style': 'عادي', petite: 'لقصيرات القامة', 'tall guy': 'لطوال القامة', 'little guy': 'لقصار القامة', twill: 'قماش تويل', corrugated: 'مموّج', ripple: 'مموّج', 'chiffon print': 'شيفون مطبوع', 'new model': 'موديل جديد', 'new style': 'موديل جديد', 'upgraded version': 'نسخة مطوّرة', 'upgraded': 'نسخة مطوّرة', regular: 'عادي', 'regular model': 'موديل عادي', standard: 'قياسي', 'already made': 'جاهز', 'high quality version': 'نسخة عالية الجودة' };
 // أطول بداية لونية في القيمة ثم ما بعدها: «Yellow and black leopard print» ⟵ {أصفر وأسود، leopard print}
 function leadColor(t: string, one: (c: string) => string | null): { c: string; rest: string } | null {
   const words = t.replace(/[-–]\s*\(/g, ' (').replace(/(\S)([\[【(（])/g, '$1 $2').replace(/[-–](?=[A-Za-z]{1,4}\d)/g, ' ').replace(/\s*[-–]\s*$/, '').split(/\s+/);
@@ -85,6 +86,9 @@ export function enAttr(raw: string): string | null {
   let t = raw.trim().replace(/\s+/g, ' ');
   // «Purple [main picture]»، «XL【European size in stock】»، «40 [Standard Size]»: الحاشية ضجيج
   t = t.replace(/[\[【(（]\s*(main picture|standard size|positive code|regular code|european size in stock|in stock|hot sale|new)\s*[\]】)）]/gi, '').trim();
+  // «navy blue]» قوس يتيم، «Navy blue*809» نجمة بدل المسافة، «Apricot-colored»
+  if (!/[\[【(（]/.test(t)) t = t.replace(/[\]】)）]+$/, '').trim();
+  t = t.replace(/\*/g, ' ').replace(/[-\s]colou?red$/i, '').replace(/\s+/g, ' ').trim();
   let who = '';
   for (const [re, ar] of WHO) if (re.test(t)) { who = ar; t = t.replace(re, '').trim(); }
   const low = t.toLowerCase().replace(/\s+(colou?r)$/, '').trim();
@@ -97,11 +101,13 @@ export function enAttr(raw: string): string | null {
   if (two.length === 2 && one(two[0]) && one(two[1])) return add(`${one(two[0])} و${one(two[1])}`);
   // طقم البيجامة: «double short-pink» = 双短 نصف كم وشورت، «short long» = 短长 نصف كم وبنطلون طويل (٢٤/٠٩/٢٦:
   // النموذج أعطاها «قميص قصير» و«قصير جداً» وضاع اللون)
+  const setw = low.match(/^(double short|short long|double long|long short)\s+(women|woman|ladies|men|man)\s*[-–]\s*(.+)$/);   // «Double short women-navy blue»
+  if (setw && one(setw[3].trim())) return add(`${SETS[setw[1]]} ${/^(wom|lad)/.test(setw[2]) ? 'نسائي' : 'رجالي'} - ${one(setw[3].trim())}`);
   const set = low.match(/^(double short|short long|double long|long short)\s*[-–]?\s*(.+)$/);
   if (set && one(set[2].trim())) return add(`${SETS[set[1]]} - ${one(set[2].trim())}`);
   // رمز طراز ثم لون: «B72 black»، «K06 black-green» — الرمز يبقى، واللون يُترجم
   // و«2333 # Wine red»، «1609#apricot»، «Ybl-t218 navy»، «JEPJ navy blue»
-  const code = t.match(/^([A-Za-z]{0,4}\d{1,6}[A-Za-z]?|[A-Za-z]{1,4}[-–][A-Za-z]?\d{1,5}|[A-Z]{2,5})\s*(?:#\s*|\s+)(.+)$/);
+  const code = t.match(/^([A-Za-z]{0,4}\d{1,6}[A-Za-z]?|[A-Za-z]{1,4}[-–][A-Za-z]?\d{1,5}|[A-Z]{2,5})\s*(?:#\s*|\s+|[-–]\s*(?=[A-Za-z]))(.+)$/);
   if (code && code[2] !== t) { const rest = enAttr(code[2]); if (rest && !needsEnTr(rest)) return add(`${code[1].toUpperCase()} ${rest}`); }
   // المقاسات
   if (/^(one size( fits all)?|free size|all yards|all code|average size|universal|one size fits most)\b/i.test(low)) return add('مقاس واحد' + kgRange(low));
@@ -111,7 +117,7 @@ export function enAttr(raw: string): string | null {
   if (/^(normal|standard|regular) size$/.test(low)) return add('مقاس عادي');
   const sz = t.match(SIZE_TOKEN);
   // «L size»، «Size L»، «M [recommendation 40-50kg]»، «Female XL»، «4xl (recommended 80-90kg )»
-  if (sz && /^(size\s+)?\S+(\s+size)?(\s*[\[(（【].*(recommend|kg|weight).*|\s+(is\s+)?recommend(ed|ation|s)?\b[^A-Za-z]*(kg|jin)?\s*\)?)?$/i.test(t)) return add(sz[1].toUpperCase() + kgRange(t));
+  if (sz && /^(size\s+)?\S+(\s+size)?(\s*[\[(（【].*(recommend|suggest|kg|weight).*|\s+(is\s+)?(recommend(ed|ation|s)?|suggest(ed|ion|s)?)\b[^A-Za-z]*(kg|jin)?\s*\)?)?$/i.test(t)) return add(sz[1].toUpperCase() + kgRange(t));
   // مقاس رقمي بحاشية: «40 [Standard Size]» بعد حذفها صار «40»
   if (/^\d{2,3}(\.\d)?$/.test(t) || /^\d{2}-\d{2}$/.test(t)) return add(t);
   const szn = t.match(/^size\s*(\d{2,3}(?:\.\d)?)$/i); if (szn) return add(`مقاس ${szn[1]}`);   // «Size 36»
@@ -125,6 +131,8 @@ export function enAttr(raw: string): string | null {
   if (num && one(num[1])) return add(`${one(num[1])} ${num[2]}`);
   // «and yellow»: شظيّة من «Black and yellow» قُطّعت عند الفاصلة
   const andc = low.match(/^and\s+(.+)$/); if (andc && one(andc[1])) return add(one(andc[1])!);
+  const skirt = t.match(/^(XXS|XS|S|M|L|XL|XXL|XXXL|[2-7]XL)\s*[【\[(（]?\s*(skirt|dress|pants) length\s*(\d+(?:\.\d+)?)\s*cm\s*[】\])）]?$/i);   // «M【skirt length 90cm】»
+  if (skirt) return add(`${skirt[1].toUpperCase()} (طول ${({ skirt: 'التنورة', dress: 'الفستان', pants: 'البنطلون' } as any)[skirt[2].toLowerCase()]} ${skirt[3]} سم)`);
   const cust = low.match(/^(\d{1,3})\s*customi[sz]ed$/); if (cust) return add(`تصميم خاص ${cust[1]}`);   // «5customized»
   // «M pure cotton 210g 40-50kg»، «Lpure cotton…»: المقاس ملتصق أحيانًا
   const cot = t.match(/^(XXS|XS|S|M|L|XL|XXL|XXXL|[2-7]XL)\s*pure cotton\s*(\d+)\s*g\s*(\d+(?:\.\d+)?-\d+(?:\.\d+)?)\s*(kg)?$/i);
@@ -132,12 +140,15 @@ export function enAttr(raw: string): string | null {
   // لون ثم وصف: «Apricot 9cm»، «Off-white 4cm high heel»، «Khaki leopard print»، «Navy blue A-line skirt»، «Royal Blue-Z142»
   const lead = leadColor(t, one);
   if (lead) {
-    const { c, rest } = lead, r = rest.toLowerCase();
+    const c = lead.c, rest = lead.rest.replace(/^[-–]\s*/, ''), r = rest.toLowerCase();
     let m: RegExpMatchArray | null;
     if ((m = r.match(/^(\d+(?:\.\d+)?)\s*cm$/))) return add(`${c} ${m[1]} سم`);
     if ((m = rest.match(/^(\d+(?:\.\d+)?)\s*cm\s+([A-Za-z]{0,4}\d[\w-]*)$/i))) return add(`${c} ${m[1]} سم ${m[2].toUpperCase()}`);   // «Off-white 5.5 cm 6102-1»
     // «new model»، «[Upgraded Version]»، «(regular)» تُترجم ولا تُحذف: «Navy blue» و«Navy blue new model» خياران مختلفان في المنتج نفسه
     if (VARIANT_WORD[r]) return add(`${c} ${VARIANT_WORD[r]}`);
+    if ((m = r.match(/^(\d+(?:\.\d+)?)\s*cm\s+(buckle|smooth board|smooth panel)$/))) return add(`${c} ${m[1]} سم ${m[2] === 'buckle' ? 'بإبزيم' : 'بلوحة ملساء'}`);   // أحزمة
+    if ((m = r.match(/^dress length\s*(\d+(?:\.\d+)?)\s*cm$/))) return add(`فستان ${c} طول ${m[1]} سم`);
+    if ((m = r.match(/^(dress|shawl|skirt|coat|jacket|shirt|pants|trousers|scarf|hat|bag)$/))) return add(`${GARMENT[m[1]]} ${c}`);
     if ((m = r.match(/^(\d+(?:\.\d+)?)\s*cm\s+high[- ]heels?$/))) return add(`${c} كعب ${m[1]} سم`);
     if (/^(with )?(lining|lined)$/.test(r)) return add(`${c} مبطّن`);
     if (/^(with )?(fleece[- ]lined|fleece lining|velvet lining)$/.test(r)) return add(`${c} مبطّن بالفرو`);
