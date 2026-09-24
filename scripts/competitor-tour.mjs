@@ -61,6 +61,9 @@ async function visit(url, i) {
   await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
   const ms = Date.now() - t0;
   if (!r || r.err) { report.pages.push({ url, error: r?.err || 'no response', ms }); log(`\n### [${i}] ${url}\n  ❌ ${r?.err || 'no response'}`); return null; }
+  // تمرير كما يفعل الإنسان: مواقع القوالب تُظهر أقسامها بحركة عند الوصول إليها، وبلا تمرير تبقى فارغة في الصورة
+  await page.evaluate(async () => { for (let y = 0; y < document.body.scrollHeight; y += 500) { window.scrollTo(0, y); await new Promise(r => setTimeout(r, 250)); } window.scrollTo(0, 0); }).catch(() => {});
+  await page.waitForTimeout(800);
   const info = await inspect(page);
   const slug = String(i).padStart(2, '0') + '-' + (new URL(url).pathname.replace(/[^\w]+/g, '_').slice(0, 40) || 'home');
   await page.screenshot({ path: `${OUT}/${slug}.png`, fullPage: true }).catch(() => {});
@@ -100,6 +103,8 @@ const mp = await m.newPage();
 const t0 = Date.now();
 await mp.goto(START, { waitUntil: 'domcontentloaded', timeout: 45000 }).catch(() => {});
 await mp.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
+await mp.evaluate(async () => { for (let y = 0; y < document.body.scrollHeight; y += 400) { window.scrollTo(0, y); await new Promise(r => setTimeout(r, 250)); } window.scrollTo(0, 0); }).catch(() => {});
+await mp.waitForTimeout(800);
 report.mobile = { ms: Date.now() - t0, width: await mp.evaluate(() => document.documentElement.scrollWidth).catch(() => 0),
   height: await mp.evaluate(() => document.documentElement.scrollHeight).catch(() => 0) };
 await mp.screenshot({ path: `${OUT}/mobile-home.png`, fullPage: true }).catch(() => {});
