@@ -1,0 +1,63 @@
+{
+ "start": "https://webapp.bizznass-co.com/",
+ "at": "2026-09-24T08:29:44.953Z",
+ "pages": [
+  {
+   "url": "https://webapp.bizznass-co.com/",
+   "final": "https://webapp.bizznass-co.com/tabs/home",
+   "status": 200,
+   "ms": 5273,
+   "title": "BizzNass",
+   "lang": "en",
+   "dir": "rtl",
+   "description": "",
+   "generator": "",
+   "h": [],
+   "text": "Bizznass\nعروض اليوم\n$\nApple AirPods Max - Sky Blue\n$0\n2020 Apple MacBook Air Laptop:...\n$\nApple iPhone 14 Pro Max, 256GB...\n$\nAMD Ryzen 7 5800X 8-core, 16-Thread...\n$\nMEHOTO Mens Air Running Sneakers...\nالعروض الموسمية\n$0\n2020 Apple MacBook Air Laptop:...\nالأكثر مبيعا\n$179\nCricut Explore Air 2 - A DIY Cutting...\nصفقات سريعه\n$0\n2020 Apple MacBook Air Laptop:...\n$\nApple AirPods Max - Sky Blue\n$\nApple iPhone 14 Pro Max, 256GB...\nالرئيسية\nعربة التسوق\nتسجيل الدخول\nالإنجليزية",
+   "textLen": 474,
+   "prices": [
+    "...\n$"
+   ],
+   "days": [],
+   "internal": [],
+   "external": [],
+   "apps": [],
+   "contact": [],
+   "buttons": [],
+   "forms": [
+    {
+     "action": "",
+     "fields": [
+      "تسوق الآن من أمازون"
+     ]
+    }
+   ],
+   "imgs": 17,
+   "brokenImgs": [],
+   "scriptHosts": [
+    "webapp.bizznass-co.com"
+   ],
+   "overflow": 0,
+   "shot": "01-_.png"
+  }
+ ],
+ "extra": [
+  {
+   "url": "https://bizznass-co.com/",
+   "status": 200,
+   "text": "الرئيسية\nلماذا بزناس\nتحميل التطبيق\nإتصل بنا\nتطبيق بزناس يربطك بالمواقع العالمية من خلال خدمات الشراء، التجميع، والشحن عبر منصة واحدة\nتحميل التطبيق\nكل هذه الخدمات و أكثر\n\nTemplate Crafted by UIdeck"
+  },
+  {
+   "url": "https://www.facebook.com/p/BizzNass-%D8%A8%D8%B2%D9%86%D8%A7%D8%B3-100078044823421/",
+   "status": 200,
+   "text": "تسجيل الدخول\nهل نسيت الحساب؟\nBizzNass بزناس \n‏المتابعون‏ ‏٤٠ ألف‏ • ‏يتابع‏ ‏٠‏\nالمزيد\nالمنشورات\nحول\nريلز\nالصور\nنبذة مختصرة\nمنصة بزناس توفرلك خدمة الشراء والشحن من أغلب المواقع العالمية.\nتواصل معنا لمزيد من التفاصيل 📩\n‏صفحة‏ · ‏شركة وساطة‏\nحي دمشق بالقرب من الدائري الثاني, Tripoli, Libya\n+218 94-7707472\n+218 94-7707472\nlinktr.ee/Bizznass\nمفتوح الآن\nبلا تقييم حتى الآن (‏٣‏ آراء)﻿\nالصور\nعرض كل الصور\nالخصوصية\n \n · خصوصية الحالة الصحية للمستهلك\n \n · الشروط\n \n · الإعلانات\n \n · Ad Choices \n \n · ملفات تعريف الارتباط\n \n · المزيد\nBizzNass بزناس\nمحتوى ذكاء اصطناعي\n \n·\nمنذ ١٣ ساعة\n١٣ س\n \n·\nرد بالك  تفوت تخفيض زي هذا \n... عرض المزيد\nBizzNass بزناس\nإرسال رسالة\nكل التفاعلات:\n١٢٨\n٦\n٤\nأعجبني\nتعليق\nعرض المزيد من BizzNass بزناس | Tripoli\nالبريد الإلكتروني أو رقم الهاتف\nكلمة السر\nتسجيل الدخول\nهل نسيت كلمة السر؟\nأو\nإنشاء حساب جديد"
+  }
+ ],
+ "mobile": {
+  "ms": 5670,
+  "width": 390,
+  "height": 844
+ },
+ "jsErrors": [],
+ "failedRequests": []
+}
