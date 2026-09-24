@@ -1873,7 +1873,8 @@ const enImp = await extCall('/api/import', { category_id: 1, page_url: 'ext:stoc
   title: `ألوان ${enTag}`, priceCny: 30, images: ['https://cbu01.alicdn.com/img/ibank/en1.jpg', 'https://cbu01.alicdn.com/img/ibank/en2.jpg'], minQty: 1, inStock: true, weightG: 300,
   variants: [{ color: 'Navy blue', size: 'Female XL', inStock: true }, { color: 'Wine red', size: 'M [recommendation 40-50kg ]', inStock: true },
     { color: 'non-returnable]', size: 'Female XL', inStock: true }, { color: 'K06 black-green', size: 'Capacity', inStock: true }, { color: '2008 double short - black', size: 'Female XL', inStock: true },
-    { color: '2333 # Wine red', size: 'Female XL', inStock: true }, { color: 'Navy blue new model', size: 'Female XL', inStock: true }] }] });
+    { color: '2333 # Wine red', size: 'Female XL', inStock: true }, { color: 'Navy blue new model', size: 'Female XL', inStock: true },
+    { color: 'Beige SW-270 [Diameter 30cm', size: 'Female XL', inStock: true }] }] });
 expect(enImp.imported === 1, `عيّنة الألوان الإنجليزية دخلت (جديد ${enImp.imported})`);
 const openEn = async () => {
   await page.goto(BASE + '/search?q=' + encodeURIComponent(enTag)); await page.locator('.card .t').first().click(); await page.waitForLoadState('networkidle');
@@ -1882,6 +1883,7 @@ const openEn = async () => {
 const enChips = await openEn();
 const enAll = [...enChips.colors, ...enChips.sizes].join('، ');
 expect(enChips.colors.includes('كحلي') && enChips.colors.includes('نبيتي') && enChips.colors.includes('K06 أسود وأخضر') && enChips.colors.includes('2008 نصف كم وشورت - أسود'), `الألوان بالعربية في منتقي اللون (${enChips.colors.join('، ')})`);
+expect(enChips.colors.includes('بيج SW-270 (قطر 30 سم)'), `قيمة من جدول الترجمة اليدوية تصل المنتقي بالعربية (${enChips.colors.join('، ')})`);
 expect(enChips.colors.includes('2333 نبيتي') && enChips.colors.includes('كحلي موديل جديد') && enChips.colors.includes('كحلي'), `رقم التصميم بعلامة # والموديل الجديد يبقى خيارًا مستقلًا عن «كحلي» (${enChips.colors.join('، ')})`);
 expect(enChips.sizes.includes('XL نسائي') && enChips.sizes.includes('M (40-50 كغ)'), `المقاسات بالعربية مع رموزها (${enChips.sizes.join('، ')})`);
 expect(!/[A-Za-z]{3,}/.test(enAll.replace(/K06/g, '')) && !/non-returnable|Capacity/i.test(enAll), `لا شظايا ولا كلمة إنجليزية في المنتقي (${enAll})`);

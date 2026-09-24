@@ -1,3 +1,4 @@
+import { MANUAL } from './attr-manual';
 // قيم الألوان والمقاسات الإنجليزية على الرف (٢٤/٠٩/٢٦): ١٬٤٩٧ منتجًا نشطًا و١٩٬٠٥٦ سطرًا — «Beige»،
 // «Navy blue»، «Female XL»، و«2008 double short - black». كانت Translator.t تُعيد أي نص بلا صيني كما هو،
 // وعدّادات الإحصاء تبحث عن الصيني والمكسور وحدهما، فبقيت بالإنجليزية أمام الزبونة في منتقي اللون والمقاس.
@@ -83,6 +84,7 @@ const SIZE_TOKEN = /\b(XXS|XS|S|M|L|XL|XXL|XXXL|XXXXL|XXXXXL|[2-7]XL)\b/i;
 
 // ترجمة بالقاموس بلا نموذج؛ null = يحتاج النموذج
 export function enAttr(raw: string): string | null {
+  const man = MANUAL[raw.trim().replace(/\s+/g, ' ').toLowerCase()]; if (man) return man;
   let t = raw.trim().replace(/\s+/g, ' ');
   // «Purple [main picture]»، «XL【European size in stock】»، «40 [Standard Size]»: الحاشية ضجيج
   t = t.replace(/[\[【(（]\s*(main picture|standard size|positive code|regular code|european size in stock|in stock|hot sale|new)\s*[\]】)）]/gi, '').trim();
