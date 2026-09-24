@@ -31,6 +31,8 @@ export const Layout: FC<Props> = ({ title, user, cartCount = 0, wishCount = 0, c
         {/* شريط علوي: معلومات تطمئن الزبونة قبل أي شيء */}
         <div class="hdr-strip">
           <div class="wrap">
+            <a href="/request" class="strip-req"><i>🔗</i>اطلبي أي منتج برابط</a>
+            <span class="sep"></span>
             <a href="/pages/shipping"><i>🚚</i>معلومات الشحن</a>
             <span class="sep"></span>
             <a href="/pages/returns"><i>↩️</i>الإرجاع والاسترداد</a>

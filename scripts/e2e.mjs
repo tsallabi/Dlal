@@ -1804,6 +1804,71 @@ try {
 }
 await page.goto(BASE + '/logout');
 
+// ---------- «اطلبي برابط» (٢٤/٠٩/٢٦) ----------
+// المنافس الوحيد في ليبيا (بزناس) يقوم كله على لصق رابط أمازون أو علي بابا. نلعب دور زبونة تلصق رابطًا،
+// ودور الإضافة التي تستورده، ودور الفريق الذي يسعّر رابطًا من غير 1688 — ونرى الإشعار يصل.
+await page.goto(BASE + '/logout');
+await page.goto(BASE + '/request');
+expect(await page.locator('.lr-login a[href*="/login"]').isVisible(), 'الزائرة ترى زر «سجّلي الدخول لإرسال رابط» لا نموذجًا يضيع');
+await login(page, PHONE, 'secret456');
+await page.goto(BASE + '/');
+await page.locator('.hdr-strip a[href="/request"]').click(); await page.waitForLoadState('networkidle');
+expect(page.url().endsWith('/request') && await page.locator('textarea[name=url]').isVisible(), 'رابط «اطلبي برابط» في أعلى كل صفحة يفتح النموذج');
+const sendLink = async (text, note = '') => {
+  await page.goto(BASE + '/request');
+  await page.fill('textarea[name=url]', text); if (note) await page.fill('input[name=note]', note);
+  await page.click('.lr-form button[type=submit]'); await page.waitForLoadState('networkidle');
+};
+await sendLink('شوفي هذا الفستان حلو');
+expect(await has(page, 'لم نجد رابطًا'), 'نص بلا رابط يُرفض برسالة واضحة');
+// رابط 1688 جديد ملصوق مع نص المشاركة كما يلصقه الناس
+const rqOffer = '84' + String(Date.now()).slice(-10); const rqTag = uniqTag();
+await sendLink(`【1688】快来看看 https://detail.1688.com/offer/${rqOffer}.html?spm=abc 复制打开`, 'مقاس M أسود');
+expect(await has(page, 'وصلنا طلبك'), 'طلب رابط 1688 جديد يُستقبل');
+expect((await page.locator('.lr-row').first().textContent()).includes('قيد التجهيز') && (await page.locator('.lr-row').first().textContent()).includes('مقاس M أسود'),
+  'ويظهر في «طلباتي بالرابط» قيد التجهيز مع ملاحظتها');
+await sendLink(`https://detail.1688.com/offer/${rqOffer}.html`);
+expect(await has(page, 'أرسلتِ هذا الرابط من قبل'), 'الرابط نفسه لا يُرسل مرتين');
+// الإضافة: الرابط يتصدّر طابور الاكتشاف
+const rqQ = await extCall('/api/import/queue?v=' + extManifest.version);
+expect((rqQ.fresh || [])[0]?.id === rqOffer, `رابط الزبونة يتصدّر طابور الإضافة (${(rqQ.fresh || []).slice(0, 3).map(f => f.id).join('،')})`);
+// الإضافة فتحت صفحته واستوردته
+const rqImp = await extCall('/api/import', { category_id: 1, page_url: 'ext:discover', items: [{ offerId: rqOffer, url: `https://detail.1688.com/offer/${rqOffer}.html`,
+  title: `مطلوب ${rqTag}`, priceCny: 30, images: ['https://cbu01.alicdn.com/img/ibank/rq1.jpg', 'https://cbu01.alicdn.com/img/ibank/rq2.jpg'], minQty: 1, inStock: true }] });
+expect(rqImp.imported === 1, `المنتج المطلوب دخل المتجر (جديد ${rqImp.imported})`);
+await page.goto(BASE + '/request');
+const rqRow = (await page.locator('.lr-row').first().textContent()) || '';
+expect(rqRow.includes('جاهز للشراء') && await page.locator('.lr-row .lr-go').first().isVisible(), `طلبها صار «جاهز للشراء» برابط المنتج (${rqRow.replace(/\s+/g, ' ').trim().slice(0, 80)})`);
+await page.locator('.lr-row .lr-go').first().click(); await page.waitForLoadState('networkidle');
+expect(await has(page, `مطلوب ${rqTag}`) && await page.locator('#addForm').count() === 1, 'والرابط يفتح صفحة المنتج بزر الإضافة للسلة');
+// المنتج صار عندنا: لصق رابطه مرة أخرى يفتح صفحته فورًا بلا انتظار
+await sendLink(`https://detail.1688.com/offer/${rqOffer}.html?spm=a26352`);
+expect(page.url().includes('/p/') && await has(page, `مطلوب ${rqTag}`), `رابط منتج موجود عندنا يفتح صفحته فورًا (${page.url().replace(BASE, '')})`);
+await page.goto(BASE + '/account/notifications');
+expect(await has(page, 'منتجك صار في هدهدي'), 'ووصلها إشعار «منتجك صار في هدهدي»');
+// رابط من غير 1688: الفريق يربطه بمنتج أو يعتذر
+await sendLink('https://item.taobao.com/item.htm?id=712345678901', 'قطعتان');
+await sendLink('https://www.amazon.com/dp/B0TEST1234');
+await login(page, '0910000000', 'admin123');
+await page.goto(BASE + '/admin/requests');
+const rqTb = page.locator('.lr-admin tr', { hasText: '712345678901' }).first();
+expect(await rqTb.isVisible() && (await rqTb.textContent()).includes('تاوباو'), 'طلب تاوباو يظهر للفريق في «طلبات بالرابط» بمصدره');
+const rqSlug = await page.evaluate(async ([b, o]) => { const r = await fetch(b + '/admin/products?q=' + o); const t = await r.text(); return (t.match(/href="\/p\/([^"]+)"/) || [])[1]; }, [BASE, rqOffer]);
+await rqTb.locator('input[name=ref]').fill('/p/' + rqSlug);
+await rqTb.locator('button', { hasText: 'ربط وإشعار' }).click(); await page.waitForLoadState('networkidle');
+expect(await has(page, 'وصل الزبونة إشعار'), `الفريق ربط طلب تاوباو بمنتج على الرف (${rqSlug})`);
+const rqAm = page.locator('.lr-admin tr', { hasText: 'B0TEST1234' }).first();
+await rqAm.locator('input[name=why]').fill('المنتج لا يُشحن إلى ليبيا');
+await rqAm.locator('button', { hasText: 'اعتذار' }).click(); await page.waitForLoadState('networkidle');
+expect(page.url().includes('status=rejected') && await has(page, 'المنتج لا يُشحن إلى ليبيا'), 'والاعتذار يُحفظ بسببه');
+await login(page, PHONE, 'secret456');
+await page.goto(BASE + '/request');
+const rqAll = ((await page.locator('.lr-list').textContent()) || '').replace(/\s+/g, ' ');
+expect(/المنتج لا يُشحن إلى ليبيا/.test(rqAll) && (rqAll.match(/جاهز للشراء/g) || []).length >= 2, 'الزبونة ترى سبب الاعتذار وطلبيها الجاهزين');
+await shot(page, 'request-by-link');
+if (stockJob) await extCall('/api/crawl/report', { job_id: stockJob.id, started_at: new Date().toISOString(), status: 'ok', checked: 0 });
+await page.goto(BASE + '/logout');
+
 // ---------- جوال ----------
 const m = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, locale: 'ar' });
 const mp = await m.newPage();

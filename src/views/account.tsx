@@ -19,6 +19,7 @@ export const AccountShell: FC<{ user: User; cartCount: number; wishCount?: numbe
     </>],
     ['طلباتي', ['orders'], <>
       {L('/account/orders', 'orders', '📦', 'كل الطلبات', counts.orders)}
+      <a href="/request"><i>🔗</i>طلباتي بالرابط</a>
       <a href="/account/orders?stage=pending_payment"><i>💳</i>بانتظار الدفع</a>
       <a href="/account/orders?stage=buying"><i>🛒</i>قيد الشراء</a>
       <a href="/account/orders?stage=shipping"><i>✈️</i>في الطريق</a>

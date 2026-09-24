@@ -4,7 +4,7 @@ import type { Env } from '../types';
 import { ORDER_STATUS, PAYMENT_METHODS } from '../types';
 import { AdminShell } from '../views/dash';
 import { Flash } from '../views/layout';
-import { getCategories, PRODUCT_SELECT, fmt, imgUrl, timeAgo, latinDigits, realWa } from '../lib/db';
+import { getCategories, PRODUCT_SELECT, fmt, imgUrl, timeAgo, latinDigits, realWa, notify } from '../lib/db';
 import type { ProductRow } from '../lib/db';
 import { classifyModesty } from '../lib/modesty';
 import { fingerprint, sameProduct } from '../lib/dedupe';
@@ -12,6 +12,7 @@ import { loadSettings, computePrice } from '../lib/pricing';
 import { requireRole } from '../lib/auth';
 import { attrValue, notRetail, kindOf } from '../lib/source';
 import { requirePerm, logActivity } from '../lib/perm';
+import { settleLinkRequests, LINK_SOURCES, LINK_STATUS } from '../lib/link-requests';
 import { setOrderStatus, markOrderPaid } from '../lib/orders';
 import { Translator, hasCJK, goodTitle, retranslatePending, releaseHeldDrafts, BROKEN_SQL } from '../lib/translate';
 
@@ -33,9 +34,10 @@ const shell = async (c: Context<Env>, active: string, title: string, body: any) 
     db.prepare("SELECT COUNT(*) n FROM orders WHERE status='pending_payment'"),
     db.prepare("SELECT COUNT(*) n FROM tickets WHERE status IN ('open','in_progress')"),
     db.prepare("SELECT COUNT(*) n FROM reviews WHERE status='pending'"),
+    db.prepare("SELECT COUNT(*) n FROM link_requests WHERE status='new'"),
   ]);
   const n = (i: number) => (k[i].results[0] as any).n as number;
-  return c.html(<AdminShell user={c.get('user')!} active={active} title={title} counts={{ orders: n(0), tickets: n(1), reviews: n(2) }}>{body}</AdminShell>);
+  return c.html(<AdminShell user={c.get('user')!} active={active} title={title} counts={{ orders: n(0), tickets: n(1), reviews: n(2), requests: n(3) }}>{body}</AdminShell>);
 };
 
 // ---------- نظرة عامة ----------
@@ -723,5 +725,72 @@ admin.get('/partners', async (c) => {
 });
 admin.post('/partners/new', async (c) => { const f = await c.req.parseBody(); await c.env.DB.prepare('INSERT INTO partners(name,warehouse_address,contact,share_percent) VALUES(?,?,?,0)').bind(String(f.name), String(f.warehouse_address ?? ''), String(f.contact ?? '')).run(); return c.redirect('/admin/partners?ok=1'); });
 admin.post('/partners/:id', async (c) => { const f = await c.req.parseBody(); await c.env.DB.prepare('UPDATE partners SET name=?,warehouse_address=?,contact=?,ship_rate_per_kg=?,share_percent=?,active=? WHERE id=?').bind(String(f.name), String(f.warehouse_address ?? ''), String(f.contact ?? ''), Number(f.ship_rate_per_kg) || 0, Number(f.share_percent) || 0, Number(f.active), Number(c.req.param('id'))).run(); return c.redirect('/admin/partners?ok=1'); });
+
+// ---------- طلبات «اطلبي برابط» ----------
+// روابط 1688 تجهز وحدها (الإضافة تستوردها ثم settleLinkRequests تُعلم الزبونة). الباقي هنا: الفريق يسعّره
+// ويضيفه منتجًا (يدويًا أو بزر الاستيراد) ثم يربطه بالطلب، أو يعتذر بسبب تقرؤه الزبونة.
+admin.get('/requests', requirePerm('catalog.manage', 'orders.manage'), async (c) => {
+  const db = c.env.DB; await settleLinkRequests(db);
+  const st = ['new', 'ready', 'rejected'].includes(c.req.query('status') ?? '') ? c.req.query('status')! : 'new';
+  const rows = await db.prepare(`SELECT r.*,u.name,u.phone,p.slug,p.title_ar,p.status pstatus,d.tries dtries,d.status dstatus FROM link_requests r JOIN users u ON u.id=r.user_id
+     LEFT JOIN products p ON p.id=r.product_id LEFT JOIN discovered_offers d ON d.offer_id=r.offer_id
+     WHERE r.status=? ORDER BY r.id ${st === 'new' ? 'ASC' : 'DESC'} LIMIT ? OFFSET ?`).bind(st, PER, (pageOf(c) - 1) * PER).all<any>();
+  const cnt = Object.fromEntries((await db.prepare('SELECT status,COUNT(*) n FROM link_requests GROUP BY status').all<any>()).results.map((r: any) => [r.status, r.n]));
+  const s = await loadSettings(db);
+  return shell(c, 'requests', 'طلبات بالرابط', (
+    <>
+      <Flash msg={c.req.query('ok') ? 'تم ✓ — وصل الزبونة إشعار' : undefined} /><Flash type="err" msg={c.req.query('err') || undefined} />
+      <p style="font-size:13px;color:#555;margin:0 0 10px">روابط <b>1688</b> تجهز وحدها: تتصدّر طابور الاكتشاف فتستوردها الإضافة في دفعتها التالية، ولحظة وصول المنتج يصير الطلب «جاهزًا» ويصل الزبونة إشعار بصفحته.
+        {(parseInt(s.discover_per_batch ?? '') || 0) === 0 && <b style="color:#8c2121"> الاستيراد من طابور الاكتشاف موقوف (٠ في كل دفعة) — فعّله من <a href="/admin/crawler#discover">بطاقة الاكتشاف</a> وإلا بقيت روابط 1688 تنتظر.</b>}
+        {' '}غيرها (تاوباو، شي إن، أمازون…): أضيفي المنتج بسعره ثم اربطيه هنا برقمه أو رابطه في المتجر.</p>
+      <div class="tabs" style="display:flex;gap:6px;margin-bottom:10px">{(['new', 'ready', 'rejected'] as const).map(k =>
+        <a class={`btn sm ${st === k ? 'brand' : 'ghost'}`} href={`/admin/requests?status=${k}`}>{LINK_STATUS[k][0]} ({cnt[k] ?? 0})</a>)}</div>
+      {rows.results.length === 0 ? <p style="color:#888">لا طلبات هنا.</p> : (
+        <div class="tbl-wrap"><table class="tbl lr-admin"><tr><th>#</th><th>الزبونة</th><th>الرابط</th><th>ملاحظتها</th><th>الحالة</th><th></th></tr>
+          {rows.results.map((r: any) => <tr>
+            <td>{r.id}<br /><small>{timeAgo(r.created_at)}</small></td>
+            <td>{r.name}<br /><small dir="ltr">{r.phone}</small></td>
+            <td><span class="status gray" style="font-size:10px">{LINK_SOURCES[r.source] ?? r.source}</span><br /><a class="src-link" href={r.url} target="_blank" rel="noopener noreferrer" dir="ltr">{String(r.url).slice(0, 60)}</a>
+              {r.offer_id && r.status === 'new' && <><br /><small class="lr-q">{r.dstatus === 'failed' ? '⚠️ تعذّرت قراءة صفحته مرتين — استورديه بزر الاستيراد' : `في طابور الإضافة (محاولات ${r.dtries ?? 0})`}</small></>}</td>
+            <td><small>{r.note ?? '—'}</small></td>
+            <td>{r.slug ? <a href={`/p/${r.slug}`} target="_blank">{String(r.title_ar ?? '').slice(0, 40)}</a> : '—'}{r.admin_note && <><br /><small>{r.admin_note}</small></>}</td>
+            <td>{r.status === 'new' && <>
+              <form method="post" action={`/admin/requests/${r.id}/link`} class="inline" style="gap:4px"><input type="text" name="ref" placeholder="رقم المنتج أو رابطه في المتجر" style="width:190px" dir="ltr" required /><button class="btn sm ok">ربط وإشعار</button></form>
+              <form method="post" action={`/admin/requests/${r.id}/reject`} class="inline" style="gap:4px;margin-top:4px"><input type="text" name="why" placeholder="سبب الاعتذار للزبونة" style="width:190px" required /><button class="btn sm ghost" style="color:#d3262b">اعتذار</button></form>
+            </>}</td>
+          </tr>)}
+        </table></div>
+      )}
+      <Pager c={c} total={cnt[st] ?? 0} />
+    </>
+  ));
+});
+// ربط الطلب بمنتج على الرف: رقمه، أو رابطه (/p/slug)، أو رقم عرض 1688
+admin.post('/requests/:id/link', requirePerm('catalog.manage', 'orders.manage'), async (c) => {
+  const db = c.env.DB; const f = await c.req.parseBody(); const id = Number(c.req.param('id'));
+  const ref = String(f.ref ?? '').trim();
+  const slug = (ref.match(/\/p\/([^/?#\s]+)/) || [])[1];
+  const p = slug ? await db.prepare('SELECT id,slug,status,title_ar FROM products WHERE slug=?').bind(slug).first<any>()
+    : /^\d{9,15}$/.test(ref) ? await db.prepare("SELECT id,slug,status,title_ar FROM products WHERE source_offer_id=?").bind(ref).first<any>()
+    : /^\d+$/.test(ref) ? await db.prepare('SELECT id,slug,status,title_ar FROM products WHERE id=?').bind(Number(ref)).first<any>() : null;
+  if (!p) return c.redirect('/admin/requests?err=' + encodeURIComponent(`لم أجد منتجًا بـ«${ref.slice(0, 60)}»`));
+  if (p.status !== 'active') return c.redirect('/admin/requests?err=' + encodeURIComponent(`المنتج ${p.id} ليس على الرف (${p.status}) — أظهريه أولًا ثم اربطيه`));
+  const r = await db.prepare("SELECT user_id FROM link_requests WHERE id=? AND status='new'").bind(id).first<{ user_id: number }>();
+  if (!r) return c.redirect('/admin/requests');
+  await db.prepare("UPDATE link_requests SET status='ready',product_id=?,updated_at=datetime('now') WHERE id=?").bind(p.id, id).run();
+  await notify(db, r.user_id, 'منتجك صار في هدهدي ✓', `${String(p.title_ar).slice(0, 80)} — بسعر نهائي بالدينار شامل الشحن والجمارك.`, `/p/${p.slug}`);
+  await logActivity(db, c.get('user')!.id, 'request.link', String(id), String(p.id));
+  return c.redirect('/admin/requests?ok=1');
+});
+admin.post('/requests/:id/reject', requirePerm('catalog.manage', 'orders.manage'), async (c) => {
+  const db = c.env.DB; const f = await c.req.parseBody(); const id = Number(c.req.param('id'));
+  const why = String(f.why ?? '').trim().slice(0, 300);
+  const r = await db.prepare("SELECT user_id FROM link_requests WHERE id=? AND status='new'").bind(id).first<{ user_id: number }>();
+  if (!r || !why) return c.redirect('/admin/requests');
+  await db.prepare("UPDATE link_requests SET status='rejected',admin_note=?,updated_at=datetime('now') WHERE id=?").bind(why, id).run();
+  await notify(db, r.user_id, 'تعذّر توفير المنتج الذي طلبتِه', why, '/request');
+  await logActivity(db, c.get('user')!.id, 'request.reject', String(id), why);
+  return c.redirect('/admin/requests?status=rejected&ok=1');
+});
 
 export default admin;

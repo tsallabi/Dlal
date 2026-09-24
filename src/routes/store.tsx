@@ -504,6 +504,7 @@ store.get('/m/menu', async (c) => {
       <Row href="/sale" icon="%" name="عروض وتخفيضات" />
       {tiles.map(t => <Row href={`/c/${t.slug}`} img={t.img} icon={t.icon} name={t.name_ar} />)}
       <Row href="/c/all" icon="▦" name="كل المنتجات" />
+      <Row href="/request" icon="🔗" name="اطلبي أي منتج برابط" />
     </div>,
   );
 });
@@ -549,6 +550,7 @@ store.get('/p/:slug', async (c) => {
   return c.html(
     <Layout {...b} title={p.title_ar} active={p.cat_slug}>
       <div class="crumbs"><a href="/">الرئيسية</a> › <a href={`/c/${p.cat_slug}`}>{p.cat_name}</a> › <span>{p.title_ar.slice(0, 40)}</span></div>
+      {c.req.query('have') && <div class="flash ok have-it">الرابط الذي لصقتِه لمنتج موجود عندنا — هذا هو، بسعره النهائي بالدينار. أضيفيه للسلة مباشرة.</div>}
       <div class="pd" data-product={p.id}>
         <div class="gallery">
           <div class="main"><img id="mainImg" src={imgUrl(images[0])} alt={p.title_ar} referrerpolicy="no-referrer" />{off > 0 && <span class="tag">-{off}%</span>}</div>

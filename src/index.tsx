@@ -11,12 +11,14 @@ import img from './routes/img';
 import pay from './routes/pay';
 import account from './routes/account';
 import pages from './routes/pages';
+import request from './routes/request';
 import adminOps from './routes/admin-ops';
 import api1688Admin, { getClient, syncStock } from './routes/api1688-admin';
 import { loadSettings } from './lib/pricing';
 import { retranslatePending } from './lib/translate';
 import { Client1688, type Tokens } from './lib/api1688';
 import { runServerJobs } from './lib/crawl';
+import { settleLinkRequests } from './lib/link-requests';
 
 const app = new Hono<Env>();
 
@@ -64,6 +66,7 @@ app.route('/account', account);
 app.route('/', pay);
 app.route('/partner', partner);
 app.route('/pages', pages);
+app.route('/request', request);
 app.route('/', auth);
 app.route('/', store);
 
@@ -92,6 +95,8 @@ export default {
     ctx.waitUntil((async () => {
       try {
         if (env.AI) { const r = await retranslatePending(env.DB, env.AI, 40); console.log('cron translate', JSON.stringify(r)); }
+        // طلبات «اطلبي برابط» التي نُشر منتجها بعد ترجمته (كان مسودة لحظة الاستيراد)
+        await settleLinkRequests(env.DB);
         if (!s.src_key) return;
         if (left <= 0) { console.log('cron enrich skipped: budget spent', spent, '/', budget); return; }
         // **يجب احترام `runner`**: مهمة موسومة للإضافة ليست للخادم. الكرون كان يأخذها بالمعرّف

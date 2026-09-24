@@ -19,7 +19,7 @@ button,input,select,textarea{font:inherit}
 /* ===== الرأس: تخطيط متاجر الموضة العالمية (شريط علوي + شعار وبحث وأيقونات + شريط أقسام) ===== */
 .hdr{background:#fff;position:sticky;top:0;z-index:30;border-bottom:1px solid var(--line)}
 .hdr-strip{background:#faf7f2;border-bottom:1px solid var(--line-2);font-size:12.5px;color:var(--ink-2)}
-.hdr-strip .wrap{display:flex;align-items:center;justify-content:center;gap:14px;height:34px;overflow-x:auto;scrollbar-width:none;white-space:nowrap}
+.hdr-strip .wrap{display:flex;align-items:center;justify-content:safe center;gap:14px;height:34px;overflow-x:auto;scrollbar-width:none;white-space:nowrap}
 .hdr-strip .wrap::-webkit-scrollbar{display:none}
 .hdr-strip a{display:flex;align-items:center;gap:6px;font-weight:600}
 .hdr-strip a:hover{color:var(--brand)}
@@ -931,3 +931,19 @@ body{background:#fff}
 .cart-row .qty button{height:34px}
 .live-disc{margin-top:8px;font-size:12.5px;color:#555;overflow-wrap:anywhere}
 .live-gains .live-new{background:var(--brand-l);color:var(--brand-d)}
+/* «اطلبي برابط» */
+.lr{max-width:760px;padding-top:18px;padding-bottom:30px}
+.lr h1{font-size:24px;margin:0 0 6px}
+.lr-sub{color:#555;line-height:1.8;margin:0 0 14px}
+.lr-form{display:grid;gap:6px;background:#fff;border:1px solid #eee;border-radius:12px;padding:14px;margin-bottom:14px}
+.lr-form textarea,.lr-form input{width:100%;font:inherit;padding:10px;border:1px solid #ddd;border-radius:8px}
+.lr-form button{justify-self:start;margin-top:6px}
+.lr-login{margin:0 0 14px}
+.lr-steps{background:var(--brand-l);border-radius:12px;padding:12px 30px 12px 14px;line-height:1.9;font-size:14px;margin:0 0 18px}
+.lr-list{display:grid;gap:8px}
+.lr-row{background:#fff;border:1px solid #eee;border-radius:10px;padding:10px 12px;display:grid;gap:4px;overflow-wrap:anywhere}
+.lr-row small{color:#777}
+.lr-go{color:var(--brand);font-weight:700}
+.lr-why{color:#8c2121}
+.lr-empty{color:#888}
+.hdr-strip .strip-req{color:var(--brand-d);font-weight:700}

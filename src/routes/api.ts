@@ -10,6 +10,7 @@ import { normWeightG, attrValue, kindOf } from '../lib/source';
 import { getProvider } from '../lib/source-providers';
 import { runServerJobs } from '../lib/crawl';
 import { liveState } from '../lib/crawl-live';
+import { settleLinkRequests } from '../lib/link-requests';
 import { retranslatePending, releaseHeldDrafts, diagnoseTitle, hasCJK, dropCJKWords, dictTranslate, mixedScript, dropMixedWords, goodTitle, sweepMashedTitles, brokenTitle, BROKEN_SQL } from '../lib/translate';
 
 const api = new Hono<Env>();
@@ -40,6 +41,8 @@ api.post('/import', async (c) => {
     await c.env.DB.prepare("UPDATE discovered_offers SET status=?,tries=tries+1,done_at=datetime('now') WHERE offer_id=?").bind(r.imported ? 'imported' : 'skipped', id).run();
     await liveStep(c.env.DB, 1, null, 0, r.imported ? id : '', r.imported);
   }
+  // رابط طلبته زبونة («اطلبي برابط») ووصل منتجه الآن: يصير جاهزًا وتصلها إشعارة
+  if (r.imported || r.updated) await settleLinkRequests(c.env.DB);
   return c.json(r);
 });
 
@@ -83,7 +86,7 @@ api.get('/import/queue', async (c) => {
   const per = Math.max(0, Math.min(100, parseInt((await c.env.DB.prepare("SELECT value FROM settings WHERE key='discover_per_batch'").first<{ value: string }>())?.value ?? '') || 0));
   const fresh = canDiscover && per ? (await c.env.DB.prepare(`SELECT d.offer_id id,d.category_id FROM discovered_offers d
      WHERE d.status='new' AND d.tries < 2 AND NOT EXISTS (SELECT 1 FROM products p WHERE p.source='1688' AND p.source_offer_id=d.offer_id)
-     ORDER BY d.tries, d.found_at LIMIT ?`).bind(per).all<{ id: string; category_id: number | null }>()).results : [];
+     ORDER BY (d.from_offer='request') DESC, d.tries, d.found_at LIMIT ?`).bind(per).all<{ id: string; category_id: number | null }>()).results : [];
   const total = Math.min(results.length, job?.max_new || 100) + fresh.length;
   await c.env.DB.prepare(`UPDATE crawler_live SET started_at=datetime('now'),finished_at=NULL,status='running',total=?,done=0,gain_img=0,gain_var=0,gain_wt=0,gone=0,
       pages_read=0,pages_linked=0,links_new=0,gain_new=0,last_offer=NULL,last_at=datetime('now') WHERE id=1`).bind(total).run();
