@@ -308,8 +308,8 @@ partner.get('/order/:code', async (c) => {
         </form>
       </div>
       <div class="card-box"><h3>🧾 فواتير المراحل ({inv.results.length})</h3>
-        {inv.results.length > 0 && <table class="tbl"><tr><th>الرقم</th><th>المرحلة</th><th>الإجمالي</th><th>التاريخ</th><th></th></tr>
-          {inv.results.map(i => <tr><td>{i.number}</td><td>{STAGE_AR(i.stage)}</td><td>{fmt(i.total_lyd)}</td><td>{timeAgo(i.created_at)}</td><td><a class="btn sm ghost" href={`/partner/invoice/${i.id}`} target="_blank">عرض وطباعة</a></td></tr>)}</table>}
+        {inv.results.length > 0 && <div class="tbl-wrap"><table class="tbl"><tr><th>الرقم</th><th>المرحلة</th><th>الإجمالي</th><th>التاريخ</th><th></th></tr>
+          {inv.results.map(i => <tr><td>{i.number}</td><td>{STAGE_AR(i.stage)}</td><td>{fmt(i.total_lyd)}</td><td>{timeAgo(i.created_at)}</td><td><a class="btn sm ghost" href={`/partner/invoice/${i.id}`} target="_blank">عرض وطباعة</a></td></tr>)}</table></div>}
         <form method="post" action={`/partner/order/${o.code}/invoice`} class="po-inv">
           <label>المرحلة</label><select name="stage">{PARTNER_FLOW.map(st => <option value={st} selected={st === o.status}>{STAGE_AR(st)}</option>)}</select>
           <div class="po-lines">{[0, 1, 2, 3].map(i => <div class="inline"><input type="text" name="desc" placeholder={i === 0 ? 'البند (مثال: شحن جوي 2.4 كغ)' : 'بند آخر (اختياري)'} style="flex:1" /><input type="number" step="0.01" name="amount" placeholder="المبلغ د.ل" style="width:130px" /></div>)}</div>
