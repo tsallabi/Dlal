@@ -353,7 +353,7 @@ export async function retranslatePending(db: D1Database, ai: any, limit = 40): P
         OR color GLOB '*[\u0621-\u064A][a-zA-Z]*' OR color GLOB '*[a-zA-Z][\u0621-\u064A]*'
         OR size  GLOB '*[\u0621-\u064A][a-zA-Z]*' OR size  GLOB '*[a-zA-Z][\u0621-\u064A]*' LIMIT 120`).all<any>();
   for (const v of vs.results) { const cc = await tr.t(v.color, 'attr'); const sz = await tr.t(v.size, 'attr'); if (cc !== v.color || sz !== v.size) { await db.prepare('UPDATE variants SET color=?,size=? WHERE id=?').bind(cc, sz, v.id).run(); nv++; } }
-  const en = await fixEnglishVariants(db, tr);
+  const en = await fixEnglishVariants(db, tr, limit);   // translate=10 في الـworkflow = عشر قيم لكل حقل تُراجع بالعين
   // كم بقي عليه نص لا يُقرأ (صيني أو مكسور) — ليعرف المُشغِّل متى يتوقف
   const left = await db.prepare(`SELECT COUNT(*) n,SUM(status='draft') d FROM products
      WHERE title_ar GLOB '*[一-龥]*' OR ${MASHED} OR ${NO_AR} OR ${BROKEN_SQL}`).first<{ n: number; d: number }>();
@@ -402,7 +402,8 @@ export async function fixEnglishVariants(db: D1Database, tr: Translator, limit =
     dropped += r.meta?.changes ?? 0;
   }
   for (const f of ['color', 'size'] as const) {
-    const { results } = await db.prepare(`SELECT ${f} v, COUNT(*) n FROM variants WHERE ${EN_SQL(f)} GROUP BY ${f} ORDER BY n DESC LIMIT ?`).bind(limit).all<{ v: string; n: number }>();
+    const { results } = await db.prepare(`SELECT ${f} v, COUNT(*) n FROM variants WHERE ${EN_SQL(f)}
+       AND product_id IN (SELECT id FROM products WHERE status='active') GROUP BY ${f} ORDER BY n DESC LIMIT ?`).bind(limit).all<{ v: string; n: number }>();
     for (const { v } of results) {
       if (junkAttr(v)) { await db.prepare(`UPDATE variants SET ${f}=NULL WHERE ${f}=?`).bind(v).run(); dropped++; continue; }
       const up = sizeCase(v);   // «Xxl» ⟵ «XXL»
