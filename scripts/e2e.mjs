@@ -653,7 +653,6 @@ await page.goto(BASE + '/account/orders?stage=cancelled'); expect(await has(page
 
 // ---------- صفحات المساعدة والسياسات بالعربية ----------
 const HELP = [
-  ['/pages/how', 'من مصانع الصين إلى باب بيتك', 'نصل إلى كل مدينة ليبية'],
   ['/pages/how-to-order', 'كيف أطلب من هدهد؟', 'أكّدي الطلب وادفعي'],
   ['/pages/shipping', 'معلومات الشحن', 'التوصيل داخل ليبيا'],
   ['/pages/returns', 'سياسة الإرجاع والاسترداد', 'متى تستحقين تعويضًا كاملًا'],
@@ -673,6 +672,12 @@ for (const [path, title, needle] of HELP) {
   const hasBody = okStatus && await has(page, needle);
   const cjk = okStatus && /[一-鿿]/.test(await page.locator('.doc').textContent());
   expect(okStatus && h1.includes(title) && hasBody && !cjk, `${path} يفتح بالعربية بعنوان «${title}» ومحتواه كامل`);
+}
+// «كيف نعمل» صارت صفحة /how بأقسام أميال (لا .doc)، والرابط القديم يحوّل إليها
+{
+  const r = await page.goto(BASE + '/pages/how');
+  expect(r.status() === 200 && new URL(page.url()).pathname === '/how' && await has(page, 'من مصانع الصين إلى باب بيتك') && await has(page, 'نصل إلى كل مدينة ليبية'),
+    '/pages/how يحوّل إلى /how ويعرض «من مصانع الصين إلى باب بيتك» ومدن التوصيل');
 }
 await page.goto(BASE + '/pages/faq');
 const accordions = await page.locator('.faq details').count();
@@ -2448,6 +2453,8 @@ await mp.screenshot({ path: `${OUT}/${String(++n).padStart(2, '0')}-mobile-order
   await tp.goto(BASE + '/c/bags');
   await tp.goto(BASE + '/search?q=' + encodeURIComponent(tq));
   await tp.goto(BASE + '/p/e2e-missing-' + tq);
+  // ماسح ثغرات (أول ليلة على الحي: 17 من 38 سطرًا) — لا يُحسب زائرًا ولا مشكلة
+  await tp.goto(BASE + '/.env.' + tq); await tp.goto(BASE + '/wp-login-' + tq + '.php');
   await tp.goto(BASE + '/c/bags'); await tp.locator('.card .t').first().click(); await tp.waitForLoadState('networkidle');
   await tp.click('#addForm button[type=submit]'); await tp.waitForLoadState('networkidle');
   await tp.goto(BASE + '/checkout'); await tp.waitForLoadState('networkidle');
@@ -2457,6 +2464,7 @@ await mp.screenshot({ path: `${OUT}/${String(++n).padStart(2, '0')}-mobile-order
   expect(await has(page, 'مسار الشراء') && await has(page, 'من أين يزوروننا'), 'صفحة «حركة الزوار» تفتح بمسار الشراء والدول والمدن');
   expect(await page.locator('.card-box', { hasText: 'بحثوا ولم يجدوا' }).textContent().then(t => t.includes(tq)), 'البحث الذي لم يجد شيئًا يظهر في «بحثوا ولم يجدوا»');
   expect(await page.locator('#errors').textContent().then(t => t.includes('/p/e2e-missing-' + tq)), 'الصفحة المفقودة التي فتحها الزائر تظهر في «مشاكل واجهت الزوار»');
+  expect(await page.locator('#errors').textContent().then(t => !t.includes('.env.' + tq) && !t.includes('wp-login-' + tq)), 'طلبات ماسحات الثغرات (/.env، *.php) لا تُحسب مشاكل');
   const recentRow = page.locator('.card-box', { hasText: 'آخر الزوار' }).locator('tr', { hasText: 'منى التجريبية' }).first();
   expect(await recentRow.count() === 1 && (await recentRow.textContent()).includes('صفحة الدفع'), 'الزبونة في «آخر الزوار» وأبعد خطوة لها «صفحة الدفع»');
   const abRow = page.locator('#abandoned tr', { hasText: PHONE });

@@ -19,7 +19,12 @@ export function visitorId(c: Context<Env>): string {
 }
 
 // الروبوتات وفحوصنا الآلية (الجولة والفحص بعد النشر) لا تُحسب زوّارًا. e2e يضع hh_track=1 ليُحسب عمدًا
+// ماسحات الثغرات تطلب /.env و/.git/config و/.aws/credentials و*.php بلا كوكي من مراكز بيانات:
+// أول ليلة على الحي كانت 17 من 38 «مشكلة» منها — ليست زوارًا ولا أعطالًا في موقعنا
+export const PROBE = /(^|\/)\.[a-z]|\.(php\d?|aspx?|jsp|cgi|env|ini|sql|bak|old|save|orig|ya?ml|config|swp|log|tar|gz|rar|7z)$|^\/(wp-|wordpress|xmlrpc|phpmyadmin|pma|cgi-bin|vendor\/|setup|admin\.|boaform|actuator|owa|ecp|autodiscover|hnap1|console|solr|telescope|_ignition|debug)/i;
+
 export function trackable(c: Context<Env>) {
+  if (PROBE.test(new URL(c.req.url).pathname)) return false;
   if (getCookie(c, 'hh_track') === '1') return true;
   return !BOT.test(c.req.header('user-agent') ?? '');
 }
