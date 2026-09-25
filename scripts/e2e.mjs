@@ -1380,7 +1380,7 @@ expect(qPosAfter < 0 || qPosAfter > qPosBefore, `المنتج المتعذّر �
 // ويظهر لصاحب المشروع ليُثريه بالكريدت
 await page.goto(BASE + '/admin/products?stuck=1');
 expect(await has(page, arOffer), 'المنتج المتعذّر يظهر في قائمة «تعذّر إثراؤه» بلوحة الأدمن');
-expect(await has(page, 'أثريها بالكريدت'), 'اللوحة تشرح لصاحب المشروع ما العمل بهذه المنتجات');
+expect(await has(page, 'أثرها بالكريدت'), 'اللوحة تشرح لصاحب المشروع ما العمل بهذه المنتجات');
 await shot(page, 'admin-stuck-enrich');
 // منتج بلا تقييم حقيقي لا يُعرض بنجوم مُختلقة
 await page.goto(BASE + '/admin/products?q=' + arOffer);
@@ -1875,7 +1875,7 @@ expect(await rqTb.isVisible() && (await rqTb.textContent()).includes('تاوبا
 const rqSlug = await page.evaluate(async ([b, o]) => { const r = await fetch(b + '/admin/products?q=' + o); const t = await r.text(); return (t.match(/href="\/p\/([^"]+)"/) || [])[1]; }, [BASE, rqOffer]);
 await rqTb.locator('input[name=ref]').fill('/p/' + rqSlug);
 await rqTb.locator('button', { hasText: 'ربط وإشعار' }).click(); await page.waitForLoadState('networkidle');
-expect(await has(page, 'وصل الزبونة إشعار'), `الفريق ربط طلب تاوباو بمنتج على الرف (${rqSlug})`);
+expect(await has(page, 'وصل الزبون إشعار'), `الفريق ربط طلب تاوباو بمنتج على الرف (${rqSlug})`);
 const rqAm = page.locator('.lr-admin tr', { hasText: 'B0TEST1234' }).first();
 await rqAm.locator('input[name=why]').fill('المنتج لا يُشحن إلى ليبيا');
 await rqAm.locator('button', { hasText: 'اعتذار' }).click(); await page.waitForLoadState('networkidle');
@@ -2367,7 +2367,7 @@ await mp.screenshot({ path: `${OUT}/${String(++n).padStart(2, '0')}-mobile-order
     // زبونة
     await page.goto(BASE + '/admin/customers'); await page.click('a:has-text("منى التجريبية")'); await page.waitForLoadState('networkidle');
     await page.click('button:has-text("ادخل باسمه")'); await page.waitForLoadState('networkidle');
-    expect(page.url().endsWith('/account') && await page.locator('.imp-bar').isVisible() && (await page.locator('.imp-bar').textContent()).includes('زبونة'), 'المالك يدخل باسم زبونة فيرى حسابها');
+    expect(page.url().endsWith('/account') && await page.locator('.imp-bar').isVisible() && (await page.locator('.imp-bar').textContent()).includes('زبون'), 'المالك يدخل باسم زبون فيرى حسابه');
     await page.goto(BASE + '/logout');
     expect(page.url().includes('/admin/staff') && !(await page.locator('.imp-bar').count()), '«خروج» أثناء الدخول باسم غيره يعيد المالك إلى حسابه');
     // الموظف غير المالك لا يرى «ادخل باسمه» ولا يستطيعه
