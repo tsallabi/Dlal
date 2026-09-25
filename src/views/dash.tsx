@@ -21,7 +21,7 @@ export const AdminShell: FC<{ user: User; active: string; title: string; childre
       <head>
         <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
         <title>{title} | إدارة هدهد</title>
-        <link rel="stylesheet" href="/style.css" /><link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" /><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" /><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" /><link rel="stylesheet" href="/style.css" /><link rel="icon" href="/favicon.svg" type="image/svg+xml" />
       </head>
       <body class="admin-body">
         <header class="hdr"><div class="hdr-top wrap"><a href="/" class="logo"><img src="/hudhud-logo.svg" alt="" width="77" height="64" /><span class="t"><b>هدهد</b><i>HUDHUDE</i><u>بوابتك إلى الصين</u></span></a><span class="pill">لوحة الإدارة</span>
@@ -43,7 +43,7 @@ export const PartnerShell: FC<{ user: User; partner: { name: string }; active: s
     <head>
       <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
       <title>{title} | {partner.name}</title>
-      <link rel="stylesheet" href="/style.css" /><link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+      <link rel="preconnect" href="https://fonts.googleapis.com" /><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" /><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" /><link rel="stylesheet" href="/style.css" /><link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     </head>
     <body class="admin-body">
       <header class="hdr"><div class="hdr-top wrap"><a href="/partner" class="logo"><img src="/hudhud-logo.svg" alt="" width="77" height="64" /><span class="t"><b>هدهد</b><i>HUDHUDE</i><u>بوابتك إلى الصين</u></span></a><span class="pill">لوحة الشحن — {partner.name}</span>

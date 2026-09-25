@@ -74,12 +74,12 @@ an.get('/analytics', async (c) => {
       <Flash msg={c.req.query('ok') ? 'أُرسل التذكير ✓' : undefined} />
       <div class="inline" style="gap:6px">{tabs}<small style="color:#888;margin-inline-start:8px">الروبوتات وحسابات الموظفين والشركاء لا تُحسب.</small></div>
       <div class="pd-tiles">
-        <a class="pd-tile"><b>{t.v ?? 0}</b><span>زائر</span><small>{t.pv ?? 0} صفحة · {pct(t.m ?? 0, t.v ?? 0)} من الجوال</small></a>
-        <a class="pd-tile"><b>{t.u ?? 0}</b><span>زبونة مسجّلة زارت</span></a>
-        <a class="pd-tile" href="#abandoned"><b>{ab.length}</b><span>سلة متروكة</span><small>بضاعة في السلة بلا طلب</small></a>
-        <a class="pd-tile warn" href="#unpaid"><b>{upN}</b><span>بدأت الدفع ولم تُكمله</span><small>طلب بانتظار الدفع</small></a>
-        <a class="pd-tile ok"><b>{o.paid ?? 0}</b><span>اشترت ودفعت</span><small>{fmt(o.v ?? 0)} في {perAr}</small></a>
-        <a class={`pd-tile ${(errs.results.length) ? 'bad' : ''}`} href="#errors"><b>{(errs.results as any[]).reduce((a, e) => a + e.n, 0)}</b><span>مشكلة واجهت الزوار</span><small>صفحات مفقودة وأخطاء</small></a>
+        <a class="pd-tile"><i class="pd-ic">👣</i><b>{t.v ?? 0}</b><span>زائر</span><small>{t.pv ?? 0} صفحة · {pct(t.m ?? 0, t.v ?? 0)} من الجوال</small></a>
+        <a class="pd-tile"><i class="pd-ic">👤</i><b>{t.u ?? 0}</b><span>زبونة مسجّلة زارت</span></a>
+        <a class="pd-tile" href="#abandoned"><i class="pd-ic">🛒</i><b>{ab.length}</b><span>سلة متروكة</span><small>بضاعة في السلة بلا طلب</small></a>
+        <a class="pd-tile warn" href="#unpaid"><i class="pd-ic">💳</i><b>{upN}</b><span>بدأت الدفع ولم تُكمله</span><small>طلب بانتظار الدفع</small></a>
+        <a class="pd-tile ok"><i class="pd-ic">✅</i><b>{o.paid ?? 0}</b><span>اشترت ودفعت</span><small>{fmt(o.v ?? 0)} في {perAr}</small></a>
+        <a class={`pd-tile ${(errs.results.length) ? 'bad' : ''}`} href="#errors"><i class="pd-ic">⚠️</i><b>{(errs.results as any[]).reduce((a, e) => a + e.n, 0)}</b><span>مشكلة واجهت الزوار</span><small>صفحات مفقودة وأخطاء</small></a>
       </div>
 
       <div class="pd-grid">

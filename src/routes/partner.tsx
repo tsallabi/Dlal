@@ -103,23 +103,28 @@ partner.get('/', async (c) => {
   const owedToUs = (cod?.v ?? 0) - (ledger?.got ?? 0);
   const pipeline = PARTNER_FLOW.filter(st => st !== 'delivered').map(st => ({ st, n: n(st) }));
   const maxP = Math.max(1, ...pipeline.map(p => p.n));
-  const Tile = (p: { v: any; l: string; sub?: any; href?: string; tone?: string }) => (
-    <a class={`pd-tile ${p.tone ?? ''}`} href={p.href ?? '#'}><b>{p.v}</b><span>{p.l}</span>{p.sub && <small>{p.sub}</small>}</a>);
+  const Tile = (p: { v: any; l: string; sub?: any; href?: string; tone?: string; ic?: string }) => (
+    <a class={`pd-tile ${p.tone ?? ''}`} href={p.href ?? '#'}>{p.ic && <i class="pd-ic">{p.ic}</i>}<b>{p.v}</b><span>{p.l}</span>{p.sub && <small>{p.sub}</small>}</a>);
   return shell(c, x, 'home', 'لوحتي', (
     <div class="pd">
+      <div class="pd-actions"><a class="primary" href="/partner/queue">🛒 ابدأ الشراء</a><a class="soft" href="/partner/delivery">🚚 التوصيل داخل ليبيا</a><a class="soft" href="/partner/shipments">📦 الشحنات</a><a class="soft" href="/partner/rates">💰 أسعاري</a></div>
       <div class="pd-tiles">
-        <Tile v={n('paid')} l="بانتظار الشراء" sub={nLate ? `⚠ ${nLate} متأخرة أكثر من يومين` : 'لا متأخر'} href="/partner/queue" tone={nLate ? 'warn' : ''} />
-        <Tile v={nStuck} l="عالقة في مرحلتها" sub="تجاوزت المدة المعتادة" href="#stuck" tone={nStuck ? 'bad' : 'ok'} />
-        <Tile v={n('purchasing') + n('purchased')} l="قيد الشراء" href="/partner/purchasing" />
-        <Tile v={n('at_warehouse') + n('consolidated')} l="في مخزن الصين" sub={`${n('consolidated')} مضمومة لشحنة`} href="/partner/warehouse" />
-        <Tile v={n('shipped')} l="في الطريق إلى ليبيا" sub={`${transit.results.length} شحنة`} href="#transit" />
-        <Tile v={n('arrived') + n('customs') + n('ready')} l="وصلت ليبيا" sub={`${n('customs')} في الجمارك · ${n('ready') - (withCourier?.n ?? 0)} جاهزة · ${withCourier?.n ?? 0} مع ${(x.p as any).courier_name || 'أميال'}`} href="/partner/delivery" />
-        <Tile v={n('delivered')} l="وصلت للزبون" sub={`${month?.n ?? 0} هذا الشهر`} href="/partner/all" tone="ok" />
-        <Tile v={(shipN.open ?? 0) + (shipN.shipped ?? 0) + (shipN.arrived ?? 0) + (shipN.customs ?? 0) + (shipN.released ?? 0)} l="الشحنات" sub={`${shipN.open ?? 0} مفتوحة · ${shipN.shipped ?? 0} في الطريق · ${shipN.released ?? 0} مكتملة`} href="/partner/shipments" />
+        <Tile v={n('paid')} l="بانتظار الشراء" ic="🛒" sub={nLate ? `⚠ ${nLate} متأخرة أكثر من يومين` : 'لا متأخر'} href="/partner/queue" tone={nLate ? 'warn' : ''} />
+        <Tile v={nStuck} l="عالقة في مرحلتها" ic="⚠️" sub="تجاوزت المدة المعتادة" href="#stuck" tone={nStuck ? 'bad' : 'ok'} />
+        <Tile v={n('purchasing') + n('purchased')} l="قيد الشراء" ic="⏳" href="/partner/purchasing" />
+        <Tile v={n('at_warehouse') + n('consolidated')} l="في مخزن الصين" ic="🏭" sub={`${n('consolidated')} مضمومة لشحنة`} href="/partner/warehouse" />
+        <Tile v={n('shipped')} l="في الطريق إلى ليبيا" ic="✈️" sub={`${transit.results.length} شحنة`} href="#transit" />
+        <Tile v={n('arrived') + n('customs') + n('ready')} l="وصلت ليبيا" ic="🇱🇾" sub={`${n('customs')} في الجمارك · ${n('ready') - (withCourier?.n ?? 0)} جاهزة · ${withCourier?.n ?? 0} مع ${(x.p as any).courier_name || 'أميال'}`} href="/partner/delivery" />
+        <Tile v={n('delivered')} l="وصلت للزبون" ic="✅" sub={`${month?.n ?? 0} هذا الشهر`} href="/partner/all" tone="ok" />
+        <Tile v={(shipN.open ?? 0) + (shipN.shipped ?? 0) + (shipN.arrived ?? 0) + (shipN.customs ?? 0) + (shipN.released ?? 0)} l="الشحنات" ic="📦" sub={`${shipN.open ?? 0} مفتوحة · ${shipN.shipped ?? 0} في الطريق · ${shipN.released ?? 0} مكتملة`} href="/partner/shipments" />
       </div>
 
       <div class="pd-grid">
         <div class="card-box pd-money"><h3>💰 الحساب بيننا</h3>
+          <div class="pd-wallets">
+            <div class="pd-wallet"><i>💼</i><div><span>المتبقي لكم علينا</span><b>{money(owedToYou)}</b><small>من مستحقات {money(dues?.total)}</small></div></div>
+            <div class="pd-wallet"><i>🧾</i><div><span>المتبقي لنا عليكم</span><b>{money(owedToUs)}</b><small>تحصيل عند الاستلام</small></div></div>
+          </div>
           <table class="tbl">
             <tr><td>مستحقاتكم عن كل الطلبات الجارية والمسلَّمة</td><td>{money(dues?.total)}</td></tr>
             <tr><td>منها عن طلبات سُلِّمت</td><td>{money(dues?.done)}</td></tr>
@@ -134,6 +139,8 @@ partner.get('/', async (c) => {
         </div>
 
         <div class="card-box"><h3>📦 الطلبات حسب المرحلة</h3>
+          {(() => { const all = pipeline.reduce((a, p) => a + p.n, 0) + n('delivered'); const pct = all ? Math.round(n('delivered') / all * 100) : 0;
+            return <div class="pd-donut" style={`--p:${pct}`} title={`وصل للزبون ${n('delivered')} من ${all} (${pct}%)`}><div><span><b>{all}</b><small>إجمالي الطلبات<br />{pct}% وصلت للزبون</small></span></div></div>; })()}
           <div class="pd-bars">{pipeline.map(p => (
             <a class="pd-bar" href={`/partner/all?status=${p.st}`} title={`${STAGE_AR(p.st)}: ${p.n} طلب`}>
               <span class="pd-bl">{STAGE_AR(p.st)}</span>
@@ -268,9 +275,9 @@ partner.get('/delivery', async (c) => {
       <Flash msg={c.req.query('ok') ? 'تم الحفظ ✓' : undefined} />
       {err && <div class="flash err">{err}</div>}
       <div class="pd-tiles">
-        <a class="pd-tile warn" href="#ready"><b>{waiting.length}</b><span>جاهزة — لم تُسلَّم لـ{cn}</span><small>{waiting.filter(o => o.courier_status === 'failed').length} تعذّر توصيلها سابقًا</small></a>
-        <a class="pd-tile" href="#courier"><b>{withC.length}</b><span>مع {cn} في الطريق للزبائن</span></a>
-        <a class="pd-tile ok"><b>{today?.n ?? 0}</b><span>وصلت الزبائن اليوم عبر {cn}</span></a>
+        <a class="pd-tile warn" href="#ready"><i class="pd-ic">📦</i><b>{waiting.length}</b><span>جاهزة — لم تُسلَّم لـ{cn}</span><small>{waiting.filter(o => o.courier_status === 'failed').length} تعذّر توصيلها سابقًا</small></a>
+        <a class="pd-tile" href="#courier"><i class="pd-ic">🚚</i><b>{withC.length}</b><span>مع {cn} في الطريق للزبائن</span></a>
+        <a class="pd-tile ok"><i class="pd-ic">✅</i><b>{today?.n ?? 0}</b><span>وصلت الزبائن اليوم عبر {cn}</span></a>
       </div>
 
       <div class="card-box" id="ready"><h3>📦 جاهزة للتسليم — سلّمها لـ{cn} أو للزبونة مباشرة ({waiting.length})</h3>
