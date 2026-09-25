@@ -1,13 +1,13 @@
 # منشورات الأسبوع الأول — launch-w1
 
 ## 00 — التعريف (أول منشور، ثبّته أعلى الصفحة)
-مرحبًا بكم في هدهدي 🐦
+مرحبًا بكم في هدهد 🐦
 نشتري لك من مصانع الصين ونوصل إلى باب بيتك في ليبيا — بسعر نهائي بالدينار تراه قبل أن تدفع، شامل الشحن والجمارك.
 ادفع محليًا: سداد، إدفعلي، موبي كاش، بطاقة معاملات، أو كاش في الفرع.
 
 https://hudhude.com/?utm_source=facebook&utm_medium=post&utm_campaign=launch-w1&utm_content=intro
 
-#هدهدي #ليبيا #طرابلس #بنغازي #مصراتة #تسوق_اونلاين #من_الصين_لليبيا
+#هدهد #ليبيا #طرابلس #بنغازي #مصراتة #تسوق_اونلاين #من_الصين_لليبيا
 
 ## 01 — فستان طويل بأكمام طويلة
 أناقة محتشمة لكل المناسبات 💜
@@ -21,7 +21,7 @@ https://hudhude.com/?utm_source=facebook&utm_medium=post&utm_campaign=launch-w1&
 اطلبه من هنا 👇
 https://hudhude.com/p/1058712141313-7a9z?utm_source=facebook&utm_medium=post&utm_campaign=launch-w1&utm_content=p1
 
-#هدهدي #ليبيا #طرابلس #بنغازي #مصراتة #تسوق_اونلاين #من_الصين_لليبيا
+#هدهد #ليبيا #طرابلس #بنغازي #مصراتة #تسوق_اونلاين #من_الصين_لليبيا
 
 ## 02 — حقيبة كتف من الدنم
 حقيبة الدنم التي تناسب كل يوم 💙
@@ -35,7 +35,7 @@ https://hudhude.com/p/1058712141313-7a9z?utm_source=facebook&utm_medium=post&utm
 اطلبه من هنا 👇
 https://hudhude.com/p/528661396282-cwua?utm_source=facebook&utm_medium=post&utm_campaign=launch-w1&utm_content=p2
 
-#هدهدي #ليبيا #طرابلس #بنغازي #مصراتة #تسوق_اونلاين #من_الصين_لليبيا
+#هدهد #ليبيا #طرابلس #بنغازي #مصراتة #تسوق_اونلاين #من_الصين_لليبيا
 
 ## 03 — عباءة طويلة مطبوعة
 عباءة طويلة بنقشة هادئة وقصّة واسعة مريحة 🌿
@@ -48,7 +48,7 @@ https://hudhude.com/p/528661396282-cwua?utm_source=facebook&utm_medium=post&utm_
 اطلبه من هنا 👇
 https://hudhude.com/p/899027877425-6kem?utm_source=facebook&utm_medium=post&utm_campaign=launch-w1&utm_content=p3
 
-#هدهدي #ليبيا #طرابلس #بنغازي #مصراتة #تسوق_اونلاين #من_الصين_لليبيا
+#هدهد #ليبيا #طرابلس #بنغازي #مصراتة #تسوق_اونلاين #من_الصين_لليبيا
 
 ## 04 — فرش مكياج 15 قطعة
 طقم فرش مكياج كامل بـ30 دينارًا فقط 💄
@@ -62,7 +62,7 @@ https://hudhude.com/p/899027877425-6kem?utm_source=facebook&utm_medium=post&utm_
 اطلبه من هنا 👇
 https://hudhude.com/p/949533241271-4hul?utm_source=facebook&utm_medium=post&utm_campaign=launch-w1&utm_content=p4
 
-#هدهدي #ليبيا #طرابلس #بنغازي #مصراتة #تسوق_اونلاين #من_الصين_لليبيا
+#هدهد #ليبيا #طرابلس #بنغازي #مصراتة #تسوق_اونلاين #من_الصين_لليبيا
 
 ## 05 — حذاء صيفي مريح
 مريح لأمك ولكِ 👟
@@ -74,7 +74,7 @@ https://hudhude.com/p/949533241271-4hul?utm_source=facebook&utm_medium=post&utm_
 اطلبه من هنا 👇
 https://hudhude.com/p/863859770254-g16g?utm_source=facebook&utm_medium=post&utm_campaign=launch-w1&utm_content=p5
 
-#هدهدي #ليبيا #طرابلس #بنغازي #مصراتة #تسوق_اونلاين #من_الصين_لليبيا
+#هدهد #ليبيا #طرابلس #بنغازي #مصراتة #تسوق_اونلاين #من_الصين_لليبيا
 
 ## 06 — غلاف حماية لسماعات هواوي
 احمِ سماعاتك 🎧
@@ -88,7 +88,7 @@ https://hudhude.com/p/863859770254-g16g?utm_source=facebook&utm_medium=post&utm_
 اطلبه من هنا 👇
 https://hudhude.com/p/1010049321396-5m2a?utm_source=facebook&utm_medium=post&utm_campaign=launch-w1&utm_content=p6
 
-#هدهدي #ليبيا #طرابلس #بنغازي #مصراتة #تسوق_اونلاين #من_الصين_لليبيا
+#هدهد #ليبيا #طرابلس #بنغازي #مصراتة #تسوق_اونلاين #من_الصين_لليبيا
 
 ## 07 — اطلب أي منتج برابط
 رأيت منتجًا في 1688 أو تاوباو أو علي بابا أو شي إن أو أمازون؟ 🔗
@@ -96,4 +96,4 @@ https://hudhude.com/p/1010049321396-5m2a?utm_source=facebook&utm_medium=post&utm
 
 https://hudhude.com/request?utm_source=facebook&utm_medium=post&utm_campaign=launch-w1&utm_content=request
 
-#هدهدي #ليبيا #طرابلس #بنغازي #مصراتة #تسوق_اونلاين #من_الصين_لليبيا
+#هدهد #ليبيا #طرابلس #بنغازي #مصراتة #تسوق_اونلاين #من_الصين_لليبيا

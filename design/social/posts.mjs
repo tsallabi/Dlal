@@ -33,7 +33,7 @@ const productPost = (p) => `<!doctype html><html><head><meta charset="utf-8">${F
 .sea .k{font-size:24px}.sea .v{font-size:52px;font-weight:900;line-height:1.1}.sea .save{font-size:22px;color:#1a7f4b}
 </style></head><body>
 <div class="ph"></div>
-<div class="brand">${bird}<b>هدهدي</b></div>
+<div class="brand">${bird}<b>هدهد</b></div>
 <div class="panel">
   <div class="t">${p.short}</div><div class="s">${p.sub}</div>
   <div class="row"><div class="price">${p.air}<small>د.ل</small></div><div class="note">✈️ جوًّا · السعر النهائي<br>شامل الشحن والجمارك</div></div>
@@ -53,7 +53,7 @@ body{background:linear-gradient(165deg,#FFF3E6 0,#F6D2AE 100%)}
 .n{flex:none;width:72px;height:72px;border-radius:50%;background:#B05A20;color:#fff;font-size:40px;font-weight:900;display:grid;place-items:center}
 .st b{display:block;font-size:34px;color:#1C1A19}.st span{font-size:25px;color:#6B5A50;font-weight:600}
 </style></head><body>
-<div class="hero">${bird}<div class="h1">هدهدي</div><div class="h2">من مصانع الصين إلى باب بيتك في ليبيا</div></div>
+<div class="hero">${bird}<div class="h1">هدهد</div><div class="h2">من مصانع الصين إلى باب بيتك في ليبيا</div></div>
 <div class="steps">
   <div class="st"><div class="n">1</div><div><b>تختار المنتج وترى سعره النهائي بالدينار</b><span>شامل الشحن من الصين والجمارك — لا مفاجآت</span></div></div>
   <div class="st"><div class="n">2</div><div><b>تدفع محليًا</b><span>سداد · إدفعلي · موبي كاش · بطاقة معاملات · أو كاش في الفرع</span></div></div>
@@ -75,7 +75,7 @@ body{background:linear-gradient(160deg,#8A4416,#B05A20 60%,#C9712F);color:#fff}
 .srcs span{background:rgba(255,255,255,.16);border:2px solid rgba(255,255,255,.35);border-radius:999px;padding:8px 22px;font-size:30px;font-weight:800}
 .bird{position:absolute;left:40px;bottom:110px;width:300px;height:auto;opacity:.95}
 </style></head><body>
-<div class="brand">${bird}<b>هدهدي</b></div>
+<div class="brand">${bird}<b>هدهد</b></div>
 <div class="box">
   <div class="h1">رأيت منتجًا في الصين؟<br>أرسل لنا رابطه</div>
   <div class="h2">نوفّره لك بسعر نهائي بالدينار الليبي شامل الشحن والجمارك — وتدفع بعد أن ترى السعر.</div>
@@ -124,7 +124,7 @@ for (const [i, p] of D.products.entries()) {
 await b.close();
 
 const cap = [`# منشورات الأسبوع الأول — ${D.campaign}`, '',
-  '## 00 — التعريف (أول منشور، ثبّته أعلى الصفحة)', 'مرحبًا بكم في هدهدي 🐦\nنشتري لك من مصانع الصين ونوصل إلى باب بيتك في ليبيا — بسعر نهائي بالدينار تراه قبل أن تدفع، شامل الشحن والجمارك.\nادفع محليًا: سداد، إدفعلي، موبي كاش، بطاقة معاملات، أو كاش في الفرع.', `\n${SITE}/?utm_source=facebook&utm_medium=post&utm_campaign=${D.campaign}&utm_content=intro\n\n${D.tags}`, '',
+  '## 00 — التعريف (أول منشور، ثبّته أعلى الصفحة)', 'مرحبًا بكم في هدهد 🐦\nنشتري لك من مصانع الصين ونوصل إلى باب بيتك في ليبيا — بسعر نهائي بالدينار تراه قبل أن تدفع، شامل الشحن والجمارك.\nادفع محليًا: سداد، إدفعلي، موبي كاش، بطاقة معاملات، أو كاش في الفرع.', `\n${SITE}/?utm_source=facebook&utm_medium=post&utm_campaign=${D.campaign}&utm_content=intro\n\n${D.tags}`, '',
   ...D.products.flatMap((p, i) => [`## ${String(i + 1).padStart(2, '0')} — ${p.short}`, p.caption, `\nاطلبه من هنا 👇\n${link(p.slug, i + 1)}\n\n${D.tags}`, '']),
   '## 07 — اطلب أي منتج برابط', 'رأيت منتجًا في 1688 أو تاوباو أو علي بابا أو شي إن أو أمازون؟ 🔗\nأرسل لنا رابطه ونوفّره لك بسعر نهائي بالدينار الليبي شامل الشحن والجمارك — وتدفع بعد أن ترى السعر.',
   `\n${SITE}/request?utm_source=facebook&utm_medium=post&utm_campaign=${D.campaign}&utm_content=request\n\n${D.tags}`, ''];

@@ -148,7 +148,7 @@ acct.get('/tickets/:code', async (c) => {
     <>
       <div class="inline" style="margin-bottom:10px"><span class={`status ${TICKET_STATUS[t.status].color}`}>{TICKET_STATUS[t.status].ar}</span><span class="status">{TICKET_TYPES[t.type]}</span>{t.order_code && <a href={`/orders/${t.order_code}`} class="status blue">الطلب {t.order_code}</a>}
         {t.resolution && <span class="status green">القرار: {{ refund: `استرجاع ${fmt(t.refund_lyd ?? 0)}`, replacement: 'إرسال بديل', points: `تعويض ${t.points_awarded} نقطة`, none: 'بدون تعويض' }[t.resolution as string]}</span>}</div>
-      <div class="chat">{msgs.results.map(m => <div class={`msg ${m.is_staff ? 'staff' : 'me'}`}><div class="who">{m.is_staff ? `فريق هدهدي — ${m.name ?? ''}` : 'أنتِ'} · {timeAgo(m.created_at)}</div><div>{m.body}</div>{m.image_url && <a href={m.image_url} target="_blank">📷 صورة</a>}</div>)}</div>
+      <div class="chat">{msgs.results.map(m => <div class={`msg ${m.is_staff ? 'staff' : 'me'}`}><div class="who">{m.is_staff ? `فريق هدهد — ${m.name ?? ''}` : 'أنتِ'} · {timeAgo(m.created_at)}</div><div>{m.body}</div>{m.image_url && <a href={m.image_url} target="_blank">📷 صورة</a>}</div>)}</div>
       {t.status !== 'closed' && <form method="post" action={`/account/tickets/${t.code}/reply`} class="card-box"><label>رد</label><textarea name="body" rows={3} required></textarea><button class="btn sm" style="margin-top:8px">إرسال</button></form>}
     </>
   ));

@@ -92,7 +92,7 @@ app.post('/t/e', async (c) => {
   return c.body(null, 204);
 });
 
-// الاسم القديم لملف الإضافة (قبل هدهدي): رابط محفوظ عند صاحب المشروع يبقى يعمل
+// الاسم القديم لملف الإضافة (قبل هدهد): رابط محفوظ عند صاحب المشروع يبقى يعمل
 app.get('/talin-extension.zip', (c) => c.redirect('/hudhud-extension.zip', 301));
 app.route('/', img);
 app.route('/api/partner/v1', partnerApi);   // قبل /api: واجهة شركات الشحن برمزها لا برمز الاستيراد

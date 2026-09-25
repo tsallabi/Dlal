@@ -72,7 +72,7 @@ req.post('/', async (c) => {
   const back = (msg: string) => c.redirect('/request?err=' + encodeURIComponent(msg));
   const link = parseLink(String(f.url ?? ''));
   if (!link) return back('لم نجد رابطًا في ما لصقتِه. انسخي رابط صفحة المنتج (يبدأ بـ https://).');
-  if (/(^|\.)hudhude\.com$|workers\.dev$/.test(new URL(link.url).hostname)) return back('هذا رابط من هدهدي نفسه — المنتج عندنا، افتحيه واشتريه مباشرة.');
+  if (/(^|\.)hudhude\.com$|workers\.dev$/.test(new URL(link.url).hostname)) return back('هذا رابط من هدهد نفسه — المنتج عندنا، افتحيه واشتريه مباشرة.');
   // المنتج عندنا أصلًا: لا انتظار
   if (link.offerId) {
     const p = await db.prepare("SELECT slug,status FROM products WHERE source='1688' AND source_offer_id=?").bind(link.offerId).first<{ slug: string; status: string }>();

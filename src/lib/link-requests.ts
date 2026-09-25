@@ -35,7 +35,7 @@ export async function settleLinkRequests(db: D1Database): Promise<number> {
   for (const r of results) {
     if (r.status === 'active') {
       await db.prepare("UPDATE link_requests SET status='ready',product_id=?,updated_at=datetime('now') WHERE id=?").bind(r.pid, r.id).run();
-      await notify(db, r.user_id, 'منتجك صار في هدهدي ✓', `${String(r.title_ar).slice(0, 80)} — بسعر نهائي بالدينار شامل الشحن والجمارك.`, `/p/${r.slug}`);
+      await notify(db, r.user_id, 'منتجك صار في هدهد ✓', `${String(r.title_ar).slice(0, 80)} — بسعر نهائي بالدينار شامل الشحن والجمارك.`, `/p/${r.slug}`);
     } else {
       const why = r.status === 'unavailable' ? 'نفد عند المورّد' : (r.min_qty ?? 1) > 1 ? `المورّد يبيعه بالجملة فقط (أقل طلب ${r.min_qty} قطعة)` : 'لا يمكن بيعه بالقطعة';
       await db.prepare("UPDATE link_requests SET status='rejected',product_id=?,admin_note=?,updated_at=datetime('now') WHERE id=?").bind(r.pid, why, r.id).run();

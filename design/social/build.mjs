@@ -1,4 +1,4 @@
-// صورة البروفايل وصورة الغلاف لصفحة فيسبوك «هدهدي» — تُولَّد من الشعار نفسه (design/hudhud/hudhud-logo-static.svg)
+// صورة البروفايل وصورة الغلاف لصفحة فيسبوك «هدهد» — تُولَّد من الشعار نفسه (design/hudhud/hudhud-logo-static.svg)
 // وبألوان الموقع (القرفة). node design/social/build.mjs ⟵ design/social/*.png
 // المقاسات كما يطلبها فيسبوك (٢٠٢٦): البروفايل 720×720 ويُعرض دائرة، والغلاف 1640×624 (ضعف 820×312 على الحاسوب).
 // الجوال يقصّ جانبي الغلاف فيبقى الوسط ~1110 بكسل: كل ما يُقرأ داخله، والحوافّ زخرفة فقط.
@@ -28,7 +28,7 @@ body{width:720px;height:720px;background:radial-gradient(circle at 50% 38%,#FFF8
 .bird{width:470px;height:auto;margin-bottom:-26px;transform:translateX(-18px)}
 .name{font-weight:900;font-size:118px;line-height:1;color:#8A4416;letter-spacing:-1px}
 .latin{font-family:Arial,sans-serif;font-weight:800;font-size:30px;letter-spacing:12px;color:#B05A20;margin-top:34px;direction:ltr}
-</style></head><body><div class="ring"></div><div class="wrap">${bird}<div class="name">هدهدي</div><div class="latin">HUDHUDE</div></div></body></html>`;
+</style></head><body><div class="ring"></div><div class="wrap">${bird}<div class="name">هدهد</div><div class="latin">HUDHUDE</div></div></body></html>`;
 
 // ---------- الغلاف 1640×624 ----------
 const cover = `<!doctype html><html><head><meta charset="utf-8">${FONT}<style>${BASE}
@@ -62,7 +62,7 @@ ${bird}
 </svg>
 <div class="route" style="pointer-events:none"><span class="lbl" style="left:0">الصين</span><span class="lbl" style="right:0">ليبيا</span></div>
 <div class="txt">
-  <div class="name">هدهدي<small>بوابتك إلى الصين</small></div>
+  <div class="name">هدهد<small>بوابتك إلى الصين</small></div>
   <p class="lead">من مصانع الصين إلى باب بيتك في ليبيا<br><b>بسعر نهائي بالدينار الليبي</b></p>
   <div class="chips">
     <span class="chip">${plane} جوًّا 12–18 يومًا</span>
@@ -92,8 +92,8 @@ h3{margin:18px 0 8px;color:#333}
 .pair{display:flex;gap:30px;align-items:flex-start}
 </style></head><body>
 <h3>الحاسوب</h3>
-<div class="desk"><div class="cv"></div><div class="row"><div class="pf"></div><div><h1>هدهدي HUDHUDE</h1><p>تسوّق · بوابتك إلى الصين</p></div></div></div>
-<div class="pair"><div><h3>الجوال</h3><div class="mob"><div class="cv"></div><div class="pf"></div><h1>هدهدي HUDHUDE</h1></div></div>
+<div class="desk"><div class="cv"></div><div class="row"><div class="pf"></div><div><h1>هدهد HUDHUDE</h1><p>تسوّق · بوابتك إلى الصين</p></div></div></div>
+<div class="pair"><div><h3>الجوال</h3><div class="mob"><div class="cv"></div><div class="pf"></div><h1>هدهد HUDHUDE</h1></div></div>
 <div><h3>صورة البروفايل في التعليقات (40 بكسل)</h3><div class="pf" style="width:40px;height:40px;border:0"></div></div></div>
 </body></html>`;
 

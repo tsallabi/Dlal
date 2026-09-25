@@ -126,6 +126,7 @@ admin.get('/orders/:code', async (c) => {
         <div>
           <div class="card-box"><h3>الحالة: <span class={`status ${ORDER_STATUS[o.status]?.color}`}>{ORDER_STATUS[o.status]?.ar}</span></h3>
             {o.partner_id && <p style="font-size:13px;margin:0 0 8px"><a href={`/partner/order/${o.code}`} target="_blank">📷 صور المراحل وفواتير الشريك ومستحقاته ←</a></p>}
+            {(o.ship_zone || o.courier_ref) && <p class="courier-admin" style="font-size:13px;margin:0 0 8px">🚚 {o.ship_zone ? `المنطقة: ${o.ship_zone}` : ''}{o.courier_ref ? ` · مع ${o.courier} — رقم الشحنة ${o.courier_ref} (${o.courier_status === 'failed' ? `تعذّر: ${o.courier_note ?? ''}` : o.courier_status === 'delivered' ? 'سُلِّم' : `منذ ${timeAgo(o.courier_at)}`})` : ''}</p>}
             {o.status === 'pending_payment' && (
               <form method="post" action={`/admin/orders/${o.code}/confirm-payment`} class="inline">
                 <input type="text" name="payment_ref" placeholder="رقم مرجع الدفع / الإيصال" required />
@@ -207,9 +208,9 @@ admin.get('/import', async (c) => {
         <div>
           <div class="card-box"><h3>الطريقة 1 — زر الاستيراد في متصفحك (موصى بها)</h3>
             <ol style="font-size:14px;line-height:1.9">
-              <li>اسحب هذا الزر إلى شريط المفضلة في Chrome: <a href={bookmarklet} class="btn sm brand" onclick="return false" draggable="true">⬇️ استورد إلى هدهدي</a></li>
+              <li>اسحب هذا الزر إلى شريط المفضلة في Chrome: <a href={bookmarklet} class="btn sm brand" onclick="return false" draggable="true">⬇️ استورد إلى هدهد</a></li>
               <li>افتح <a href="https://www.1688.com" target="_blank" class="src-link">1688.com</a> وسجّل الدخول بحسابك، وابحث عن أي منتج أو افتح صفحة قسم.</li>
-              <li>اضغط الزر من شريط المفضلة: تظهر نافذة تعرض منتجات الصفحة، تختار القسم في هدهدي وتضغط "استيراد".</li>
+              <li>اضغط الزر من شريط المفضلة: تظهر نافذة تعرض منتجات الصفحة، تختار القسم في هدهد وتضغط "استيراد".</li>
               <li>في صفحة منتج واحد يستورد الزر المنتج بكل صوره ومقاساته وألوانه.</li>
             </ol>
             <p style="font-size:13px;color:#666">الزبون لا يرى أبدًا رابط المصدر أو السعر الأصلي. السعر يُحسب تلقائيًا بقواعد التسعير.</p>
@@ -740,6 +741,15 @@ admin.get('/partners', async (c) => {
   const rows = await db.prepare(`SELECT p.*,(SELECT COUNT(*) FROM orders o WHERE o.partner_id=p.id AND o.status IN ('paid','purchasing','purchased','at_warehouse')) AS active_orders,(SELECT COUNT(*) FROM users u WHERE u.partner_id=p.id) AS staff,
       (SELECT status FROM partner_dispatch d WHERE d.partner_id=p.id ORDER BY d.id DESC LIMIT 1) AS last_dispatch FROM partners p ORDER BY p.id`).all<any>();
   const log = await db.prepare('SELECT d.id,d.status,d.http_status,d.attempts,d.error,d.created_at,d.sent_at,o.code,p.name FROM partner_dispatch d JOIN orders o ON o.id=d.order_id JOIN partners p ON p.id=d.partner_id ORDER BY d.id DESC LIMIT 30').all<any>();
+  const dom = (await db.prepare(`SELECT p.id,p.name,p.courier_name,p.courier_track_url,p.courier_api_url,
+      (SELECT COUNT(*) FROM orders o WHERE o.partner_id=p.id AND o.status='ready' AND (o.courier_status IS NULL OR o.courier_status='failed')) waiting,
+      (SELECT COUNT(*) FROM orders o WHERE o.partner_id=p.id AND o.status='ready' AND o.courier_status='with_courier') withc,
+      (SELECT COUNT(*) FROM orders o WHERE o.partner_id=p.id AND o.status='ready' AND o.courier_status='failed') failed,
+      (SELECT COUNT(*) FROM orders o WHERE o.partner_id=p.id AND o.courier_status='delivered' AND o.updated_at >= datetime('now','-7 days')) done7,
+      (SELECT COUNT(*) FROM partner_zones z WHERE z.partner_id=p.id) zones, (SELECT COUNT(DISTINCT city) FROM partner_zones z WHERE z.partner_id=p.id) cities
+     FROM partners p ORDER BY p.id`).all<any>()).results;
+  const withC = (await db.prepare("SELECT code,courier,courier_ref,courier_at,courier_status,courier_note,ship_city,ship_zone FROM orders WHERE status='ready' AND courier_status IN ('with_courier','failed') ORDER BY courier_at LIMIT 100").all<any>()).results;
+  const zonesAll = (await db.prepare('SELECT z.*,p.name pname FROM partner_zones z JOIN partners p ON p.id=z.partner_id ORDER BY p.id,z.city,z.km_from LIMIT 300').all<any>()).results;
   const bal = await Promise.all(rows.results.map(async (p: any) => ({ p, b: await partnerBalance(db, p.id), log: (await db.prepare('SELECT kind,amount_lyd,note,created_at FROM partner_ledger WHERE partner_id=? ORDER BY id DESC LIMIT 5').bind(p.id).all<any>()).results })));
   const med = await db.prepare("SELECT SUM(r2_key IS NOT NULL) r2,SUM(data IS NOT NULL) d1,SUM(url IS NOT NULL) ext,COALESCE(SUM(bytes),0) b FROM order_media").first<any>();
   // المعاينة: ?preview=ID يحسب الأسعار كما لو اختير هذا الشريك، دون حفظ شيء
@@ -795,6 +805,20 @@ admin.get('/partners', async (c) => {
         {pvp.id !== pp && pvp.fee_air_kg_lyd > 0 && <form method="post" action="/admin/partners/pricing" style="margin-top:10px"><input type="hidden" name="partner_id" value={pvp.id} />
           <button class="btn dark" onclick="return confirm('تسعير الرف كله بأسعار هذا الشريك الآن؟')">اعتمد أسعار «{pvp.name}» للرف وأعد التسعير</button></form>}
       </div>}
+
+      <div class="card-box" id="domestic"><h3>🚚 التوصيل داخل ليبيا</h3>
+        <div class="tbl-wrap"><table class="tbl"><tr><th>الشريك</th><th>شركة التوصيل</th><th>جاهزة لم تُسلَّم</th><th>معها الآن</th><th>تعذّر توصيلها</th><th>سُلِّمت عبرها (7 أيام)</th><th>مناطق التسعير</th></tr>
+          {dom.map((d: any) => <tr><td>{d.name}</td><td>{d.courier_name}{d.courier_track_url ? ' · تتبّع ✓' : ''}{d.courier_api_url ? ' · API ✓' : ''}</td><td>{d.waiting}</td><td>{d.withc}</td><td class={d.failed ? 'pd-red' : ''}>{d.failed}</td><td>{d.done7}</td><td>{d.zones ? `${d.zones} منطقة في ${d.cities} مدينة` : '—'}</td></tr>)}
+        </table></div>
+        {withC.length > 0 && <details style="margin-top:8px"><summary>الطرود مع شركات التوصيل الآن ({withC.length})</summary>
+          <div class="tbl-wrap"><table class="tbl"><tr><th>الطلب</th><th>الشركة</th><th>رقم الشحنة</th><th>منذ</th><th>المدينة والمنطقة</th><th>الحالة</th></tr>
+            {withC.map((o: any) => <tr><td><a href={`/admin/orders/${o.code}`}>{o.code}</a></td><td>{o.courier}</td><td dir="ltr">{o.courier_ref}</td><td>{timeAgo(o.courier_at)}</td><td>{o.ship_city}{o.ship_zone ? ` — ${o.ship_zone}` : ''}</td><td class={o.courier_status === 'failed' ? 'pd-red' : ''}>{o.courier_status === 'failed' ? `تعذّر: ${o.courier_note ?? ''}` : 'في الطريق'}</td></tr>)}
+          </table></div></details>}
+        {zonesAll.length > 0 && <details style="margin-top:8px"><summary>أسعار مناطق التوصيل كما وضعها الشركاء ({zonesAll.length})</summary>
+          <div class="tbl-wrap"><table class="tbl"><tr><th>الشريك</th><th>المدينة</th><th>المنطقة</th><th>كم</th><th>سعره</th><th>على الزبون</th></tr>
+            {zonesAll.map((z: any) => <tr><td>{z.pname}</td><td>{z.city}</td><td>{z.zone}</td><td>{z.km_from}–{z.km_to}</td><td>{fmt(z.price_lyd)}</td><td>{fmt(Math.round((z.price_lyd + parseFloat(s.partner_fee_margin_lyd ?? '1')) * 100) / 100)}</td></tr>)}
+          </table></div></details>}
+      </div>
 
       <div class="card-box" id="ledger"><h3>💰 الحساب مع كل شريك</h3>
         <p style="font-size:13px;color:#666;margin-top:0">المستحقات من لقطة أسعار الشريك يوم دفع كل طلب. سجّل هنا ما تدفعه للشريك وما يسلّمه لك من تحصيل «الدفع عند الاستلام» — يظهر الرصيد نفسه في «لوحتي» عنده.</p>
@@ -920,7 +944,7 @@ admin.post('/requests/:id/link', requirePerm('catalog.manage', 'orders.manage'),
   const r = await db.prepare("SELECT user_id FROM link_requests WHERE id=? AND status='new'").bind(id).first<{ user_id: number }>();
   if (!r) return c.redirect('/admin/requests');
   await db.prepare("UPDATE link_requests SET status='ready',product_id=?,updated_at=datetime('now') WHERE id=?").bind(p.id, id).run();
-  await notify(db, r.user_id, 'منتجك صار في هدهدي ✓', `${String(p.title_ar).slice(0, 80)} — بسعر نهائي بالدينار شامل الشحن والجمارك.`, `/p/${p.slug}`);
+  await notify(db, r.user_id, 'منتجك صار في هدهد ✓', `${String(p.title_ar).slice(0, 80)} — بسعر نهائي بالدينار شامل الشحن والجمارك.`, `/p/${p.slug}`);
   await logActivity(db, c.get('user')!.id, 'request.link', String(id), String(p.id));
   return c.redirect('/admin/requests?ok=1');
 });

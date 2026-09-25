@@ -13,7 +13,7 @@ auth.get('/login', async (c) => {
     <Layout {...b} title="تسجيل الدخول">
       <form class="form" method="post">
         <h1>تسجيل الدخول</h1>
-        <Flash type="err" msg={c.req.query('err') === 'pending' ? 'حسابك بانتظار موافقة إدارة هدهدي — ستتمكن من الدخول فور قبوله.' : c.req.query('err') === 'disabled' ? 'هذا الحساب معطّل. تواصلي مع الدعم.' : c.req.query('err') ? 'رقم الهاتف أو كلمة المرور غير صحيحة' : undefined} />
+        <Flash type="err" msg={c.req.query('err') === 'pending' ? 'حسابك بانتظار موافقة إدارة هدهد — ستتمكن من الدخول فور قبوله.' : c.req.query('err') === 'disabled' ? 'هذا الحساب معطّل. تواصلي مع الدعم.' : c.req.query('err') ? 'رقم الهاتف أو كلمة المرور غير صحيحة' : undefined} />
         <input type="hidden" name="next" value={c.req.query('next') ?? '/'} />
         <label>رقم الهاتف</label><input type="tel" name="phone" placeholder="09xxxxxxxx" required autofocus />
         <label>كلمة المرور</label><input type="password" name="password" required />

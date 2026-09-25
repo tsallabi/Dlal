@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import type { Env } from '../types';
-import { ORDER_STATUS } from '../types';
+import { ORDER_STATUS, CITIES } from '../types';
 import { PartnerShell } from '../views/dash';
 import { Flash } from '../views/layout';
 import { fmt, imgUrl, timeAgo, notify } from '../lib/db';
@@ -9,7 +9,7 @@ import { setOrderStatus } from '../lib/orders';
 import { requireRole, normPhone, hashPassword } from '../lib/auth';
 import { PARTNER_FLOW } from '../types';
 import { loadSettings } from '../lib/pricing';
-import { saveMedia, mediaResponse, deleteMedia, createInvoice, newSecret, testDispatch, RATE_KEYS, RATE_AR, feeMargin, syncPricingPartner, pricingPartnerId } from '../lib/partner';
+import { zonesFor, zoneLabel, courierTrack, courierCreate, courierHandover, courierResult, saveMedia, mediaResponse, deleteMedia, createInvoice, newSecret, testDispatch, RATE_KEYS, RATE_AR, feeMargin, syncPricingPartner, pricingPartnerId } from '../lib/partner';
 
 const partner = new Hono<Env>();
 partner.use('*', requireRole('partner', 'admin'));
@@ -77,7 +77,7 @@ partner.get('/', async (c) => {
   const stuckSql = Object.entries(STAGE_SLA).map(([st, d]) => `(status='${st}' AND updated_at < datetime('now','-${d} days'))`).join(' OR ');
   const LIVE = "status NOT IN ('pending_payment','cancelled','refunded')";
   const LATE = "status='paid' AND paid_at < datetime('now','-2 days')";
-  const [late, stuck, ships, transit, dues, ledger, cod, inv, ev, month, lateN, stuckN] = await Promise.all([
+  const [late, stuck, ships, transit, dues, ledger, cod, inv, ev, month, lateN, stuckN, withCourier] = await Promise.all([
     db.prepare(`SELECT code,paid_at,ship_city FROM orders WHERE partner_id=? AND ${LATE} ORDER BY paid_at LIMIT 12`).bind(pid).all<any>(),
     db.prepare(`SELECT code,status,updated_at,ship_city FROM orders WHERE partner_id=? AND (${stuckSql}) ORDER BY updated_at LIMIT 12`).bind(pid).all<any>(),
     db.prepare('SELECT status,COUNT(*) n FROM shipments WHERE partner_id=? GROUP BY status').bind(pid).all<any>(),
@@ -93,6 +93,7 @@ partner.get('/', async (c) => {
     db.prepare("SELECT COUNT(*) n FROM orders WHERE partner_id=? AND status='delivered' AND updated_at >= date('now','start of month')").bind(pid).first<any>(),
     db.prepare(`SELECT COUNT(*) n FROM orders WHERE partner_id=? AND ${LATE}`).bind(pid).first<{ n: number }>(),
     db.prepare(`SELECT COUNT(*) n FROM orders WHERE partner_id=? AND (${stuckSql})`).bind(pid).first<{ n: number }>(),
+    db.prepare("SELECT COUNT(*) n FROM orders WHERE partner_id=? AND status='ready' AND courier_status='with_courier'").bind(pid).first<{ n: number }>(),
   ]);
   const nLate = lateN?.n ?? 0, nStuck = stuckN?.n ?? 0;
   const n = (st: string) => x.counts[st] ?? 0;
@@ -112,7 +113,7 @@ partner.get('/', async (c) => {
         <Tile v={n('purchasing') + n('purchased')} l="قيد الشراء" href="/partner/purchasing" />
         <Tile v={n('at_warehouse') + n('consolidated')} l="في مخزن الصين" sub={`${n('consolidated')} مضمومة لشحنة`} href="/partner/warehouse" />
         <Tile v={n('shipped')} l="في الطريق إلى ليبيا" sub={`${transit.results.length} شحنة`} href="#transit" />
-        <Tile v={n('arrived') + n('customs') + n('ready')} l="وصلت ليبيا" sub={`${n('customs')} في الجمارك · ${n('ready')} جاهزة للتسليم`} href="/partner/delivery" />
+        <Tile v={n('arrived') + n('customs') + n('ready')} l="وصلت ليبيا" sub={`${n('customs')} في الجمارك · ${n('ready') - (withCourier?.n ?? 0)} جاهزة · ${withCourier?.n ?? 0} مع ${(x.p as any).courier_name || 'أميال'}`} href="/partner/delivery" />
         <Tile v={n('delivered')} l="وصلت للزبون" sub={`${month?.n ?? 0} هذا الشهر`} href="/partner/all" tone="ok" />
         <Tile v={(shipN.open ?? 0) + (shipN.shipped ?? 0) + (shipN.arrived ?? 0) + (shipN.customs ?? 0) + (shipN.released ?? 0)} l="الشحنات" sub={`${shipN.open ?? 0} مفتوحة · ${shipN.shipped ?? 0} في الطريق · ${shipN.released ?? 0} مكتملة`} href="/partner/shipments" />
       </div>
@@ -122,7 +123,7 @@ partner.get('/', async (c) => {
           <table class="tbl">
             <tr><td>مستحقاتكم عن كل الطلبات الجارية والمسلَّمة</td><td>{money(dues?.total)}</td></tr>
             <tr><td>منها عن طلبات سُلِّمت</td><td>{money(dues?.done)}</td></tr>
-            <tr><td>ما دفعته هدهدي لكم</td><td>− {money(ledger?.paid)}</td></tr>
+            <tr><td>ما دفعته هدهد لكم</td><td>− {money(ledger?.paid)}</td></tr>
             <tr class="pd-sum"><th>المتبقي لكم علينا</th><th>{money(owedToYou)}</th></tr>
             <tr><td>حصّلتم من الزبائن عند الاستلام ({cod?.n ?? 0} طلب)</td><td>{money(cod?.v)}</td></tr>
             <tr><td>ما سلّمتموه لنا منه</td><td>− {money(ledger?.got)}</td></tr>
@@ -252,18 +253,89 @@ partner.get('/shipments', async (c) => {
 });
 
 // ---------- التسليم في ليبيا ----------
+// ---------- التوصيل داخل ليبيا: من «جاهز للتسليم» إلى شركة التوصيل (أميال) إلى يد الزبونة ----------
 partner.get('/delivery', async (c) => {
-  const x = await ctx(c);
+  const x = await ctx(c); const p = x.p as any; const cn = p.courier_name || 'أميال';
   const orders = await ordersWithItems(x.db, x.pid, ['ready']);
-  return shell(c, x, 'delivery', `جاهز للتسليم (${orders.length})`, (
-    <>
+  const waiting = orders.filter(o => !o.courier_status || o.courier_status === 'failed');
+  const withC = orders.filter(o => o.courier_status === 'with_courier');
+  const today = await x.db.prepare("SELECT COUNT(*) n FROM orders WHERE partner_id=? AND status='delivered' AND courier_status='delivered' AND updated_at >= date('now')").bind(x.pid).first<{ n: number }>();
+  const cod = (o: any) => o.payment_method === 'cod_deposit' ? <b style="color:#d68b00">{fmt(o.total_lyd * 0.7)} يُحصَّل عند الاستلام</b> : 'مدفوع بالكامل';
+  const Addr = (o: any) => <>{o.ship_name} · <span dir="ltr">{o.ship_phone}</span><br /><small>{o.ship_city}{o.ship_zone ? ` — ${o.ship_zone}` : ''} — {o.ship_address}</small></>;
+  const err = c.req.query('err');
+  return shell(c, x, 'delivery', 'التوصيل داخل ليبيا', (
+    <div class="pd">
       <Flash msg={c.req.query('ok') ? 'تم الحفظ ✓' : undefined} />
-      {orders.length === 0 && <div class="empty">لا طلبات جاهزة للتسليم</div>}
-      <div class="tbl-wrap"><table class="tbl"><tr><th>الطلب</th><th>الزبونة</th><th>الهاتف</th><th>العنوان</th><th>الدفع المتبقي</th><th></th></tr>
-        {orders.map(o => <tr><td><b>{o.code}</b></td><td>{o.ship_name}</td><td>{o.ship_phone}</td><td>{o.ship_city} — {o.ship_address}</td><td>{o.payment_method === 'cod_deposit' ? <b style="color:#d68b00">{fmt(o.total_lyd * 0.7)} عند الاستلام</b> : 'مدفوع بالكامل'}</td><td><form method="post" action={`/partner/order/${o.code}/status`}><input type="hidden" name="status" value="delivered" /><button class="btn sm ok">تم التسليم ✓</button></form></td></tr>)}
-      </table></div>
-    </>
+      {err && <div class="flash err">{err}</div>}
+      <div class="pd-tiles">
+        <a class="pd-tile warn" href="#ready"><b>{waiting.length}</b><span>جاهزة — لم تُسلَّم لـ{cn}</span><small>{waiting.filter(o => o.courier_status === 'failed').length} تعذّر توصيلها سابقًا</small></a>
+        <a class="pd-tile" href="#courier"><b>{withC.length}</b><span>مع {cn} في الطريق للزبائن</span></a>
+        <a class="pd-tile ok"><b>{today?.n ?? 0}</b><span>وصلت الزبائن اليوم عبر {cn}</span></a>
+      </div>
+
+      <div class="card-box" id="ready"><h3>📦 جاهزة للتسليم — سلّمها لـ{cn} أو للزبونة مباشرة ({waiting.length})</h3>
+        {waiting.length === 0 ? <p class="pd-empty">لا طلبات تنتظر التسليم.</p> :
+          <div class="tbl-wrap"><table class="tbl courier-tbl"><tr><th>الطلب</th><th>الزبونة والعنوان</th><th>الدفع</th><th>التسليم</th></tr>
+            {waiting.map(o => <tr><td><a class="po-link" href={`/partner/order/${o.code}`}>{o.code}</a>{o.courier_status === 'failed' && <><br /><small class="pd-red">تعذّر: {o.courier_note ?? '—'}</small></>}</td><td>{Addr(o)}</td><td>{cod(o)}</td>
+              <td><form method="post" action={`/partner/order/${o.code}/courier`} class="inline" style="gap:4px">
+                  <input type="text" name="ref" placeholder={cn === 'أميال' ? 'AMY-284510' : `رقم شحنة ${cn}`} style="width:140px" dir="ltr" />
+                  <button class="btn sm dark">سُلِّم لـ{cn} 🚚</button>
+                  {p.courier_api_enabled && p.courier_api_url ? <button class="btn sm ghost" name="via" value="api">إنشاء الشحنة عبر API</button> : null}
+                </form>
+                <form method="post" action={`/partner/order/${o.code}/status`} style="margin-top:4px"><input type="hidden" name="status" value="delivered" /><button class="btn sm ok">تم التسليم ✓ (سلّمناه بأنفسنا)</button></form></td></tr>)}
+          </table></div>}
+      </div>
+
+      <div class="card-box" id="courier"><h3>🚚 مع {cn} ({withC.length})</h3>
+        {withC.length === 0 ? <p class="pd-empty">لا طرود مع {cn} الآن.</p> :
+          <div class="tbl-wrap"><table class="tbl courier-tbl"><tr><th>الطلب</th><th>رقم الشحنة</th><th>منذ</th><th>الزبونة والعنوان</th><th>الدفع</th><th></th></tr>
+            {withC.map(o => { const tr = courierTrack(p, o.courier_ref); return <tr><td><a class="po-link" href={`/partner/order/${o.code}`}>{o.code}</a></td>
+              <td dir="ltr">{tr ? <a href={tr} target="_blank" rel="noopener">{o.courier_ref} ↗</a> : o.courier_ref}</td><td>{timeAgo(o.courier_at)}</td><td>{Addr(o)}</td><td>{cod(o)}</td>
+              <td><form method="post" action={`/partner/order/${o.code}/courier/delivered`}><button class="btn sm ok">وصل للزبونة ✓</button></form>
+                <form method="post" action={`/partner/order/${o.code}/courier/failed`} class="inline" style="gap:4px;margin-top:4px"><input type="text" name="note" placeholder="سبب التعذّر (لم ترد، عنوان خطأ…)" style="width:170px" /><button class="btn sm ghost" style="color:#d3262b">تعذّر</button></form></td></tr>; })}
+          </table></div>}
+      </div>
+
+      <form method="post" action={`/partner/courier${pq(x)}`} class="card-box po-rates" id="courier-settings"><h3>⚙ الربط مع شركة التوصيل</h3>
+        <p style="font-size:13px;color:#555;margin-top:0">الطريق اليوم مع أميال (ثبت من موقعها في ٢٥/٠٩/٢٦): افتح حساب تاجر في <a href="https://portal.amyal.ly/register" target="_blank" rel="noopener" dir="ltr">portal.amyal.ly</a>، سجّل الشحنة هناك باسم الزبونة وهاتفها وعنوانها والمبلغ المطلوب تحصيله، ثم اكتب رقم الشحنة الذي تعطيك إياه (مثل <b dir="ltr">AMY-284510</b>) في خانة الطلب أعلاه — فيصل للزبونة في إشعار وصفحة طلبها. أميال لا تنشر واجهة برمجية (API) علنية؛ إن أعطتكم رابطها ومفتاحها ضعهما هنا فيُنشئ زر «عبر API» الشحنة عندهم مباشرة.</p>
+        <div class="inline"><label style="min-width:170px">اسم شركة التوصيل</label><input type="text" name="courier_name" value={cn} /></div>
+        <div class="inline"><label style="min-width:170px">رابط التتبع</label><input type="url" name="courier_track_url" value={p.courier_track_url ?? ''} placeholder="https://…/track?code={code}" dir="ltr" style="min-width:320px" /><small>{'{code}'} = رقم الشحنة</small></div>
+        <div class="inline"><label style="min-width:170px">رابط API لإنشاء شحنة</label><input type="url" name="courier_api_url" value={p.courier_api_url ?? ''} placeholder="https://…/api/shipments" dir="ltr" style="min-width:320px" /></div>
+        <div class="inline"><label style="min-width:170px">مفتاح API</label><input type="text" name="courier_api_key" value={p.courier_api_key ?? ''} dir="ltr" style="min-width:320px" /></div>
+        <label class="inline" style="font-weight:400"><input type="checkbox" name="courier_api_enabled" value="1" checked={!!p.courier_api_enabled} /> أظهر زر «إنشاء الشحنة عبر API»</label>
+        <button class="btn dark">حفظ</button>
+      </form>
+    </div>
   ));
+});
+partner.post('/courier', async (c) => {
+  const x = await ctx(c); const f = await c.req.parseBody();
+  const url = (v: any) => { const t = String(v ?? '').trim(); return /^https?:\/\//.test(t) ? t.slice(0, 300) : null; };
+  await x.db.prepare('UPDATE partners SET courier_name=?,courier_track_url=?,courier_api_url=?,courier_api_key=?,courier_api_enabled=? WHERE id=?')
+    .bind(String(f.courier_name ?? '').trim().slice(0, 40) || 'أميال', url(f.courier_track_url), url(f.courier_api_url), String(f.courier_api_key ?? '').trim().slice(0, 200) || null, f.courier_api_enabled === '1' ? 1 : 0, x.pid).run();
+  return c.redirect('/partner/delivery?ok=1' + pq2(x) + '#courier-settings');
+});
+partner.post('/order/:code/courier', async (c) => {
+  const code = c.req.param('code'); const f = await c.req.parseBody(); const db = c.env.DB;
+  const o = await db.prepare('SELECT o.id,p.* FROM orders o JOIN partners p ON p.id=o.partner_id WHERE o.code=?').bind(code).first<any>();
+  if (!o) return c.notFound();
+  const cn = o.courier_name || 'أميال';
+  let ref = String(f.ref ?? '').trim().slice(0, 60);
+  if (f.via === 'api') {
+    const orderId = (await db.prepare('SELECT id FROM orders WHERE code=?').bind(code).first<any>())!.id;
+    const r = await courierCreate(db, o, orderId);
+    if (!r.ok) return c.redirect('/partner/delivery?err=' + encodeURIComponent(`لم تُنشأ الشحنة عند ${cn}: ${r.error}`));
+    ref = r.ref!;
+  }
+  if (!ref) return c.redirect('/partner/delivery?err=' + encodeURIComponent(`اكتب رقم شحنة ${cn} قبل التسليم`));
+  await courierHandover(db, code, cn, ref, c.get('user')!.id);
+  return c.redirect('/partner/delivery?ok=1#courier');
+});
+partner.post('/order/:code/courier/delivered', async (c) => { await courierResult(c.env.DB, c.req.param('code'), 'delivered', null, c.get('user')!.id); return c.redirect('/partner/delivery?ok=1#courier'); });
+partner.post('/order/:code/courier/failed', async (c) => {
+  const f = await c.req.parseBody();
+  await courierResult(c.env.DB, c.req.param('code'), 'failed', String(f.note ?? '').trim().slice(0, 200) || null, c.get('user')!.id);
+  return c.redirect('/partner/delivery?ok=1#ready');
 });
 
 // ---------- كل الطلبات ----------
@@ -315,7 +387,7 @@ partner.post('/item/:id/unavailable', async (c) => {
     db.prepare("UPDATE order_items SET purchase_status='unavailable' WHERE id=?").bind(id),
     db.prepare("UPDATE products SET in_stock=0,last_checked_at=datetime('now') WHERE id=?").bind(it.product_id),   // يُخفى فورًا من الموقع
   ]);
-  await notify(db, it.user_id, `منتج غير متوفر في طلبك ${it.code}`, `"${it.title_ar}" نفد عند المورد. سيتواصل معك فريق هدهدي لاختيار بديل أو استرجاع قيمته.`, `/orders/${it.code}`);
+  await notify(db, it.user_id, `منتج غير متوفر في طلبك ${it.code}`, `"${it.title_ar}" نفد عند المورد. سيتواصل معك فريق هدهد لاختيار بديل أو استرجاع قيمته.`, `/orders/${it.code}`);
   return c.redirect('/partner/queue?ok=1');
 });
 
@@ -381,6 +453,7 @@ partner.get('/order/:code', async (c) => {
           <button class="btn sm dark">حفظ الحالة</button>
         </form>
       ))}
+      {(o.ship_zone || o.courier_ref) && <div class="card-box"><h3>🚚 التوصيل داخل ليبيا</h3><p style="margin:0">{o.ship_city}{o.ship_zone ? ` — ${o.ship_zone}` : ''}{o.courier_ref ? <> · مع {o.courier} — رقم الشحنة <b dir="ltr">{o.courier_ref}</b> ({o.courier_status === 'failed' ? `تعذّر: ${o.courier_note ?? ''}` : o.courier_status === 'delivered' ? 'سُلِّم' : `منذ ${timeAgo(o.courier_at)}`})</> : ''} · <a href="/partner/delivery">صفحة التوصيل ←</a></p></div>}
       <div class="card-box"><h3>🧾 مستحقاتكم عن هذا الطلب</h3>
         {dues ? (
           <table class="tbl po-dues">
@@ -477,7 +550,7 @@ partner.get('/invoice/:id', async (c) => {
     <html lang="ar" dir="rtl"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>فاتورة {i.number}</title><link rel="stylesheet" href="/style.css" /></head>
       <body class="po-print"><div class="po-invoice">
         <div class="inline" style="justify-content:space-between"><div><h2 style="margin:0">فاتورة {i.number}</h2><small>{new Date(i.created_at + 'Z').toLocaleDateString('ar-LY')}</small></div><img src="/hudhud-logo.svg" alt="" width="77" height="64" /></div>
-        <p><b>من:</b> {i.partner}{i.contact ? ` · ${i.contact}` : ''}<br /><b>إلى:</b> هدهدي HUDHUDE · <b>الطلب:</b> {i.code} · <b>المرحلة:</b> {STAGE_AR(i.stage)}</p>
+        <p><b>من:</b> {i.partner}{i.contact ? ` · ${i.contact}` : ''}<br /><b>إلى:</b> هدهد HUDHUDE · <b>الطلب:</b> {i.code} · <b>المرحلة:</b> {STAGE_AR(i.stage)}</p>
         <table class="tbl"><tr><th>البند</th><th>المبلغ</th></tr>{lines.map(l => <tr><td>{l.desc}</td><td>{fmt(l.amount)}</td></tr>)}<tr><th>الإجمالي</th><th>{fmt(i.total_lyd)}</th></tr></table>
         {i.note && <p>{i.note}</p>}
         <button class="btn no-print" onclick="print()">🖨 طباعة / حفظ PDF</button>
@@ -496,15 +569,39 @@ partner.get('/rates', async (c) => {
     ['الشحن الجوي (نصف كيلو)', ex.kg * (p.fee_air_kg_lyd ?? 0)],
     ['التوصيل داخل ليبيا', p.fee_delivery_lyd ?? 0],
   ] as [string, number][];
+  const zones = await zonesFor(x.db, x.pid);
   return shell(c, x, 'rates', 'أسعاري', (
     <>
       <Flash msg={c.req.query('ok') ? 'حُفظت أسعارك ✓' : undefined} />
       <form method="post" action={`/partner/rates${pq(x)}`} class="card-box po-rates">
-        <p style="font-size:13px;color:#555;margin-top:0">ضع سعر كل خدمة كما تنفّذها بالدينار الليبي. هذه أسعارك أنت، وتُحسب منها مستحقاتك عن كل طلب لحظة دفعه. يُضاف على كل بند <b>رسم منصة هدهدي {m} د.ل</b> يدفعه الزبون ولا يُخصم منك.</p>
+        <p style="font-size:13px;color:#555;margin-top:0">ضع سعر كل خدمة كما تنفّذها بالدينار الليبي. هذه أسعارك أنت، وتُحسب منها مستحقاتك عن كل طلب لحظة دفعه. يُضاف على كل بند <b>رسم منصة هدهد {m} د.ل</b> يدفعه الزبون ولا يُخصم منك.</p>
         {RATE_KEYS.map(k => <div class="inline"><label style="min-width:190px">{RATE_AR[k].ar}</label><input type="number" step="0.01" min="0" name={k} value={p[k] ?? 0} style="width:120px" /><small>{RATE_AR[k].unit}</small></div>)}
         <button class="btn dark">حفظ أسعاري</button>
         {p.rates_updated_at && <small style="color:#888"> آخر تعديل {timeAgo(p.rates_updated_at)}</small>}
       </form>
+      <div class="card-box" id="zones"><h3>🚚 التوصيل داخل ليبيا حسب المدينة والمنطقة</h3>
+        <p style="font-size:13px;color:#555;margin-top:0">لكل مدينة مناطق بحسب بُعدها عن مركز المدينة بالكيلومتر. تختار الزبونة منطقتها عند الدفع فيُحسب سعرها (+ رسم المنصة {m} د.ل). المدينة بلا مناطق تُحسب بسعر «التوصيل داخل ليبيا» الموحّد أعلاه.</p>
+        {zones.length > 0 && <div class="tbl-wrap"><table class="tbl zones-tbl"><tr><th>المدينة</th><th>المنطقة</th><th>من (كم)</th><th>إلى (كم)</th><th>سعرك</th><th>يدفعه الزبون</th><th></th></tr>
+          {zones.map(z => <tr><td>{z.city}</td><td>{z.zone}</td><td>{z.km_from}</td><td>{z.km_to}</td><td>{fmt(z.price_lyd)}</td><td>{fmt(Math.round((z.price_lyd + m) * 100) / 100)}</td>
+            <td><form method="post" action={`/partner/zones/${z.id}/delete${pq(x)}`}><button class="btn sm ghost" style="color:#d3262b">حذف</button></form></td></tr>)}
+        </table></div>}
+        <form method="post" action={`/partner/zones${pq(x)}`} class="inline zone-add" style="gap:6px;margin-top:10px;flex-wrap:wrap">
+          <select name="city">{CITIES.map(ct => <option>{ct}</option>)}</select>
+          <input type="text" name="zone" placeholder="اسم المنطقة (وسط المدينة، تاجوراء…)" required style="min-width:200px" />
+          <input type="number" step="0.5" min="0" name="km_from" placeholder="من كم" style="width:80px" required />
+          <input type="number" step="0.5" min="0" name="km_to" placeholder="إلى كم" style="width:80px" required />
+          <input type="number" step="0.5" min="0" name="price" placeholder="السعر د.ل" style="width:100px" required />
+          <button class="btn sm dark">+ إضافة منطقة</button>
+        </form>
+        <form method="post" action={`/partner/zones/quick${pq(x)}`} class="inline zone-quick" style="gap:6px;margin-top:10px;flex-wrap:wrap;background:#faf6f2;padding:8px;border-radius:8px">
+          <b style="font-size:13px">قالب سريع لمدينة:</b><select name="city">{CITIES.map(ct => <option>{ct}</option>)}</select>
+          <label style="font-weight:400">وسط 0–5 كم <input type="number" step="0.5" min="0" name="p1" style="width:70px" required /></label>
+          <label style="font-weight:400">ضواحي 5–15 <input type="number" step="0.5" min="0" name="p2" style="width:70px" required /></label>
+          <label style="font-weight:400">بعيدة 15–30 <input type="number" step="0.5" min="0" name="p3" style="width:70px" /></label>
+          <label style="font-weight:400">خارج المدينة 30–60 <input type="number" step="0.5" min="0" name="p4" style="width:70px" /></label>
+          <button class="btn sm ghost">إنشاء المناطق</button>
+        </form>
+      </div>
       <div class="card-box"><h3>مثال بأسعارك: قطعة ثمنها 50 د.ل ووزنها نصف كيلو، شحن جوي</h3>
         <table class="tbl"><tr><th>الخدمة</th><th>لك</th><th>يدفعه الزبون مقابلها</th></tr>
           {rows.map(([n, v]) => <tr><td>{n}</td><td>{fmt(Math.round(v * 100) / 100)}</td><td>{fmt(Math.round((v + m) * 100) / 100)}</td></tr>)}
@@ -530,15 +627,15 @@ partner.get('/team', async (c) => {
   const err: Record<string, string> = { phone: 'هذا الرقم مسجّل لحساب آخر', pw: 'كلمة المرور 6 أحرف على الأقل', name: 'اكتب الاسم ورقم هاتف صحيحًا' };
   return shell(c, x, 'team', `موظفو ${x.p.name}`, (
     <>
-      <Flash msg={c.req.query('ok') ? 'أُرسل الطلب ✓ — يستطيع الموظف الدخول فور موافقة إدارة هدهدي' : undefined} />
+      <Flash msg={c.req.query('ok') ? 'أُرسل الطلب ✓ — يستطيع الموظف الدخول فور موافقة إدارة هدهد' : undefined} />
       {c.req.query('err') && <div class="flash err">{err[c.req.query('err')!] ?? 'تعذّر الحفظ'}</div>}
       <div class="card-box"><div class="tbl-wrap"><table class="tbl team-tbl"><tr><th>الاسم</th><th>الهاتف (اسم الدخول)</th><th>الحالة</th><th>آخر دخول</th></tr>
         {results.map((u: any) => <tr><td>{u.name}</td><td dir="ltr">{u.phone}</td>
-          <td>{u.pending_approval ? <span class="status gray">⏳ بانتظار موافقة هدهدي</span> : u.active ? <span class="status green">نشط</span> : <span class="status red">معطّل</span>}</td>
+          <td>{u.pending_approval ? <span class="status gray">⏳ بانتظار موافقة هدهد</span> : u.active ? <span class="status green">نشط</span> : <span class="status red">معطّل</span>}</td>
           <td>{u.last_login_at ? timeAgo(u.last_login_at) : '—'}</td></tr>)}
       </table></div></div>
       <form method="post" action={`/partner/team${pq(x)}`} class="card-box po-rates"><h3>+ إضافة موظف لشركتكم</h3>
-        <p style="font-size:13px;color:#555;margin-top:0">يرى الموظف طلبات شركتكم فقط ويعمل عليها. يبقى الحساب موقوفًا حتى توافق عليه إدارة هدهدي.</p>
+        <p style="font-size:13px;color:#555;margin-top:0">يرى الموظف طلبات شركتكم فقط ويعمل عليها. يبقى الحساب موقوفًا حتى توافق عليه إدارة هدهد.</p>
         <div class="inline"><label style="min-width:120px">الاسم</label><input type="text" name="name" required /></div>
         <div class="inline"><label style="min-width:120px">الهاتف</label><input type="tel" name="phone" placeholder="09xxxxxxxx" dir="ltr" required /></div>
         <div class="inline"><label style="min-width:120px">كلمة المرور</label><input type="text" name="password" minlength={6} required /></div>
@@ -557,6 +654,31 @@ partner.post('/team', async (c) => {
   const { results: owners } = await db.prepare("SELECT id FROM users WHERE role='admin' AND staff_role='owner' AND active=1").all<{ id: number }>();
   for (const o of owners) await notify(db, o.id, `${x.p.name} يطلب إضافة موظف`, `${name} (${phone}) — بانتظار موافقتك`, '/admin/staff#pending');
   return c.redirect('/partner/team?ok=1' + pq2(x));
+});
+
+// مناطق التوصيل داخل ليبيا (مدينة × بُعد عن المركز)
+const kmOf = (v: any) => Math.max(0, Math.min(500, parseFloat(String(v ?? '').replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))) || 0));
+partner.post('/zones', async (c) => {
+  const x = await ctx(c); const f = await c.req.parseBody();
+  const city = CITIES.includes(String(f.city)) ? String(f.city) : null; const zone = String(f.zone ?? '').trim().slice(0, 60);
+  const a = kmOf(f.km_from), b = kmOf(f.km_to), price = kmOf(f.price);
+  if (city && zone && b > a) await x.db.prepare('INSERT INTO partner_zones(partner_id,city,zone,km_from,km_to,price_lyd) VALUES(?,?,?,?,?,?)').bind(x.pid, city, zone, a, b, price).run();
+  return c.redirect('/partner/rates?ok=1' + pq2(x) + '#zones');
+});
+partner.post('/zones/quick', async (c) => {
+  const x = await ctx(c); const f = await c.req.parseBody();
+  const city = CITIES.includes(String(f.city)) ? String(f.city) : null;
+  if (!city) return c.redirect('/partner/rates' + pq(x));
+  const bands: [string, number, number, any][] = [['وسط المدينة', 0, 5, f.p1], ['ضواحي قريبة', 5, 15, f.p2], ['ضواحي بعيدة', 15, 30, f.p3], ['خارج المدينة', 30, 60, f.p4]];
+  const rows = bands.filter(b => String(b[3] ?? '').trim() !== '');
+  await x.db.batch([x.db.prepare('DELETE FROM partner_zones WHERE partner_id=? AND city=?').bind(x.pid, city),
+    ...rows.map(b => x.db.prepare('INSERT INTO partner_zones(partner_id,city,zone,km_from,km_to,price_lyd) VALUES(?,?,?,?,?,?)').bind(x.pid, city, b[0], b[1], b[2], kmOf(b[3])))]);
+  return c.redirect('/partner/rates?ok=1' + pq2(x) + '#zones');
+});
+partner.post('/zones/:id/delete', async (c) => {
+  const x = await ctx(c);
+  await x.db.prepare('DELETE FROM partner_zones WHERE id=? AND partner_id=?').bind(Number(c.req.param('id')), x.pid).run();
+  return c.redirect('/partner/rates?ok=1' + pq2(x) + '#zones');
 });
 
 // ---------- ربط API ----------
@@ -593,6 +715,9 @@ POST ${origin}/api/partner/v1/orders/{code}/status
 POST ${origin}/api/partner/v1/orders/{code}/photos
      {"stage":"at_warehouse","image_base64":"data:image/jpeg;base64,...","caption":"","public":false}
      or {"stage":"...","url":"https://..."}
+POST ${origin}/api/partner/v1/orders/{code}/courier
+     {"courier":"أميال","tracking":"AMY-284510"}   ← سُلِّم لشركة التوصيل
+     {"result":"delivered"} or {"result":"failed","note":"..."}
 POST ${origin}/api/partner/v1/orders/{code}/invoices
      {"stage":"shipped","lines":[{"desc":"Air freight 2.4kg","amount":55}],"note":""}
 Header: Authorization: Bearer ${p.api_token.slice(0, 6)}…`}</pre>

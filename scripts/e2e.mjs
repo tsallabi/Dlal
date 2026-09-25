@@ -285,8 +285,8 @@ const tilesX2 = await page.evaluate(() => document.getElementById('catTiles').sc
 expect(Math.abs(tilesX2 - tilesX) > 50, `سهم البلاطات يمرّرها (${tilesX} → ${tilesX2})`);
 await page.setViewportSize({ width: 1280, height: 860 });
 await page.goto(BASE + '/'); await page.waitForLoadState('networkidle');
-// الاسم صار «هدهدي» وسطر «بوابتك إلى الصين» عاد تحته (قرار صاحب المشروع بعد شراء hudhude.com)
-expect(await page.locator('.hdr-main .logo u').textContent() === 'بوابتك إلى الصين' && await page.locator('.hdr-main .logo b em').count() === 0, 'الشعار: «هدهدي» وتحته «بوابتك إلى الصين»');
+// الاسم صار «هدهد» وسطر «بوابتك إلى الصين» عاد تحته (قرار صاحب المشروع بعد شراء hudhude.com)
+expect(await page.locator('.hdr-main .logo u').textContent() === 'بوابتك إلى الصين' && await page.locator('.hdr-main .logo b em').count() === 0, 'الشعار: «هدهد» وتحته «بوابتك إلى الصين»');
 // طوابق الأقسام: كل طابق شريط أفقي يمرَّر وله رابط إلى قسمه
 const floors = await page.locator('.floor').count();
 expect(floors >= 4, `الرئيسية تعرض ${floors} طوابق أقسام`);
@@ -474,7 +474,7 @@ await page.goto(BASE + '/admin/coupons');
 await page.fill('input[name=code]', 'test' + String(Date.now()).slice(-4)); await page.fill('input[name=value]', '15'); await page.click('button:has-text("إنشاء")'); await page.waitForLoadState('networkidle');
 expect(await has(page, 'TEST'), 'إنشاء كوبون جديد من الإدارة'); await shot(page, 'admin-coupons');
 for (const [path, name, check] of [
-  ['/admin/import', 'admin-import', 'استورد إلى هدهدي'], ['/admin/products', 'admin-products', 'offerId'], ['/admin/categories', 'admin-categories', 'الوزن التقديري'],
+  ['/admin/import', 'admin-import', 'استورد إلى هدهد'], ['/admin/products', 'admin-products', 'offerId'], ['/admin/categories', 'admin-categories', 'الوزن التقديري'],
   ['/admin/stock', 'admin-stock', 'فحص المخزون'], ['/admin/pricing', 'admin-pricing', 'سعر الصرف'], ['/admin/partners', 'admin-partners', 'شاهين'], ['/admin/staff', 'admin-staff', 'مصفوفة الصلاحيات'], ['/admin/customers', 'admin-customers', 'منى'],
   ['/admin/reports', 'admin-reports', 'المبيعات اليومية'], ['/admin/activity', 'admin-activity', 'سجل النشاط'], ['/admin/tickets', 'admin-tickets', 'التذاكر'], ['/admin/reviews', 'admin-reviews', 'بانتظار المراجعة'],
 ]) { await page.goto(BASE + path); expect(await has(page, check), `صفحة ${path} تعمل`); await shot(page, name); }
@@ -653,8 +653,8 @@ await page.goto(BASE + '/account/orders?stage=cancelled'); expect(await has(page
 
 // ---------- صفحات المساعدة والسياسات بالعربية ----------
 const HELP = [
-  ['/pages/how', 'كيف يعمل هدهدي؟', 'شحن جوي إلى ليبيا'],
-  ['/pages/how-to-order', 'كيف أطلب من هدهدي؟', 'أكّدي الطلب وادفعي'],
+  ['/pages/how', 'كيف يعمل هدهد؟', 'شحن جوي إلى ليبيا'],
+  ['/pages/how-to-order', 'كيف أطلب من هدهد؟', 'أكّدي الطلب وادفعي'],
   ['/pages/shipping', 'معلومات الشحن', 'التوصيل داخل ليبيا'],
   ['/pages/returns', 'سياسة الإرجاع والاسترداد', 'متى تستحقين تعويضًا كاملًا'],
   ['/pages/payment', 'طرق الدفع والرسوم', 'الدفع كاش في أحد فروعنا'],
@@ -748,17 +748,17 @@ await page.goto(BASE + '/c/dresses?sort=price_asc');
 await page.goto(BASE + '/logout'); await page.goto(BASE + '/');
 expect(await page.locator('.hdr-strip a', { hasText: 'معلومات الشحن' }).isVisible(), 'الشريط العلوي يعرض معلومات الشحن');
 expect(await page.locator('.hdr-main .logo').isVisible() && await page.locator('.hdr-main .search input').isVisible(), 'الشعار وحقل البحث في الشريط الرئيسي');
-expect(await page.locator('.hdr-main .logo b').textContent() === 'هدهدي', 'الشعار يحمل الاسم العربي «هدهدي»');
+expect(await page.locator('.hdr-main .logo b').textContent() === 'هدهد', 'الشعار يحمل الاسم العربي «هدهد»');
 expect(await page.locator('.hdr-main .logo i').textContent() === 'HUDHUDE', 'وتحته الاسم اللاتيني «HUDHUDE» (كالنطاق hudhude.com)');
 expect(await page.locator('.hdr-main .logo u').textContent() === 'بوابتك إلى الصين', 'وتحتهما «بوابتك إلى الصين»');
-expect((await page.title()).includes('هدهدي HUDHUDE'), 'عنوان الصفحة يحمل الاسمين');
+expect((await page.title()).includes('هدهد HUDHUDE'), 'عنوان الصفحة يحمل الاسمين');
 // الهدهد نفسه: صورة تُحمَّل فعلًا (لا مربع مكسور)، وحركتها تعمل داخلها، ولون الموقع صار القرفة
 const hh = await page.locator('.hdr-main .logo img').evaluate(i => ({ w: i.naturalWidth, h: i.getBoundingClientRect().height, src: i.getAttribute('src') }));
 expect(hh.src === '/hudhud-logo.svg' && hh.w > 0 && hh.h >= 40, `صورة الهدهد في الترويسة محمّلة (${hh.src} · ${Math.round(hh.h)}px)`);
 const hhSvg = await (await ctx.request.get(BASE + '/hudhud-logo.svg')).text();
 expect(/@keyframes fan/.test(hhSvg) && /@keyframes peck/.test(hhSvg) && /prefers-reduced-motion/.test(hhSvg), 'ملف الشعار فيه حركة العُرف والنقر ويحترم «تقليل الحركة»');
 const fav = await page.locator('link[rel=icon]').getAttribute('href');
-expect(fav === '/favicon.svg' && (await (await ctx.request.get(BASE + fav)).text()).includes('aria-label="هدهدي HUDHUDE"'), 'أيقونة التبويب صارت الهدهد');
+expect(fav === '/favicon.svg' && (await (await ctx.request.get(BASE + fav)).text()).includes('aria-label="هدهد HUDHUDE"'), 'أيقونة التبويب صارت الهدهد');
 expect((await ctx.request.get(BASE + '/apple-touch-icon.png')).status() === 200, 'أيقونة شاشة الجوال موجودة');
 const brandCol = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--brand').trim().toLowerCase());
 expect(brandCol === '#b05a20', `لون الموقع صار القرفة (${brandCol})`);
@@ -1859,7 +1859,7 @@ expect(await has(page, `مطلوب ${rqTag}`) && await page.locator('#addForm').
 await sendLink(`https://detail.1688.com/offer/${rqOffer}.html?spm=a26352`);
 expect(page.url().includes('/p/') && await has(page, `مطلوب ${rqTag}`), `رابط منتج موجود عندنا يفتح صفحته فورًا (${page.url().replace(BASE, '')})`);
 await page.goto(BASE + '/account/notifications');
-expect(await has(page, 'منتجك صار في هدهدي'), 'ووصلها إشعار «منتجك صار في هدهدي»');
+expect(await has(page, 'منتجك صار في هدهد'), 'ووصلها إشعار «منتجك صار في هدهد»');
 // رابط من غير 1688: الفريق يربطه بمنتج أو يعتذر
 await sendLink('https://item.taobao.com/item.htm?id=712345678901', 'قطعتان');
 await sendLink('https://www.amazon.com/dp/B0TEST1234');
@@ -2396,7 +2396,7 @@ await mp.screenshot({ path: `${OUT}/${String(++n).padStart(2, '0')}-mobile-order
     await page.goto(BASE + '/partner');
     for (const t of ['الحساب بيننا', 'الطلبات حسب المرحلة', 'في الطريق إلى ليبيا', 'طلبات متأخرة أو عالقة', 'آخر الحركات'])
       expect(await has(page, t), `«لوحتي» فيها قسم «${t}»`);
-    const paidBefore = await numIn(page.locator('.pd-money tr', { hasText: 'ما دفعته هدهدي لكم' }).locator('td').nth(1));
+    const paidBefore = await numIn(page.locator('.pd-money tr', { hasText: 'ما دفعته هدهد لكم' }).locator('td').nth(1));
     await shot(page, 'partner-dashboard');
     // المالك يسجّل دفعة للشريك ⟵ تظهر في «لوحتي» عنده
     await login(page, '0910000000', 'admin123');
@@ -2406,7 +2406,7 @@ await mp.screenshot({ path: `${OUT}/${String(++n).padStart(2, '0')}-mobile-order
     await lf.locator('button').click(); await page.waitForLoadState('networkidle');
     expect(await has(page, ledgerNote), 'الأدمن يسجّل دفعة لشريك في «الحساب مع كل شريك»');
     await login(page, '0920000000', 'partner123'); await page.goto(BASE + '/partner');
-    const paidAfter = await numIn(page.locator('.pd-money tr', { hasText: 'ما دفعته هدهدي لكم' }).locator('td').nth(1));
+    const paidAfter = await numIn(page.locator('.pd-money tr', { hasText: 'ما دفعته هدهد لكم' }).locator('td').nth(1));
     expect(Math.abs(paidAfter - paidBefore - 125.5) < 0.01, `الدفعة تظهر في «الحساب بيننا» عند الشريك (${paidBefore} ⟵ ${paidAfter})`);
     // بطاقة المرحلة تفتح طلبات تلك المرحلة وحدها
     await page.locator('.pd-bar', { hasText: 'وصل مخزن الصين' }).click(); await page.waitForLoadState('networkidle');
@@ -2417,10 +2417,10 @@ await mp.screenshot({ path: `${OUT}/${String(++n).padStart(2, '0')}-mobile-order
       await page.fill('form[action^="/partner/team"] input[name=name]', nm); await page.fill('form[action^="/partner/team"] input[name=phone]', ph);
       await page.fill('form[action^="/partner/team"] input[name=password]', 'team666'); await page.click('form[action^="/partner/team"] button'); await page.waitForLoadState('networkidle');
     }
-    expect((await page.locator('.team-tbl tr', { hasText: '0920000066' }).textContent()).includes('بانتظار موافقة'), 'الموظف الذي يضيفه الشريك يبقى بانتظار موافقة هدهدي');
+    expect((await page.locator('.team-tbl tr', { hasText: '0920000066' }).textContent()).includes('بانتظار موافقة'), 'الموظف الذي يضيفه الشريك يبقى بانتظار موافقة هدهد');
     await shot(page, 'partner-team');
     await login(page, '0920000066', 'team666');
-    expect(await has(page, 'بانتظار موافقة إدارة هدهدي'), 'دخوله قبل القبول يقول له إن حسابه بانتظار الموافقة');
+    expect(await has(page, 'بانتظار موافقة إدارة هدهد'), 'دخوله قبل القبول يقول له إن حسابه بانتظار الموافقة');
     await login(page, '0910000000', 'admin123'); await page.goto(BASE + '/admin/staff');
     expect(await page.locator('#pending [data-phone="0920000066"]').count() === 1, 'المالك يرى طلب الموظف في «بانتظار موافقتك»');
     await page.locator('#pending [data-phone="0920000066"] button:has-text("قبول")').click(); await page.waitForLoadState('networkidle');
@@ -2469,6 +2469,84 @@ await mp.screenshot({ path: `${OUT}/${String(++n).padStart(2, '0')}-mobile-order
   expect(await has(page, 'أضاف للسلة') && await has(page, tq), 'مسار الزائر يعرض كل صفحاته بالترتيب (البحث، الإضافة للسلة…)');
   await login(page, PHONE, 'secret456'); await page.goto(BASE + '/account/notifications').catch(() => {});
   expect(await has(page, 'سلتك تنتظرك'), 'الزبونة تستلم التذكير في إشعاراتها');
+}
+
+// ---------- التوصيل داخل ليبيا: مناطق المدينة بالكيلومتر، وتسليم الطرد لأميال حتى يصل الزبونة (٢٥/٠٩/٢٦) ----------
+{
+  const { execFileSync } = await import('node:child_process');
+  const d1q = (sql) => JSON.parse(execFileSync('npx', ['wrangler', 'd1', 'execute', 'dlal-db', '--local', '-c', 'wrangler.local.toml', '--json', '--command', sql], { stdio: 'pipe' }).toString())[0].results;
+  const oldZones = d1q("SELECT city,zone,km_from,km_to,price_lyd FROM partner_zones WHERE partner_id=1 AND city='طرابلس'");
+  const oldPP = d1q("SELECT value FROM settings WHERE key='pricing_partner_id'")[0]?.value ?? '0';
+  const ref = 'AMY-' + String(Date.now()).slice(-6);
+  try {
+    await login(page, '0920000000', 'partner123');
+    await page.goto(BASE + '/partner/rates#zones');
+    const qf = page.locator('form.zone-quick');
+    await qf.locator('select[name=city]').selectOption('طرابلس');
+    await qf.locator('input[name=p1]').fill('10'); await qf.locator('input[name=p2]').fill('15'); await qf.locator('input[name=p3]').fill('20'); await qf.locator('input[name=p4]').fill('30');
+    await qf.locator('button').click(); await page.waitForLoadState('networkidle');
+    const zr = page.locator('table.zones-tbl tr', { hasText: 'طرابلس' });
+    expect(await zr.count() === 4, `الشريك يضع أسعار أربع مناطق لطرابلس بقالب واحد (${await zr.count()})`);
+    expect((await page.locator('table.zones-tbl tr', { hasText: 'ضواحي بعيدة' }).textContent()).includes('21 د.ل'), 'سعر المنطقة على الزبون = سعر الشريك + دينار (20 ⟵ 21)');
+    await shot(page, 'partner-zones');
+    // الزبونة: المناطق تظهر عند الدفع حين يُسعَّر بشريك (الإعداد يُعاد في finally)
+    d1q("UPDATE settings SET value='1' WHERE key='pricing_partner_id'");
+    await login(page, PHONE, 'secret456');
+    await page.goto(BASE + '/c/bags'); await page.click('.card >> nth=1'); await page.waitForLoadState('networkidle');
+    await page.click('#addForm button[type=submit]'); await page.waitForLoadState('networkidle');
+    await page.goto(BASE + '/checkout?city=' + encodeURIComponent('طرابلس'));
+    await page.locator('input[name=address_id][value=""]').check().catch(() => {});
+    expect(await page.locator('select.zone-pick option').count() === 4, 'صفحة الدفع تعرض مناطق طرابلس الأربع');
+    const far = await page.locator('select.zone-pick option', { hasText: 'ضواحي بعيدة' }).getAttribute('value');
+    await page.selectOption('select.zone-pick', far); await page.waitForLoadState('networkidle');
+    expect(page.url().includes('zone=' + far) && await has(page, '21 د.ل'), 'اختيار «ضواحي بعيدة» يغيّر أجرة التوصيل إلى 21 د.ل');
+    await page.locator('input[name=address_id][value=""]').check().catch(() => {});
+    await page.fill('textarea[name=address]', 'تاجوراء، قرب الجامع الكبير').catch(() => {});
+    await page.check('input[value=mypay_sadad]');
+    await page.click('button:has-text("تأكيد الطلب")'); await page.waitForLoadState('networkidle');
+    if (page.url().includes('/pay/mock/')) { await page.click('button:has-text("تأكيد الدفع")'); await page.waitForURL(/paid=1/, { timeout: 30000 }).catch(() => {}); }
+    const zCode = page.url().match(/DL-\d{4}-\d{6}/)?.[0];
+    const zo = d1q(`SELECT ship_zone,shipping_lyd,partner_fees_json FROM orders WHERE code='${zCode}'`)[0] ?? {};
+    expect(/ضواحي بعيدة/.test(zo.ship_zone ?? '') && zo.shipping_lyd === 21, `الطلب يحفظ المنطقة وأجرتها (${zo.ship_zone} · ${zo.shipping_lyd})`);
+    expect(JSON.parse(zo.partner_fees_json ?? '{}').delivery === 20, 'مستحق الشريك عن التوصيل = سعر منطقته (20) بلا دينارنا');
+    // الشريك: جاهز ⟵ سُلِّم لأميال ⟵ تعذّر ⟵ سُلِّم ثانية ⟵ وصل
+    await login(page, '0920000000', 'partner123');
+    await page.goto(BASE + '/partner/order/' + zCode);
+    await page.selectOption('.po-move select[name=status]', 'ready'); await page.click('.po-move button'); await page.waitForLoadState('networkidle');
+    await page.goto(BASE + '/partner/delivery');
+    const rowR = page.locator('#ready tr', { hasText: zCode });
+    expect(await rowR.count() === 1 && (await rowR.textContent()).includes('ضواحي بعيدة'), 'الطلب الجاهز في «جاهزة للتسليم» بمنطقته');
+    await rowR.locator('button:has-text("سُلِّم لـ")').click(); await page.waitForLoadState('networkidle');
+    expect(await has(page, 'اكتب رقم شحنة'), 'التسليم لأميال بلا رقم شحنة يُرفض برسالة');
+    await page.locator('#ready tr', { hasText: zCode }).locator('input[name=ref]').fill(ref);
+    await page.locator('#ready tr', { hasText: zCode }).locator('button:has-text("سُلِّم لـ")').click(); await page.waitForLoadState('networkidle');
+    expect(await page.locator('#courier tr', { hasText: zCode }).count() === 1 && await has(page, ref), `الطلب انتقل إلى «مع أميال» برقم الشحنة ${ref}`);
+    await shot(page, 'partner-courier');
+    await page.locator('#courier tr', { hasText: zCode }).locator('input[name=note]').fill('لم ترد على الهاتف');
+    await page.locator('#courier tr', { hasText: zCode }).locator('button:has-text("تعذّر")').click(); await page.waitForLoadState('networkidle');
+    expect((await page.locator('#ready tr', { hasText: zCode }).textContent()).includes('لم ترد على الهاتف'), '«تعذّر» يعيده للجاهزة مع السبب');
+    await page.locator('#ready tr', { hasText: zCode }).locator('input[name=ref]').fill(ref + 'B');
+    await page.locator('#ready tr', { hasText: zCode }).locator('button:has-text("سُلِّم لـ")').click(); await page.waitForLoadState('networkidle');
+    // الأدمن يتابع
+    await login(page, '0910000000', 'admin123');
+    await page.goto(BASE + '/admin/orders/' + zCode);
+    expect(await has(page, ref + 'B') && await has(page, 'ضواحي بعيدة'), 'صفحة الطلب عند الأدمن تعرض المنطقة ورقم شحنة أميال');
+    await page.goto(BASE + '/admin/partners#domestic');
+    expect(await page.locator('#domestic').textContent().then(t => t.includes('أميال') && t.includes('4 منطقة في 1 مدينة')), 'لوحة الأدمن تعرض التوصيل داخل ليبيا لكل شريك ومناطق أسعاره');
+    // الزبونة ترى رقم الشحنة ثم «تم التسليم»
+    await login(page, PHONE, 'secret456'); await page.goto(BASE + '/orders/' + zCode);
+    expect(await page.locator('.courier-box').isVisible() && await has(page, ref + 'B'), 'الزبونة ترى «طلبك مع أميال» ورقم الشحنة');
+    await page.goto(BASE + '/account/notifications');
+    expect(await has(page, 'في الطريق إليك'), 'ويصلها إشعار بالتسليم لأميال');
+    await login(page, '0920000000', 'partner123'); await page.goto(BASE + '/partner/delivery');
+    await page.locator('#courier tr', { hasText: zCode }).locator('button:has-text("وصل للزبونة")').click(); await page.waitForLoadState('networkidle');
+    await login(page, PHONE, 'secret456'); await page.goto(BASE + '/orders/' + zCode);
+    expect(await has(page, 'تم التسليم') && !(await page.locator('.courier-box').count()), '«وصل للزبونة» يجعل الطلب «تم التسليم»');
+  } finally {
+    d1q(`UPDATE settings SET value='${oldPP}' WHERE key='pricing_partner_id'`);
+    d1q("DELETE FROM partner_zones WHERE partner_id=1 AND city='طرابلس'");
+    for (const z of oldZones) d1q(`INSERT INTO partner_zones(partner_id,city,zone,km_from,km_to,price_lyd) VALUES(1,'${z.city}','${z.zone}',${z.km_from},${z.km_to},${z.price_lyd})`);
+  }
 }
 
 // ---------- D1 يرفض نمط LIKE فوق 50 بايتًا (المحلي لا يرفضه فلا يراه أي فحص آخر) — ٢٤/٠٩/٢٦ ----------

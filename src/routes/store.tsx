@@ -10,7 +10,7 @@ import { getCategories, PRODUCT_SELECT, fmt, imgUrl, orderCode, timeAgo, notify,
 import type { ProductRow } from '../lib/db';
 import { KIND_NOTE, type ListingKind } from '../lib/source';
 import { loadSettings, computePrice, shipRates, seaOn } from '../lib/pricing';
-import { partnerDelivery, pricingPartnerId, mediaResponse } from '../lib/partner';
+import { partnerDelivery, pricingPartnerId, mediaResponse, zoneQuote, zoneLabel, courierTrack } from '../lib/partner';
 import { track } from '../lib/track';
 import type { ShipMode, Settings } from '../lib/pricing';
 import { checkCoupon } from '../lib/coupons';
@@ -783,7 +783,9 @@ async function cartTotals(c: Context<Env>, rows: any[], usePoints: boolean) {
   const pointsLyd = Math.round(pointsUsed * ptsValue * 100) / 100;
   // المدينة تأتي من نموذج الدفع إن كانت الزبونة تملأه الآن، وإلا من ملفها
   const city = (c.req.query('city') ?? u.city) || null;
-  const cityFee = deliveryFor(s, city);
+  // مناطق المدينة بالكيلومتر عند شريك التسعير (وسط المدينة، ضواحي…): تختار الزبونة منطقتها فيتغيّر السعر
+  const zq = await zoneQuote(db, s, city, Number(c.req.query('zone') ?? 0) || null);
+  const cityFee = zq.fee ?? deliveryFor(s, city);
   const delivery = freeShip || subtotal >= parseFloat(s.free_ship_over_lyd) ? 0 : cityFee;
   const total = Math.round((afterCoupon - pointsLyd + delivery) * 100) / 100;
   // فرق السعر بين الطريقتين ليظهر للزبونة كم توفّر بالبحري
@@ -792,7 +794,7 @@ async function cartTotals(c: Context<Env>, rows: any[], usePoints: boolean) {
   const seaSum = rows.reduce((a, r) => a + (r.sea_unit ?? r.unit) * r.qty, 0);
   const seaSaving = Math.round((airSum - seaSum) * 100) / 100;
   const shipDays = mode === 'sea' ? (s.sea_days || '30 — 45 يومًا') : (s.air_days || '12 — 18 يومًا');
-  return { s, subtotal, discount, freeShip, coupon, couponErr, pointsUsed, pointsLyd, maxPts, ptsValue, delivery, cityFee, city, total, mode, airSum, seaSum, seaSaving, shipDays };
+  return { s, subtotal, discount, freeShip, coupon, couponErr, pointsUsed, pointsLyd, maxPts, ptsValue, delivery, cityFee, city, total, mode, airSum, seaSum, seaSaving, shipDays, zones: zq.zones, zone: zq.zone };
 }
 
 // وصف عربي حقيقي للمنتجات التي وصلت من صفحة بحث بلا وصف — أفضل من سطر «لا يوجد وصف»
@@ -935,6 +937,11 @@ store.get('/checkout', async (c) => {
               <select name="city" onchange="location.href=location.pathname+'?city='+encodeURIComponent(this.value)+(/use_points=1/.test(location.search)?'&use_points=1':'')">
                 {CITIES.map(ct => <option selected={ct === (t.city ?? u.city)}>{ct}</option>)}
               </select>
+              {t.zones.length > 0 && <>
+                <label>المنطقة (بُعدها عن مركز {t.city})</label>
+                <select name="zone_id" class="zone-pick" onchange="location.href=location.pathname+'?city='+encodeURIComponent(this.form.city.value)+'&zone='+this.value+(/use_points=1/.test(location.search)?'&use_points=1':'')">
+                  {t.zones.map(z => <option value={z.id} selected={z.id === t.zone?.id}>{zoneLabel(z)} — {fmt(Math.round((z.price_lyd + parseFloat(t.s.partner_fee_margin_lyd ?? '1')) * 100) / 100)}</option>)}
+                </select></>}
               <p style="font-size:12px;color:#666;margin:4px 0 0">أجرة التوصيل إلى <b>{t.city ?? u.city ?? CITIES[0]}</b>: <b>{t.delivery === 0 ? 'مجانًا' : fmt(t.cityFee)}</b>{t.delivery === 0 && t.cityFee > 0 ? ` (مجانية لأن طلبك تجاوز ${fmt(parseFloat(t.s.free_ship_over_lyd))})` : ''}</p>
               <label>العنوان بالتفصيل</label><textarea name="address" rows={2}>{u.address ?? ''}</textarea>
               <label class="radio" style="border:0;padding:4px 0"><input type="checkbox" name="save_address" value="1" checked /> احفظي هذا العنوان في دفتر عناويني</label>
@@ -990,7 +997,9 @@ store.post('/checkout', async (c) => {
     }
   }
   // أجرة التوصيل تُحسم بمدينة العنوان المختار فعلًا، لا بالمدينة التي كانت معروضة في النموذج
-  const delivery = t.freeShip || t.subtotal >= parseFloat(t.s.free_ship_over_lyd) ? 0 : deliveryFor(t.s, ship.city);
+  // المنطقة المختارة تُقبل فقط إن كانت من مناطق مدينة العنوان نفسها، وإلا وسط المدينة
+  const zq = await zoneQuote(db, t.s, ship.city, Number(f.zone_id ?? 0) || null);
+  const delivery = t.freeShip || t.subtotal >= parseFloat(t.s.free_ship_over_lyd) ? 0 : (zq.fee ?? deliveryFor(t.s, ship.city));
   const total = Math.round((Math.max(0, t.subtotal - t.discount) - t.pointsLyd + delivery) * 100) / 100;
 
   // توزيع الطلب على شريك شحن نشط حسب نسبة التوزيع
@@ -1007,7 +1016,7 @@ store.post('/checkout', async (c) => {
   const oid = ins.meta.last_row_id as number;
   const code = orderCode(oid);
   const stmts = [
-    db.prepare('UPDATE orders SET code=? WHERE id=?').bind(code, oid),
+    db.prepare('UPDATE orders SET code=?,ship_zone_id=?,ship_zone=? WHERE id=?').bind(code, zq.zone?.id ?? null, zq.zone ? zoneLabel(zq.zone) : null, oid),
     // لقطة التكلفة لحظة البيع: تبقى ثابتة في التقارير مهما تغيّرت إعدادات التسعير لاحقًا
     ...rows.map(r => {
       const br = computePrice(t.s, r.source_price_cny ?? 0, r.weight_g ?? r.est_weight_g ?? 300, r.markup_percent, r.volume_cm3, t.mode, r.min_qty ?? 1);
@@ -1057,6 +1066,7 @@ store.get('/orders/:code', async (c) => {
     db.prepare('SELECT id,stage,url,caption,created_at FROM order_media WHERE order_id=? AND public=1 ORDER BY id').bind(o.id).all<any>(),
   ]);
   const s = await loadSettings(db);
+  const courierUrl = o.courier_ref && o.partner_id ? courierTrack((await db.prepare('SELECT courier_track_url FROM partners WHERE id=?').bind(o.partner_id).first<any>()) ?? {}, o.courier_ref) : null;
   const steps = ['paid', 'purchased', 'at_warehouse', 'shipped', 'arrived', 'ready', 'delivered'];
   const cur = ORDER_STATUS[o.status]?.step ?? 0;
   const done = new Map(events.results.map(e => [e.status, e.created_at]));
@@ -1098,6 +1108,10 @@ store.get('/orders/:code', async (c) => {
             </div>
           )}
           {paid && <div class="card-box" style="border-color:#1a9c5b"><h3>✅ مدفوع عبر {pm?.ar}</h3><p style="font-size:13px;color:#666">المرجع: {paid.provider_ref ?? paid.trx_ref} · {timeAgo(paid.updated_at)}</p></div>}
+          {o.courier_ref && o.status !== 'delivered' && <div class="card-box courier-box"><h3>🚚 طلبك مع {o.courier} للتوصيل</h3>
+            <p style="margin:0">رقم الشحنة: <b dir="ltr">{o.courier_ref}</b> · سُلِّم لهم {timeAgo(o.courier_at)}{o.ship_zone ? ` · ${o.ship_zone}` : ''}
+              {courierUrl && <> · <a href={courierUrl} target="_blank" rel="noopener">تتبّع الشحنة ↗</a></>}</p>
+            {o.courier_status === 'failed' && <p class="pd-red" style="margin:6px 0 0">تعذّر التوصيل{o.courier_note ? `: ${o.courier_note}` : ''} — سنتواصل معك لتحديد موعد جديد.</p>}</div>}
           <div class="card-box"><h3>تتبع الطلب</h3>
             <div class="track">
               {steps.map(st => { const sd = ORDER_STATUS[st]; const isDone = cur >= sd.step; const isNow = o.status === st || (st === 'paid' && ['purchasing'].includes(o.status)) || (st === 'at_warehouse' && o.status === 'consolidated') || (st === 'arrived' && o.status === 'customs'); return (

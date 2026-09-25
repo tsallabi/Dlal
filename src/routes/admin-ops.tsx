@@ -224,7 +224,7 @@ ops.get('/payments', async (c) => {
             <textarea name="branches" rows={5} dir="rtl" disabled={!canManage} style="width:100%;font-family:inherit">{s.branches ?? ''}</textarea>
             {canManage && <button class="btn sm" style="margin-top:8px">حفظ الفروع</button>}
           </form>
-          <div class="card-box"><h3>كيف يعمل التكامل</h3><ol style="font-size:13px;line-height:1.8;padding-inline-start:18px"><li>الزبونة تختار وسيلة فورية عند الدفع → هدهدي ينشئ دفعة بمرجع فريد ويطلب رابط الدفع من ماي باي.</li><li>تُحوَّل لصفحة ماي باي وتدفع.</li><li>ماي باي يرسل Webhook موقّعًا (HMAC-SHA256 في X-MyPay-Signature) → هدهدي يتحقق من التوقيع والمبلغ ويحوّل الطلب إلى "مدفوع" ويُبلغ الزبونة وشريك الشراء.</li><li>عودة المتصفح وحدها لا تؤكد الدفع — الويبهوك هو مصدر الحقيقة.</li></ol></div>
+          <div class="card-box"><h3>كيف يعمل التكامل</h3><ol style="font-size:13px;line-height:1.8;padding-inline-start:18px"><li>الزبونة تختار وسيلة فورية عند الدفع → هدهد ينشئ دفعة بمرجع فريد ويطلب رابط الدفع من ماي باي.</li><li>تُحوَّل لصفحة ماي باي وتدفع.</li><li>ماي باي يرسل Webhook موقّعًا (HMAC-SHA256 في X-MyPay-Signature) → هدهد يتحقق من التوقيع والمبلغ ويحوّل الطلب إلى "مدفوع" ويُبلغ الزبونة وشريك الشراء.</li><li>عودة المتصفح وحدها لا تؤكد الدفع — الويبهوك هو مصدر الحقيقة.</li></ol></div>
         </div>
       </div>
     </>
@@ -509,7 +509,7 @@ ops.post('/staff/:id/reject', async (c) => {
   const u = await db.prepare('SELECT id,name,added_by FROM users WHERE id=? AND pending_approval=1').bind(id).first<any>();
   if (u) {
     try { await db.prepare('DELETE FROM users WHERE id=?').bind(id).run(); } catch { await db.prepare("UPDATE users SET phone='deleted-'||id,pending_approval=0 WHERE id=?").bind(id).run(); }
-    if (u.added_by) await notify(db, u.added_by, 'لم يُقبل الموظف', `طلب إضافة ${u.name} رُفض من إدارة هدهدي`, '/partner/team');
+    if (u.added_by) await notify(db, u.added_by, 'لم يُقبل الموظف', `طلب إضافة ${u.name} رُفض من إدارة هدهد`, '/partner/team');
     await logActivity(db, c.get('user')!.id, 'staff.reject', String(id), u.name);
   }
   return c.redirect('/admin/staff?ok=1');
@@ -531,7 +531,7 @@ ops.use('/crawler*', requirePerm('catalog.manage'));
 // نسخة الإضافة المتوقَّعة. تُطابق extension/manifest.json ويحرس التطابقَ فحصٌ في e2e.
 // سببها: صاحب المشروع وجد نسختين مثبّتتين معًا («دلال» القديمة و«تالين») ورقمهما واحد
 // لأني غيّرت الشيفرة ولم أرفع الرقم — فلم يستطع التمييز بينهما، وكلتاهما تزحف معًا.
-export const EXT_VERSION = '1.7.1';
+export const EXT_VERSION = '1.7.2';
 
 // شريط تقدّم الإضافة. طلب صاحب المشروع: «ضع شريطًا يظهر التقدّم حتى أعرف أن الإضافة تعمل
 // وتجلب وتثري المنتجات». يُرسم هنا ويُعاد رسمه كل 5 ثوانٍ من /admin/crawler/live بلا إعادة تحميل.
@@ -678,7 +678,7 @@ ops.get('/crawler', async (c) => {
             <label>الاسم</label><input type="text" name="name" required placeholder="عبايات سوداء" />
             <label>النوع</label><select name="type"><option value="search">بحث بكلمة صينية في 1688</option><option value="url">رابط صفحة قائمة/قسم في 1688</option><option value="stock">فحص المخزون والأسعار للمنتجات الحالية</option></select>
             <label>الكلمة أو الرابط</label><input type="text" name="query" placeholder="黑色 长袍 女 或 https://s.1688.com/..." dir="ltr" />
-            <label>القسم في هدهدي</label><select name="category_id">{cats.map(ct => <option value={ct.id}>{ct.icon} {ct.name_ar}</option>)}</select>
+            <label>القسم في هدهد</label><select name="category_id">{cats.map(ct => <option value={ct.id}>{ct.icon} {ct.name_ar}</option>)}</select>
             <div class="inline"><div><label>عدد الصفحات</label><input type="number" name="max_pages" value="2" min="1" max="20" /></div><div><label>كل (ساعات)</label><input type="number" name="interval_hours" value="24" min="1" /></div></div>
             <div class="inline"><div><label>أقصى منتجات تُثرى/تُفحص</label><input type="number" name="max_new" value="40" min="1" /></div><div><label>جلب التفاصيل</label><select name="enrich"><option value="1">نعم (صور+مقاسات)</option><option value="0">لا (سريع)</option></select></div></div>
             <button class="btn sm" style="margin-top:10px">إضافة</button></form>
@@ -785,7 +785,7 @@ ops.get('/source', async (c) => {
       <div class="two">
         <div>
           <form method="post" action="/admin/source" class="card-box"><h3>الإعدادات</h3>
-            <p style="font-size:13px;color:#666">مع مزوّد API يعمل الاستيراد وفحص المخزون من خادم هدهدي تلقائيًا كل ليلة (Cron 03:00 UTC) بلا متصفح مفتوح. بدون مزوّد تبقى إضافة المتصفح هي الطريقة.</p>
+            <p style="font-size:13px;color:#666">مع مزوّد API يعمل الاستيراد وفحص المخزون من خادم هدهد تلقائيًا كل ليلة (Cron 03:00 UTC) بلا متصفح مفتوح. بدون مزوّد تبقى إضافة المتصفح هي الطريقة.</p>
             <label>المزوّد</label><select name="src_provider"><option value="none" selected={!s.src_provider || s.src_provider === 'none'}>— بلا (استخدم إضافة المتصفح) —</option>{Object.entries(PROVIDERS).map(([k, v]) => <option value={k} selected={s.src_provider === k}>{v.ar}</option>)}</select>
             <label>عنوان API الأساسي</label><input type="url" name="src_base_url" value={s.src_base_url ?? ''} placeholder="https://otapi.net أو https://api.tmapi.top" dir="ltr" />
             <label>المفتاح (instanceKey / apiToken)</label><input type="password" name="src_key" value={s.src_key ?? ''} dir="ltr" />

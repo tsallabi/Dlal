@@ -118,7 +118,7 @@ an.get('/analytics', async (c) => {
           <div class="tbl-wrap"><table class="tbl"><tr><th>الزبونة</th><th>المدينة</th><th>في السلة</th><th>القيمة</th><th>آخر إضافة</th><th>تذكير</th></tr>
             {ab.map(r => <tr><td><a href={`/admin/customers/${r.id}`}>{r.name}</a><br /><small dir="ltr">{r.phone}</small></td><td>{r.city ?? '—'}</td><td>{r.items} منتج</td><td>{fmt(r.val)}</td><td>{r.last_add ? timeAgo(r.last_add) : '—'}</td>
               <td class="inline" style="gap:4px"><form method="post" action={`/admin/analytics/remind/${r.id}`}><button class="btn sm ghost">إشعار</button></form>
-                <a class="btn sm ok" target="_blank" rel="noopener" href={wa(r.phone, `مرحبًا ${r.name} 👋 في سلتك على هدهدي ${r.items} منتج بانتظارك بقيمة ${fmt(r.val)}. أكملي طلبك الآن ليصلك بسرعة: https://hudhude.com/cart`)}>واتساب</a>
+                <a class="btn sm ok" target="_blank" rel="noopener" href={wa(r.phone, `مرحبًا ${r.name} 👋 في سلتك على هدهد ${r.items} منتج بانتظارك بقيمة ${fmt(r.val)}. أكملي طلبك الآن ليصلك بسرعة: https://hudhude.com/cart`)}>واتساب</a>
                 {r.reminded && <small>ذُكّرت {timeAgo(r.reminded)}</small>}</td></tr>)}</table></div>}
       </div>
 
@@ -127,7 +127,7 @@ an.get('/analytics', async (c) => {
           <div class="tbl-wrap"><table class="tbl"><tr><th>الطلب</th><th>الزبونة</th><th>المبلغ</th><th>الطريقة</th><th>منذ</th><th>تذكير</th></tr>
             {up.map(r => <tr><td><a href={`/admin/orders/${r.code}`}>{r.code}</a></td><td>{r.name}<br /><small dir="ltr">{r.phone}</small></td><td>{fmt(r.total_lyd)}</td><td>{r.payment_method}</td><td>{timeAgo(r.created_at)}</td>
               <td class="inline" style="gap:4px"><form method="post" action={`/admin/analytics/remind/${r.uid}?order=${r.code}`}><button class="btn sm ghost">إشعار</button></form>
-                <a class="btn sm ok" target="_blank" rel="noopener" href={wa(r.phone, `مرحبًا ${r.name} 👋 طلبك ${r.code} على هدهدي بقيمة ${fmt(r.total_lyd)} ينتظر الدفع. ادفعي الآن ليبدأ شراؤه من الصين فورًا: https://hudhude.com/orders/${r.code}`)}>واتساب</a>
+                <a class="btn sm ok" target="_blank" rel="noopener" href={wa(r.phone, `مرحبًا ${r.name} 👋 طلبك ${r.code} على هدهد بقيمة ${fmt(r.total_lyd)} ينتظر الدفع. ادفعي الآن ليبدأ شراؤه من الصين فورًا: https://hudhude.com/orders/${r.code}`)}>واتساب</a>
                 {r.reminded && <small>ذُكّرت {timeAgo(r.reminded)}</small>}</td></tr>)}</table></div>}
       </div>
 

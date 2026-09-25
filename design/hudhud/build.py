@@ -23,7 +23,7 @@ STYLE = f"""
   @media (prefers-reduced-motion:reduce){{.f,.head,.tail,.body{{animation:none}}}}
 </style>"""
 def svg(anim=True, size='', bust=False):
-    out = f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 200" {size} role="img" aria-label="هدهدي HUDHUDE">{STYLE if anim else ''}
+    out = f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 200" {size} role="img" aria-label="هدهد HUDHUDE">{STYLE if anim else ''}
 <defs>
   <path id="fshape" d="{feather}"/>
   <clipPath id="fclip"><use href="#fshape"/></clipPath>
@@ -77,14 +77,14 @@ STATIC = svg(False)
 def lockup(kind='ar', dark=False, h=76):
     ink = '#FFFFFF' if dark else '#1C1A19'
     if kind == 'ar':
-        text = f'<span class="t"><b style="color:{ink}">هدهدي <em>الصين</em></b><i style="color:{ink}">HUDHUDE</i></span>'
+        text = f'<span class="t"><b style="color:{ink}">هدهد <em>الصين</em></b><i style="color:{ink}">HUDHUDE</i></span>'
     else:
-        text = f'<span class="t"><b class="lat" style="color:{ink}">HUDHUDE</b><i class="ar" style="color:{ink}">هدهدي <em>الصين</em></i></span>'
+        text = f'<span class="t"><b class="lat" style="color:{ink}">HUDHUDE</b><i class="ar" style="color:{ink}">هدهد <em>الصين</em></i></span>'
     return f'<div class="lockup" style="--h:{h}px">{ANIM}{text}</div>'
 
 html = f'''<!doctype html>
 <html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>شعار هدهدي</title>
+<title>شعار هدهد</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap">
 <style>
@@ -121,7 +121,7 @@ h1{{font-size:22px;margin:0 0 4px}} h2{{font-size:16px;margin:0 0 12px;color:var
 .sw i{{width:22px;height:22px;border-radius:6px;border:1px solid var(--line);display:inline-block}}
 .note{{font-size:13px;color:var(--mut);margin:10px 0 0}}
 </style></head><body><div class="wrap">
-<h1>شعار هدهدي — HUDHUDE</h1>
+<h1>شعار هدهد — HUDHUDE</h1>
 <p class="lead">الهدهد يطأطئ رأسه ليلتقط من الأرض والعُرف مطويّ، ثم يرفع عُرفه مروحةً، ويهزّ ذيله. الدورة ٤ ثوانٍ وتتكرر. من يطلب في جهازه تقليل الحركة يرى الشعار ثابتًا والعُرف مفتوحًا.</p>
 
 <div class="card"><h2>الشعار متحركًا</h2><div class="hero">{ANIM}</div></div>
@@ -129,7 +129,7 @@ h1{{font-size:22px;margin:0 0 4px}} h2{{font-size:16px;margin:0 0 12px;color:var
 <div class="card"><h2>الخيار ١ — العربية أولًا (كترتيب الشعار الحالي: الاسم كبيرًا وتحته اللاتيني)</h2>
 <div class="grid"><div class="pane light">{lockup('ar')}</div><div class="pane dark">{lockup('ar', True)}</div></div></div>
 
-<div class="card"><h2>الخيار ٢ — HUDHUDE أولًا وتحته «هدهدي»</h2>
+<div class="card"><h2>الخيار ٢ — HUDHUDE أولًا وتحته «هدهد»</h2>
 <div class="grid"><div class="pane light">{lockup('lat')}</div><div class="pane dark">{lockup('lat', True)}</div></div></div>
 
 <div class="card"><h2>الأيقونة الصغيرة — تبويب المتصفح وشاشة الجوال</h2>
@@ -138,7 +138,7 @@ h1{{font-size:22px;margin:0 0 4px}} h2{{font-size:16px;margin:0 0 12px;color:var
 <figure>{icon().replace('<svg ', '<svg width="64" height="64" ')}<figcaption>٦٤</figcaption></figure>
 <figure>{icon().replace('<svg ', '<svg width="32" height="32" ')}<figcaption>٣٢</figcaption></figure>
 <figure>{icon().replace('<svg ', '<svg width="16" height="16" ')}<figcaption>١٦</figcaption></figure>
-<figure><span class="tab">{icon()} هدهدي | HUDHUDE</span><figcaption>في تبويب كروم</figcaption></figure>
+<figure><span class="tab">{icon()} هدهد | HUDHUDE</span><figcaption>في تبويب كروم</figcaption></figure>
 </div></div>
 
 <div class="card"><h2>الألوان</h2><div class="sw">

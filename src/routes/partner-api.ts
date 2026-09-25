@@ -5,7 +5,7 @@ import type { Context } from 'hono';
 import type { Env } from '../types';
 import { PARTNER_FLOW } from '../types';
 import { setOrderStatus } from '../lib/orders';
-import { saveMedia, b64ToBytes, createInvoice } from '../lib/partner';
+import { saveMedia, b64ToBytes, createInvoice, courierHandover, courierResult } from '../lib/partner';
 
 const papi = new Hono<Env>();
 
@@ -56,6 +56,21 @@ papi.post('/orders/:code/invoices', async (c) => {
   const stage = PARTNER_FLOW.includes(String(b.stage)) ? String(b.stage) : o.status;
   const r = await createInvoice(c.env.DB, o.id, p.id, stage, Array.isArray(b.lines) ? b.lines : [], b.note ? String(b.note).slice(0, 500) : null, null);
   return c.json(r, r.ok ? 200 : 400);
+});
+
+// التوصيل داخل ليبيا من نظام الشريك: {"courier":"أميال","tracking":"AM123"} للتسليم، أو {"result":"delivered|failed","note":""} للنتيجة
+papi.post('/orders/:code/courier', async (c) => {
+  const p = await partnerOf(c); if (!p) return unauth(c);
+  const o = await orderOf(c, p.id); if (!o) return notFound(c);
+  const b = await c.req.json<{ courier?: string; tracking?: string; result?: string; note?: string }>().catch(() => ({} as any));
+  if (b.result === 'delivered' || b.result === 'failed') {
+    const ok = await courierResult(c.env.DB, o.code, b.result, b.note ? String(b.note).slice(0, 200) : null, null);
+    return ok ? c.json({ ok: true, code: o.code, result: b.result }) : c.json({ ok: false, error: 'الطلب ليس مع شركة توصيل' }, 400);
+  }
+  const ref = String(b.tracking ?? '').trim().slice(0, 60);
+  if (!ref) return c.json({ ok: false, error: 'tracking مطلوب' }, 400);
+  const ok = await courierHandover(c.env.DB, o.code, String(b.courier ?? 'أميال').slice(0, 40), ref, null);
+  return ok ? c.json({ ok: true, code: o.code, tracking: ref }) : c.json({ ok: false, error: 'الطلب ليس «جاهزًا للتسليم»' }, 400);
 });
 
 export default papi;

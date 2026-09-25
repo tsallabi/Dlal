@@ -1041,3 +1041,8 @@ body{background:#fff}
 .an .an-conv{position:absolute;bottom:-2px;inset-inline-start:138px;font-size:11px;color:#777}
 .an .pd-bl small{color:#8c2121;font-weight:600}
 .an .pd-tile{cursor:default}.an a.pd-tile[href]{cursor:pointer}
+/* التوصيل داخل ليبيا */
+.courier-tbl td{vertical-align:top}
+.courier-box{border-color:#b05a20}
+.zone-pick{margin-top:4px}
+.courier-tbl td[dir=ltr]{white-space:nowrap}

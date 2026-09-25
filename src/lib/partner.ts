@@ -2,6 +2,8 @@
 // طلب صاحب المشروع (٢٤/٠٩/٢٦): الطلب يذهب إلى شركة الشحن مباشرة بعد تأكيد الدفع، والشريك يضع أسعاره
 // بنفسه، ولنا «دينار على كل بند ينفّذه» + ٣٥٪ على سعر البضاعة لا تظهر له.
 import type { Settings } from './pricing';
+import { setOrderStatus } from './orders';
+import { notify } from './db';
 
 export type PartnerRates = {
   fee_commission_pct: number;   // عمولة الشراء % من سعر البضاعة
@@ -44,7 +46,11 @@ export async function syncPricingPartner(db: D1Database): Promise<boolean> {
 
 // ما يستحقه الشريك عن الطلب بأسعاره هو (بلا رسم المنصة ولا ربحنا): البضاعة يدفعها للمورد + خدماته
 export async function partnerDues(db: D1Database, orderId: number, p: PartnerRates) {
-  const o = await db.prepare('SELECT ship_method FROM orders WHERE id=?').bind(orderId).first<{ ship_method: string }>();
+  const o = await db.prepare('SELECT ship_method,ship_city,ship_zone_id FROM orders WHERE id=?').bind(orderId).first<{ ship_method: string; ship_city: string; ship_zone_id: number | null }>();
+  // التوصيل داخل ليبيا بسعر منطقة الزبونة عند هذا الشريك إن وضع مناطق لمدينتها، وإلا سعره الموحّد
+  const pid = (p as any).id as number | undefined;
+  const zone = pid ? await db.prepare('SELECT price_lyd FROM partner_zones WHERE partner_id=? AND (id=? OR city=?) ORDER BY (id=?) DESC, km_from LIMIT 1')
+    .bind(pid, o?.ship_zone_id ?? 0, o?.ship_city ?? '', o?.ship_zone_id ?? 0).first<{ price_lyd: number }>() : null;
   const { results } = await db.prepare(`SELECT oi.qty,oi.unit_goods_lyd,COALESCE(pr.weight_g,c.est_weight_g,300) w
      FROM order_items oi LEFT JOIN products pr ON pr.id=oi.product_id LEFT JOIN categories c ON c.id=pr.category_id WHERE oi.order_id=?`).bind(orderId).all<any>();
   const sea = o?.ship_method === 'sea';
@@ -56,7 +62,7 @@ export async function partnerDues(db: D1Database, orderId: number, p: PartnerRat
     const k = (r.w / 1000) * r.qty; kg += k; shipping += k * perKg;
   }
   const r2 = (v: number) => Math.round(v * 100) / 100;
-  const out = { method: sea ? 'sea' : 'air', kg: r2(kg), goods: r2(goods), commission: r2(commission), domestic: r2(domestic), shipping: r2(shipping), delivery: r2(p.fee_delivery_lyd) } as any;
+  const out = { method: sea ? 'sea' : 'air', kg: r2(kg), goods: r2(goods), commission: r2(commission), domestic: r2(domestic), shipping: r2(shipping), delivery: r2(zone ? zone.price_lyd : p.fee_delivery_lyd) } as any;
   out.total = r2(out.goods + out.commission + out.domestic + out.shipping + out.delivery);
   out.rates = Object.fromEntries(RATE_KEYS.map(k => [k, p[k]]));
   return out;
@@ -250,4 +256,72 @@ export async function partnerBalance(db: D1Database, pid: number) {
   const r2 = (v: number) => Math.round(v * 100) / 100;
   const dues = (d.results[0] as any).total, paid = (l.results[0] as any).paid, got = (l.results[0] as any).got, codv = (cod.results[0] as any).v;
   return { dues: r2(dues), paid: r2(paid), toPartner: r2(dues - paid), cod: r2(codv), got: r2(got), toUs: r2(codv - got), net: r2(dues - paid - (codv - got)) };
+}
+
+// ---------- التوصيل داخل ليبيا: مناطق كل مدينة بالكيلومتر، وتسليم الطرد لشركة التوصيل (أميال) ----------
+export type Zone = { id: number; city: string; zone: string; km_from: number; km_to: number; price_lyd: number };
+export async function zonesFor(db: D1Database, partnerId: number, city?: string | null): Promise<Zone[]> {
+  if (!partnerId) return [];
+  const { results } = await db.prepare(`SELECT id,city,zone,km_from,km_to,price_lyd FROM partner_zones WHERE partner_id=? ${city ? 'AND city=?' : ''} ORDER BY city,km_from`)
+    .bind(...(city ? [partnerId, city] : [partnerId])).all<Zone>();
+  return results;
+}
+export const zoneLabel = (z: Zone) => `${z.zone} (${z.km_from}–${z.km_to} كم من المركز)`;
+// أجرة التوصيل للزبونة: منطقة المدينة عند «شريك التسعير» + رسم المنصة، أو null فيُستعمل التسعير القديم
+export async function zoneQuote(db: D1Database, s: Settings, city: string | null, zoneId?: number | null) {
+  const pid = pricingPartnerId(s);
+  const zones = city ? await zonesFor(db, pid, city) : [];
+  if (!zones.length) return { zones, zone: null as Zone | null, fee: null as number | null };
+  const zone = zones.find(z => z.id === Number(zoneId)) ?? zones[0];   // بلا اختيار: وسط المدينة (الأقرب)
+  return { zones, zone, fee: Math.round((zone.price_lyd + feeMargin(s)) * 100) / 100 };
+}
+
+export const courierTrack = (p: { courier_track_url?: string | null }, ref?: string | null) =>
+  p.courier_track_url && ref ? p.courier_track_url.replace('{code}', encodeURIComponent(ref)) : null;
+
+// إرسال الطرد إلى واجهة شركة التوصيل (إن وضع الشريك رابطها): JSON بالمستلمة والمدينة والمنطقة والمبلغ المطلوب تحصيله.
+// لا نعرف صيغة أميال (موقعها لا ينشر واجهة برمجية): نقبل رقم التتبع من أي حقل شائع في الرد، ونحفظ الرد كما هو.
+export async function courierCreate(db: D1Database, p: any, orderId: number): Promise<{ ok: boolean; ref?: string; error?: string }> {
+  if (!p.courier_api_url) return { ok: false, error: 'لا رابط API لشركة التوصيل' };
+  const o = await db.prepare('SELECT o.*,(SELECT COUNT(*) FROM order_items WHERE order_id=o.id) items FROM orders o WHERE o.id=?').bind(orderId).first<any>();
+  if (!o) return { ok: false, error: 'الطلب غير موجود' };
+  const cod = o.payment_method === 'cod_deposit' ? Math.round(o.total_lyd * 0.7 * 100) / 100 : 0;
+  const body = JSON.stringify({ reference: o.code, receiver: { name: o.ship_name, phone: o.ship_phone, city: o.ship_city, area: o.ship_zone, address: o.ship_address },
+    pieces: o.items, cod_amount: cod, note: o.note ?? '' });
+  try {
+    const r = await fetch(p.courier_api_url, { method: 'POST', body, signal: AbortSignal.timeout(20000),
+      headers: { 'content-type': 'application/json', ...(p.courier_api_key ? { authorization: `Bearer ${p.courier_api_key}` } : {}) } });
+    const text = (await r.text()).slice(0, 1000);
+    let j: any = {}; try { j = JSON.parse(text); } catch { /* ليس JSON */ }
+    const ref = String(j.tracking ?? j.tracking_number ?? j.code ?? j.shipment_id ?? j.id ?? j.data?.tracking ?? j.data?.code ?? j.data?.id ?? '').trim();
+    if (!r.ok || !ref) return { ok: false, error: `HTTP ${r.status}: ${text.slice(0, 160)}` };
+    return { ok: true, ref };
+  } catch (e: any) { return { ok: false, error: String(e?.message ?? e).slice(0, 200) }; }
+}
+
+// تسليم الطرد لشركة التوصيل: الحالة تبقى «جاهز للتسليم» وتُسجَّل الخطوة في سجل الطلب وتُبلَّغ الزبونة برقم الشحنة
+export async function courierHandover(db: D1Database, code: string, courier: string, ref: string, byUserId: number | null) {
+  const o = await db.prepare("SELECT id,user_id FROM orders WHERE code=? AND status='ready'").bind(code).first<{ id: number; user_id: number }>();
+  if (!o) return false;
+  await db.batch([
+    db.prepare("UPDATE orders SET courier=?,courier_ref=?,courier_status='with_courier',courier_at=datetime('now'),courier_note=NULL,updated_at=datetime('now') WHERE id=?").bind(courier, ref, o.id),
+    db.prepare("INSERT INTO order_events(order_id,status,note,by_user_id) VALUES(?,'ready',?,?)").bind(o.id, `سُلِّم لـ${courier} للتوصيل — رقم الشحنة ${ref}`, byUserId),
+  ]);
+  await notify(db, o.user_id, `طلبك ${code} في الطريق إليك 🚚`, `سلّمناه لـ${courier} للتوصيل داخل ليبيا — رقم الشحنة ${ref}.`, `/orders/${code}`);
+  return true;
+}
+// نتيجة شركة التوصيل: وصل ⟵ «تم التسليم» (بنقاطه)، تعذّر ⟵ يعود لقائمة الجاهز مع السبب
+export async function courierResult(db: D1Database, code: string, result: 'delivered' | 'failed', note: string | null, byUserId: number | null) {
+  const o = await db.prepare("SELECT id,courier FROM orders WHERE code=? AND courier_status='with_courier'").bind(code).first<{ id: number; courier: string }>();
+  if (!o) return false;
+  if (result === 'delivered') {
+    await db.prepare("UPDATE orders SET courier_status='delivered' WHERE id=?").bind(o.id).run();
+    await setOrderStatus(db, code, 'delivered', byUserId, `سلّمه ${o.courier} للزبونة`);
+  } else {
+    await db.batch([
+      db.prepare("UPDATE orders SET courier_status='failed',courier_note=?,updated_at=datetime('now') WHERE id=?").bind(note, o.id),
+      db.prepare("INSERT INTO order_events(order_id,status,note,by_user_id) VALUES(?,'ready',?,?)").bind(o.id, `تعذّر التوصيل عبر ${o.courier}${note ? ' — ' + note : ''}`, byUserId),
+    ]);
+  }
+  return true;
 }

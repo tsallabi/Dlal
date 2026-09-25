@@ -27,7 +27,7 @@ feeds.get('/meta.csv', async (c) => {
     const title = String(p.title_ar).slice(0, 150);
     const desc = (p.description_ar && !hasCJK(p.description_ar) ? String(p.description_ar) : title) + ' — سعر نهائي بالدينار الليبي شامل الشحن من الصين والجمارك.';
     lines.push([p.id, title, desc.slice(0, 5000), p.in_stock ? 'in stock' : 'out of stock', 'new', `${Number(p.price_lyd).toFixed(2)} LYD`,
-      `${origin}/p/${p.slug}?utm_source=facebook&utm_medium=catalog`, abs(imgs[0]), imgs.slice(1).map(abs).join(','), 'هدهدي HUDHUDE', p.cat ?? ''].map(csvCell).join(','));
+      `${origin}/p/${p.slug}?utm_source=facebook&utm_medium=catalog`, abs(imgs[0]), imgs.slice(1).map(abs).join(','), 'هدهد HUDHUDE', p.cat ?? ''].map(csvCell).join(','));
   }
   const res = new Response(lines.join('\n'), { headers: { 'content-type': 'text/csv; charset=utf-8', 'cache-control': 'public, max-age=21600' } });
   c.executionCtx?.waitUntil?.(caches.default?.put(cacheKey, res.clone()).catch(() => {}) ?? Promise.resolve());
