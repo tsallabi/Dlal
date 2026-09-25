@@ -20,7 +20,7 @@ binding = "MEDIA"
 bucket_name = "hudhude-media"
 
 [vars]
-SITE_NAME = "هدهدي"
+SITE_NAME = "هدهد"
 SITE_URL = "https://dlal.ly"
 DEFAULT_CURRENCY = "LYD"
 
