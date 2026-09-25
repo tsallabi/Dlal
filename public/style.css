@@ -1374,6 +1374,48 @@ body:not(.admin-body) .crumbs a{color:#8a6a52}
   body:not(.admin-body) .fs-clear{border:1.5px solid #e4cdb9;color:var(--brand);border-radius:999px}
   body:not(.admin-body) .fs-done{background:var(--brand-grad);border-radius:999px;box-shadow:0 6px 16px rgba(176,90,32,.3)}
 }
+/* ===== صفحة المنتج والسلة والدفع — ٢٥/٠٩/٢٦ («طبّق نفس التصميم على صفحة المنتج والسلة والدفع») ===== */
+body:not(.admin-body) .gallery .main{border-radius:24px;box-shadow:var(--sh)}
+body:not(.admin-body) .gallery .main .tag{border-radius:999px;background:var(--brand-grad);padding:4px 10px}
+body:not(.admin-body) .gallery .thumbs img{border-radius:14px;border:2px solid #fff;box-shadow:0 3px 10px rgba(110,60,20,.10)}
+body:not(.admin-body) .gallery .thumbs img.on{border-color:var(--brand)}
+body:not(.admin-body) .pd h1{font-size:22px;font-weight:800;line-height:1.45}
+body:not(.admin-body) .price{font-size:32px}
+body:not(.admin-body) .price-note{background:#fff;border-radius:14px;padding:10px 12px;box-shadow:0 2px 10px rgba(110,60,20,.05)}
+body:not(.admin-body) .fit{background:var(--tint);color:#6d5a4a;border-radius:999px;padding:8px 14px;display:inline-block}
+body:not(.admin-body) .moq-note,body:not(.admin-body) .kind-note{border-radius:14px;padding:10px 12px}
+body:not(.admin-body) .qty{border:1.5px solid #eadfd5;border-radius:999px;background:#fff;overflow:hidden;align-items:center;padding:2px}
+body:not(.admin-body) .qty button{width:36px;height:36px;border-radius:50%;background:var(--tint);color:var(--brand);font-size:18px;font-weight:800}
+body:not(.admin-body) .qty button:hover{background:var(--brand-grad);color:#fff}
+body:not(.admin-body) .qty input{border:0;border-radius:0;box-shadow:none;background:transparent;width:52px;font-weight:800}
+body:not(.admin-body) .qty input:focus{box-shadow:none}
+/* أقسام «الوصف» و«دليل المقاسات» و«الشحن والإرجاع» تحت المنتج: بطاقات تُفتح بـ«+» مثل الأسئلة الشائعة */
+body:not(.admin-body) .pd details{background:#fff;border-radius:16px;box-shadow:0 4px 16px rgba(110,60,20,.05);border:1px solid var(--edge);padding:0 16px;margin-top:10px}
+body:not(.admin-body) .pd details>summary{cursor:pointer;list-style:none;padding:14px 0;font-weight:800;display:flex;justify-content:space-between;align-items:center}
+body:not(.admin-body) .pd details>summary::-webkit-details-marker{display:none}
+body:not(.admin-body) .pd details>summary::after{content:"+";color:var(--brand);font-size:22px;font-weight:400;line-height:1}
+body:not(.admin-body) .pd details[open]>summary::after{content:"−"}
+body:not(.admin-body) .pd details>:last-child{padding-bottom:14px}
+body:not(.admin-body) .size-guide table{border-collapse:separate;border-spacing:0;border:1px solid var(--edge);border-radius:14px;overflow:hidden}
+body:not(.admin-body) .size-guide td,body:not(.admin-body) .size-guide th{border:0;border-bottom:1px solid #f3ece6;padding:7px 8px}
+body:not(.admin-body) .size-guide th{background:var(--tint);color:#6d5a4a}
+body:not(.admin-body) .review{border-bottom:1px solid #f3ece6;padding:12px 0}
+body:not(.admin-body) .review .rv-h .status,body:not(.admin-body) .review .tag{border-radius:999px}
+/* السلة: القائمة بطاقة بيضاء، الكوبون بطاقة بحدّ متقطع قرفي */
+body:not(.admin-body) .two>div:has(>.cart-row){background:#fff;border-radius:var(--r-l);box-shadow:var(--sh);padding:6px 18px;align-self:start}
+body:not(.admin-body) .cart-row{border-bottom:1px solid #f3ece6}
+body:not(.admin-body) .two>div>.cart-row:last-child{border-bottom:0}
+body:not(.admin-body) .cart-row img{box-shadow:0 3px 10px rgba(110,60,20,.08)}
+body:not(.admin-body) .coupon-box{border:1.5px dashed #e0bfa3;border-radius:18px;padding:12px 14px;background:#fffdfb;flex-wrap:nowrap;box-shadow:0 2px 10px rgba(110,60,20,.04)}
+body:not(.admin-body) .coupon-box:has(a){flex-wrap:wrap}
+body:not(.admin-body) .coupon-box input{flex:1 1 140px;min-width:0}
+body:not(.admin-body) .coupon-box .btn{flex:none}
+/* الدفع: طرق الدفع بمربّع أيقونة، والفروع بطاقة دافئة */
+body:not(.admin-body) .pm-i{width:42px;height:42px;border-radius:13px;display:grid;place-items:center;background:var(--tint);color:var(--brand);flex:none}
+body:not(.admin-body) .radio.pm:has(input:checked) .pm-i{background:var(--brand-grad);color:#fff;box-shadow:0 4px 12px rgba(176,90,32,.28)}
+body:not(.admin-body) .pm-tag{border-radius:999px}
+body:not(.admin-body) .branches{background:var(--tint);border:0;border-radius:16px}
+body:not(.admin-body) .zone-pick{border-radius:12px}
 /* الحساب */
 body:not(.admin-body) .acct-side a{border-radius:12px}
 body:not(.admin-body) .acct-side a.on{background:var(--brand-grad);color:#fff;box-shadow:0 6px 14px rgba(176,90,32,.28)}

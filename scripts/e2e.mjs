@@ -844,6 +844,14 @@ await shot(page, 'cart-ship-sea');
 // الطلب يحفظ الطريقة ويعرضها في التتبع
 await page.goto(BASE + '/checkout');
 expect(await page.locator('.shipsel label.on').textContent().then(t => t.includes('بحري')), 'صفحة الدفع تتذكر اختيار البحري');
+// الكوبون وطريقة الشحن داخل صفحة الدفع: كانا نموذجين متداخلين في نموذج الطلب، فالمتصفح أسقط نموذج الكوبون
+// وصار «تطبيق» يرسل الطلب نفسه بلا خصم (٢٥/٠٩/٢٦). الآن نموذجان مستقلان مربوطان بالسمة form
+expect(await page.locator('input[name=code]').evaluate(el => el.form?.getAttribute('action')) === '/cart/coupon', 'حقل الكوبون في صفحة الدفع ينتمي لنموذج الكوبون لا لنموذج الطلب');
+await page.fill('.coupon-box input[name=code]', 'NOPE' + String(Date.now()).slice(-4)); await page.click('.coupon-box button:has-text("تطبيق")'); await page.waitForLoadState('networkidle');
+expect(new URL(page.url()).pathname === '/checkout' && !/DL-\d{4}/.test(page.url()) && await page.locator('.coupon-box .flash.err').isVisible(), '«تطبيق» الكوبون في صفحة الدفع يعود للدفع برسالة، ولا يُنشئ طلبًا');
+await page.check('.shipsel input[value=air]'); await page.waitForLoadState('networkidle');
+expect(new URL(page.url()).pathname === '/checkout' && (await page.locator('.shipsel label.on').textContent()).includes('جوي'), 'تغيير طريقة الشحن في صفحة الدفع يبقى في الدفع ويُحفظ');
+await page.check('.shipsel input[value=sea]'); await page.waitForLoadState('networkidle');
 await page.check('input[value=mypay_sadad]');
 await page.click('button:has-text("تأكيد الطلب")'); await page.waitForLoadState('networkidle');
 const seaOrder = page.url().match(/DL-\d{4}-\d{6}/);

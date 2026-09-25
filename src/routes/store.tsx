@@ -224,6 +224,8 @@ store.get('/how', async (c) => {
 
 // ---------- تتبّع الطلب برقمه (بأسلوب «تتبع شحنتك» في أميال، ٢٥/٠٩/٢٦) ----------
 // بلا تسجيل دخول: رقم الطلب + آخر 4 أرقام من هاتف التوصيل، فلا يرى أحد طلب غيره برقم يخمّنه.
+// أيقونة كل طريقة دفع في صفحة الدفع (بدل الإيموجي 💳📱📲📳🏪 في PAYMENT_METHODS التي يرسمها كل جهاز بشكل)
+const PM_IC: Record<string, string> = { mypay_moamalat: 'card', mypay_sadad: 'phone', mypay_edfali: 'wallet', mypay_mobicash: 'phone', cash_branch: 'store', transfer: 'box', cod_deposit: 'truck' };
 const TRACK_STEPS: [string, string, string][] = [
   ['paid', 'card', 'استلمنا طلبك ودفعته'], ['purchased', 'cart', 'اشتريناه من المصنع في الصين'], ['at_warehouse', 'box', 'وصل مخزننا في الصين وفحصناه'],
   ['shipped', 'plane', 'في الطريق إلى ليبيا'], ['arrived', 'pin', 'وصل ليبيا وخرج من الجمارك'], ['ready', 'truck', 'مع شركة التوصيل في طريقه إليك'], ['delivered', 'check', 'تم التسليم'],
@@ -929,33 +931,36 @@ function autoDesc(p: any, s: any, rates: { days: string; ar: string }, colors: s
 }
 
 // اختيار طريقة الشحن من الصين: جوي سريع أو بحري أرخص
-const ShipPicker = ({ t, back }: any) => {
+// fid: داخل نموذج الدفع لا يجوز نموذج متداخل (المتصفح يُسقط وسم <form> الداخلي فتنتمي الحقول لنموذج الطلب).
+// فالأدوات تُكتب في مكانها وتُربط بنموذج مستقل بعد نموذج الطلب عبر السمة form="…" — كان «تطبيق» الكوبون في صفحة الدفع يرسل الطلب نفسه
+const ShipPicker = ({ t, back, fid }: any) => {
+  const Box = (fid ? 'div' : 'form') as any; const own = fid ? { form: fid } : {};
   if (!seaOn(t.s)) return null;
   const air = t.s.air_days || '12 — 18 يومًا';
   const sea = t.s.sea_days || '30 — 45 يومًا';
   return (
-    <form method="post" action="/cart/ship" class="card-box" style="margin-bottom:14px">
-      <input type="hidden" name="back" value={back} />
+    <Box {...(fid ? {} : { method: 'post', action: '/cart/ship' })} class="card-box" style="margin-bottom:14px">
+      <input type="hidden" name="back" value={back} {...own} />
       <h3 style="margin:0 0 4px;font-size:16px">طريقة الشحن من الصين</h3>
       <p style="font-size:12.5px;color:#767676;margin:0 0 12px">السعر المعروض لكل منتج يشمل الشحن — اختر الطريقة ويتغيّر السعر تلقائيًا.</p>
       <div class="shipsel">
         <label class={t.mode === 'air' ? 'on' : ''}>
-          <input type="radio" name="mode" value="air" checked={t.mode === 'air'} onchange="this.form.submit()" />
+          <input type="radio" name="mode" value="air" checked={t.mode === 'air'} onchange="this.form.submit()" {...own} />
           <div>
             <div class="t"><Ic n="plane" s={18} /> شحن جوي <span class="fast">الأسرع</span></div>
             <div class="d">يصل خلال <b>{air}</b> · إجمالي السلة {fmt(t.airSum)}</div>
           </div>
         </label>
         <label class={t.mode === 'sea' ? 'on' : ''}>
-          <input type="radio" name="mode" value="sea" checked={t.mode === 'sea'} onchange="this.form.submit()" />
+          <input type="radio" name="mode" value="sea" checked={t.mode === 'sea'} onchange="this.form.submit()" {...own} />
           <div>
             <div class="t"><Ic n="box" s={18} /> شحن بحري {t.seaSaving > 0 && <span class="save">وفّر {fmt(t.seaSaving)}</span>}</div>
             <div class="d">يصل خلال <b>{sea}</b> · إجمالي السلة {fmt(t.seaSum)}</div>
           </div>
         </label>
       </div>
-      <noscript><button class="btn sm" type="submit">تطبيق</button></noscript>
-    </form>
+      <noscript><button class="btn sm" type="submit" {...own}>تطبيق</button></noscript>
+    </Box>
   );
 };
 
@@ -974,15 +979,18 @@ const Summary = ({ t, u, rows, showItems, usePointsToggle }: any) => (
   </div>
 );
 
-const CouponBox = ({ c, t, back }: { c: Context<Env>; t: any; back: string }) => (
-  <form method="post" action="/cart/coupon" class="coupon-box">
-    <input type="hidden" name="back" value={back} />
-    {t.coupon ? <><span>🎟️ الكوبون <b>{t.coupon.code}</b> مُطبَّق</span><button class="btn sm ghost" name="action" value="remove">إزالة</button></>
-      : <><input type="text" name="code" placeholder="كود الكوبون" value={c.req.query('cerr') ? '' : ''} /><button class="btn sm">تطبيق</button><a href="/account/coupons" style="font-size:12px;color:var(--brand)">كوبوناتي</a></>}
+const CouponBox = ({ c, t, back, fid }: { c: Context<Env>; t: any; back: string; fid?: string }) => {
+  const Box = (fid ? 'div' : 'form') as any; const own = fid ? { form: fid } : {};
+  return (
+  <Box {...(fid ? {} : { method: 'post', action: '/cart/coupon' })} class="coupon-box">
+    <input type="hidden" name="back" value={back} {...own} />
+    {t.coupon ? <><span><Ic n="tag" s={16} /> الكوبون <b>{t.coupon.code}</b> مُطبَّق</span><button class="btn sm ghost" name="action" value="remove" {...own}>إزالة</button></>
+      : <><input type="text" name="code" placeholder="كود الكوبون" value={c.req.query('cerr') ? '' : ''} {...own} /><button class="btn sm" {...own}>تطبيق</button><a href="/account/coupons" style="font-size:12px;color:var(--brand)">كوبوناتي</a></>}
     {c.req.query('cerr') && <div class="flash err" style="margin:6px 0 0;padding:6px 10px">{c.req.query('cerr')}</div>}
     {t.couponErr && <div class="flash err" style="margin:6px 0 0;padding:6px 10px">{t.couponErr}</div>}
-  </form>
-);
+  </Box>
+  );
+};
 
 store.get('/cart', async (c) => {
   const u = c.get('user');
@@ -1068,7 +1076,7 @@ store.get('/checkout', async (c) => {
           <div class="card-box"><h3><Ic n="card" s={20} /> طريقة الدفع</h3>
             <div class="pm-list">
               {Object.entries(PAYMENT_METHODS).filter(([, v]) => !v.hidden && (!v.online || mp.gateways.includes(v.gateway!))).map(([k, v]) => (
-                <label class={`radio pm ${v.online ? 'online' : ''}`}><input type="radio" name="payment_method" value={k} checked={k === pm} required /> <span class="pm-i">{v.icon}</span><span><b>{v.ar}</b>{v.online && <i class="pm-tag">فوري عبر MyPay</i>}<br /><small>{v.desc}</small></span></label>
+                <label class={`radio pm ${v.online ? 'online' : ''}`}><input type="radio" name="payment_method" value={k} checked={k === pm} required /> <span class="pm-i"><Ic n={PM_IC[k] ?? 'card'} s={22} /></span><span><b>{v.ar}</b>{v.online && <i class="pm-tag">فوري عبر MyPay</i>}<br /><small>{v.desc}</small></span></label>
               ))}
             </div>
             <div class="branches">
@@ -1080,12 +1088,14 @@ store.get('/checkout', async (c) => {
           </div>
         </div>
         <div>
-          <CouponBox c={c} t={t} back="/checkout" />
-          <div><ShipPicker t={t} back="/checkout" /><Summary t={t} u={u} rows={rows} showItems usePointsToggle /></div>
+          <CouponBox c={c} t={t} back="/checkout" fid="cpf" />
+          <div><ShipPicker t={t} back="/checkout" fid="spf" /><Summary t={t} u={u} rows={rows} showItems usePointsToggle /></div>
           <button class="btn brand" type="submit" style="width:100%;margin-top:12px;font-size:16px">تأكيد الطلب {t.total > 0 ? `· ${fmt(t.total)}` : ''}</button>
           <p style="font-size:12px;color:#888;margin:10px 0 0">بتأكيد الطلب توافق على <a href="/pages/terms" style="color:var(--brand)">الشروط</a> و<a href="/pages/returns" style="color:var(--brand)">سياسة الإرجاع</a>.</p>
         </div>
       </form>
+      {/* نموذجا الكوبون وطريقة الشحن مستقلّان عن نموذج الطلب؛ أدواتهما في مكانها بالسمة form */}
+      <form id="cpf" method="post" action="/cart/coupon" hidden></form><form id="spf" method="post" action="/cart/ship" hidden></form>
     </Layout>,
   );
 });
