@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import type { Env } from '../types';
 import { getCategories } from '../lib/db';
+import { syncWeightOptionsBatch } from '../lib/weight-options';
 import { importProducts } from './admin';
 import { classifyModesty } from '../lib/modesty';
 import { fingerprint, sameProduct } from '../lib/dedupe';
@@ -232,8 +233,9 @@ export async function repriceRows(db: D1Database, mode: 'all' | 'missing', limit
     const w = p.weight_g ?? tW ?? estWeightG(cat?.est_weight_g, p.source_price_cny);
     const air = computePrice(s, p.source_price_cny, w, cat?.markup_percent, p.volume_cm3, 'air', p.min_qty ?? 1);
     const sea = computePrice(s, p.source_price_cny, w, cat?.markup_percent, p.volume_cm3, 'sea', p.min_qty ?? 1);
-    return tW ? db.prepare('UPDATE products SET price_lyd=?,price_sea_lyd=?,weight_g=? WHERE id=?').bind(air.total_lyd, sea.total_lyd, tW, p.id)
-      : db.prepare('UPDATE products SET price_lyd=?,price_sea_lyd=? WHERE id=?').bind(air.total_lyd, sea.total_lyd, p.id);
+    // wopt_at=NULL: أي منتج بخيارات موزونة يُعاد حساب فروق خياراته بالإعدادات الجديدة (syncWeightOptionsBatch بعدها)
+    return tW ? db.prepare('UPDATE products SET price_lyd=?,price_sea_lyd=?,weight_g=?,wopt_at=NULL WHERE id=?').bind(air.total_lyd, sea.total_lyd, tW, p.id)
+      : db.prepare('UPDATE products SET price_lyd=?,price_sea_lyd=?,wopt_at=NULL WHERE id=?').bind(air.total_lyd, sea.total_lyd, p.id);
   });
   for (let i = 0; i < stmts.length; i += 100) await db.batch(stmts.slice(i, i + 100));
   return results as { id: number }[];
@@ -251,9 +253,11 @@ api.post('/source/reprice', async (c) => {
   const all = b.only_missing_sea === false;
   const after = Number(b.after_id ?? 0) || 0;
   const results = await repriceRows(db, all ? 'all' : 'missing', limit, after);
+  // ثم فروق الخيارات الموزونة لما أُعيد تسعيره («دمبل 1 كجم و 5 كجم»)
+  const wopt = await syncWeightOptionsBatch(db, await loadSettings(db), await getCategories(db), 150);
   const left = await db.prepare('SELECT COUNT(*) n FROM products WHERE price_sea_lyd IS NULL').first<{ n: number }>();
   const lastId = results.length ? results[results.length - 1].id : after;
-  return c.json({ ok: true, repriced: results.length, last_id: lastId, missing_sea_left: left?.n ?? 0 });
+  return c.json({ ok: true, repriced: results.length, last_id: lastId, missing_sea_left: left?.n ?? 0, weight_options: wopt });
 });
 
 // فحص منطق الحشمة والبصمة والشحن على الكود الحقيقي (scripts/logic-test)

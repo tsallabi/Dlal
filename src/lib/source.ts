@@ -106,25 +106,35 @@ export function estWeightG(estG: number | null | undefined, cny: number): number
 const APPAREL = new Set(['dresses', 'abayas', 'tops', 'lingerie', 'hijab', 'kids', 'shoes']);
 const W_UNIT = /(\d+(?:\.\d+)?)\s*(公斤|千克|kgs?|كيلو\s?(?:غرام|جرام)|كيلوغرام|كيلوجرام|كجم|كغ|كيلو|克|g|grams?|جرام|غرام|جم|غ)(?![a-z؀-ۿ])/gi;
 const W_NOT = /(تتحمل|يتحمل|تحمل|حمولة|سعة|حتى|لوزن|للوزن|وزن الجسم|للأوزان|承重|载重|负重|适合|体重|load|capacity|up to|max|bearing|holds?)\s*$/i;
-export function titleWeightG(titles: (string | null | undefined)[], catSlug: string | null | undefined, estG: number, cny: number): number | undefined {
-  if (catSlug && APPAREL.has(catSlug)) return undefined;
-  let best = 0;
-  for (const t of titles) {
-    if (!t) continue;
-    const s = String(t);
-    for (const m of s.matchAll(W_UNIT)) {
-      const i = m.index ?? 0, before = s.slice(Math.max(0, i - 14), i), after = s.slice(i + m[0].length, i + m[0].length + 3);
-      if (/[-~～–]\s*$/.test(before) || /^\s*[-~～–]\s*\d/.test(after) || W_NOT.test(before)) continue;
-      const v = parseFloat(m[1]); const u = m[2].toLowerCase();
-      const g = /公斤|千克|kg|كيلو|كجم|كغ/.test(u) ? v * 1000 : v;
-      if (g > best) best = g;
-    }
+function weightsIn(s: string): number[] {
+  const out: number[] = [];
+  for (const m of s.matchAll(W_UNIT)) {
+    const i = m.index ?? 0, before = s.slice(Math.max(0, i - 14), i), after = s.slice(i + m[0].length, i + m[0].length + 3);
+    if (/[-~～–]\s*$/.test(before) || /^\s*[-~～–]\s*\d/.test(after) || W_NOT.test(before)) continue;
+    const v = parseFloat(m[1]); const u = m[2].toLowerCase();
+    out.push(Math.round(/公斤|千克|kg|كيلو|كجم|كغ/.test(u) ? v * 1000 : v));
   }
-  if (!(best >= 5)) return undefined;
-  const g = Math.round(best);
-  // والقاعدة نفسها التي تحرس وزن الإضافة: «40 كغ» في عنوان ربطة عنق ليست وزنها
-  return g <= MAX_WEIGHT_G && plausibleWeightG(g, estG, cny) === g ? g : undefined;
+  return out;
 }
+// كل الأوزان المعقولة في العنوانين، مرتّبة بلا تكرار: «دمبل 1 كجم و 5 كجم» = [1000, 5000]
+export function titleWeightsG(titles: (string | null | undefined)[], catSlug: string | null | undefined, estG: number, cny: number): number[] {
+  if (catSlug && APPAREL.has(catSlug)) return [];
+  const all = titles.filter(Boolean).flatMap(t => weightsIn(String(t)));
+  // والقاعدة نفسها التي تحرس وزن الإضافة: «40 كغ» في عنوان ربطة عنق ليست وزنها، و«臂力器40公斤» قوّة مقاومة لا وزن
+  return [...new Set(all)].filter(g => g >= 5 && g <= MAX_WEIGHT_G && plausibleWeightG(g, estG, cny) === g).sort((a, b) => a - b);
+}
+export function titleWeightG(titles: (string | null | undefined)[], catSlug: string | null | undefined, estG: number, cny: number): number | undefined {
+  const ws = titleWeightsG(titles, catSlug, estG, cny);
+  return ws.length ? ws[ws.length - 1] : undefined;
+}
+// وزن خيار من اسمه («200*230cm 3.5kg»، «5 كغ»). «45KG/115 رطل» في شريط مقاومة قوّة شدّ لا وزن — يُرفض
+export function labelWeightG(label: string | null | undefined, catSlug: string | null | undefined, estG: number, cny: number): number | undefined {
+  if (!label || (catSlug && APPAREL.has(catSlug)) || /رطل|\blbs?\b|磅/i.test(label)) return undefined;
+  const ws = weightsIn(String(label)).filter(g => g >= 5 && g <= MAX_WEIGHT_G && plausibleWeightG(g, estG, cny) === g);
+  return ws.length ? Math.max(...ws) : undefined;
+}
+// اسم خيار مولَّد من العنوان
+export const weightLabel = (g: number) => g >= 1000 ? `${+(g / 1000).toFixed(2)} كغ` : `${g} غ`;
 
 // طبقة مصدر المنتجات — تُبدَّل دون تغيير باقي النظام
 // اليوم: BrowserImportSource (الموظف يتصفح 1688 ويضغط "استورد")

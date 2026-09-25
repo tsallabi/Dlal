@@ -321,7 +321,7 @@ export async function importProducts(db: D1Database, arr: any[], categoryId: num
           .bind(ex.id, v.skuId ?? null, v.color, v.size, v.priceCny ? Math.round((v.priceCny - price) * parseFloat(s.fx_cny_lyd) * 1.4 * 2) / 2 : 0, v.inStock === false ? 0 : 1, v.image ?? null)));
       }
       // كل مرور على منتج موجود محاولة إثراء تُعدّ، نجحت أو لم تنجح: بها يتقدّم الطابور ولا يدور
-      const upd: string[] = ['enrich_tries=enrich_tries+1']; const binds: any[] = [];
+      const upd: string[] = ['enrich_tries=enrich_tries+1', 'wopt_at=NULL']; const binds: any[] = [];
       if ((hasCJK(cur?.title_ar) || !goodTitle(cur?.title_ar)) && !hasCJK(titleAr) && titleAr !== cur?.title_ar && (goodTitle(titleAr) || hasCJK(cur?.title_ar))) { got = true; upd.push('title_ar=?'); binds.push(titleAr.slice(0, 200)); if (hasArabic(titleAr)) upd.push("status=CASE WHEN status='draft' THEN 'active' ELSE status END"); }
       // الإثراء يكتشف الحد الأدنى الحقيقي بعد أن يكون المنتج على الرف. رفعُه وحده لا يكفي:
       // منتج نشط صار حدّه الأدنى قطعتين يُجبر الزبونة، فيجب أن يُخفى في الجملة نفسها.
@@ -546,7 +546,7 @@ admin.get('/products/:id', async (c) => {
           <form method="post" action={`/admin/products/${p.id}/reprice`} style="margin-top:8px"><button class="btn sm ghost">تطبيق السعر المقترح</button></form>
         </div>
         <div class="card-box"><h3>الصور ({imgs.results.length})</h3><div class="import-preview">{imgs.results.map(i => <div class="it"><img src={i.url} /></div>)}</div></div>
-        <div class="card-box"><h3>المتغيرات ({vars.results.length})</h3><table class="tbl"><tr><th>لون</th><th>مقاس</th><th>فرق سعر</th><th>متوفر</th></tr>{vars.results.map(v => <tr><td>{v.color ?? '—'}</td><td>{v.size ?? '—'}</td><td>{v.price_delta_lyd}</td><td>{v.in_stock ? '✓' : '✗'}</td></tr>)}</table></div>
+        <div class="card-box"><h3>المتغيرات ({vars.results.length})</h3><table class="tbl"><tr><th>لون</th><th>مقاس</th><th>الوزن</th><th>فرق سعر</th><th>فرق الوزن جوي/بحري</th><th>متوفر</th></tr>{vars.results.map(v => <tr><td>{v.color ?? '—'}</td><td>{v.size ?? '—'}{v.auto_w ? <small style="color:#8a7a6c"> (من العنوان)</small> : null}</td><td>{v.weight_g ? `${v.weight_g} غ` : '—'}</td><td>{v.price_delta_lyd}</td><td>{v.w_delta_lyd || v.w_delta_sea_lyd ? `+${v.w_delta_lyd} / +${v.w_delta_sea_lyd}` : '—'}</td><td>{v.in_stock ? '✓' : '✗'}</td></tr>)}</table></div>
       </div>
     </div>
   ));

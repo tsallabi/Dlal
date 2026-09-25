@@ -68,6 +68,13 @@ const proxyImg = (u) => (!u ? u : /(^|\.)(alicdn\.com|1688\.com|taobao\.com|tbcd
       const cl = $('#colorLbl'); if (cl) cl.textContent = sel.color || '';
       const sl = $('#sizeLbl'); if (sl) sl.textContent = sel.size || '';
       if (m && m.image_url) $('#mainImg').src = proxyImg(m.image_url);
+      // السعر يتبع الخيار: «5 كغ» أغلى من «1 كغ» بفرق شحنه وبضاعته (w_delta)، وفرق سعر المورّد إن وُجد
+      const pp = $('#pPrice');
+      if (pp) {
+        const sea = pp.dataset.mode === 'sea';
+        const v = (+pp.dataset.base || 0) + (m ? (+m.price_delta_lyd || 0) + (+(sea ? m.w_delta_sea_lyd : m.w_delta_lyd) || 0) : 0);
+        pp.textContent = new Intl.NumberFormat('en-US', { maximumFractionDigits: v % 1 ? 2 : 0 }).format(v) + ' د.ل';
+      }
     };
     // لون لا يتوفر مع المقاس المختار (أو العكس) لا يُتجاهل بصمت: نختاره وننقل الخاصية الأخرى إلى ما يتوفر معه
     opts.forEach(g => $$('.chip', g).forEach(ch => ch.addEventListener('click', () => {

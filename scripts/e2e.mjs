@@ -553,7 +553,7 @@ expect(priceBefore === priceAfter, `سعر المنتج لا يتغير عند �
 {
   const { execFileSync } = await import('node:child_process');
   const dq = (sql) => JSON.parse(execFileSync('npx', ['wrangler', 'd1', 'execute', 'dlal-db', '--local', '-c', 'wrangler.local.toml', '--json', '--command', sql], { stdio: 'pipe' }).toString())[0].results;
-  const tag = String(Date.now()).slice(-7), tie = '97' + tag, tent = '98' + tag, brush = '96' + tag, canopy = '95' + tag, knife = '94' + tag, bell = '93' + tag, jack = '92' + tag;
+  const tag = String(Date.now()).slice(-7), tie = '97' + tag, tent = '98' + tag, brush = '96' + tag, canopy = '95' + tag, knife = '94' + tag, bell = '93' + tag, jack = '92' + tag, pair = '91' + tag;
   const imp = (items, cat) => ctx.request.post(BASE + '/api/import', { headers: { 'x-import-token': 'dev-import-token' }, data: { category_id: cat, page_url: 'test', items } });
   try {
     const acc = dq("SELECT id FROM categories WHERE slug='accessories'")[0].id, out = dq("SELECT id FROM categories WHERE slug='outdoor'")[0].id;
@@ -583,6 +583,25 @@ expect(priceBefore === priceAfter, `سعر المنتج لا يتغير عند �
     for (let i = 0; i < 40; i++) { const x = await (await ctx.request.post(BASE + '/api/source/reprice', { headers: { 'x-import-token': 'dev-import-token' }, data: { limit: 800 } })).json(); if (!x.missing_sea_left) break; }
     const [db6] = dq(`SELECT weight_g,price_sea_lyd FROM products WHERE source_offer_id='${bell}'`);
     expect(db6.weight_g === 5000 && db6.price_sea_lyd !== null, 'إعادة التسعير تحفظ وزن «5 كجم» من العنوان لمنتج قائم بلا وزن');
+    // تسعير كل خيار بوزنه: «دمبل 1 كجم و 5 كجم» بلا خيارات ⟵ خياران من العنوان، والمنتج بسعر الأخفّ، والخيار الأثقل بفرقه
+    await imp([{ offerId: pair, url: `https://detail.1688.com/offer/${pair}.html`, title: '哑铃 1kg 5kg ' + tag, titleAr: 'دمبل 1 كجم و 5 كجم ' + tag, priceCny: 10, images: [], variants: [], inStock: true }], spt);
+    for (let i = 0; i < 40; i++) { await ctx.request.post(BASE + '/api/source/reprice', { headers: { 'x-import-token': 'dev-import-token' }, data: { limit: 800 } }); if (dq(`SELECT wopt_at FROM products WHERE source_offer_id='${pair}'`)[0].wopt_at) break; }
+    const [pp] = dq(`SELECT id,slug,weight_g,price_lyd FROM products WHERE source_offer_id='${pair}'`);
+    const pv = dq(`SELECT id,size,weight_g,w_delta_lyd,auto_w FROM variants WHERE product_id=${pp.id} ORDER BY weight_g`);
+    expect(pv.length === 2 && pv[0].size === '1 كغ' && pv[1].size === '5 كغ' && pv.every(v => v.auto_w === 1) && pp.weight_g === 1000 && pv[0].w_delta_lyd === 0 && pv[1].w_delta_lyd > 0,
+      `«دمبل 1 كجم و 5 كجم» صار خيارين من العنوان، والمنتج بوزن الأخفّ (${pp.weight_g} غ · ${pp.price_lyd} د.ل) والخيار 5 كغ بفرق +${pv[1]?.w_delta_lyd}`);
+    const money = (v) => new Intl.NumberFormat('en-US', { maximumFractionDigits: v % 1 ? 2 : 0 }).format(v) + ' د.ل';
+    await page.goto(BASE + '/p/' + pp.slug);
+    await page.locator('.chips[data-opt=size] .chip', { hasText: '5 كغ' }).click();
+    const heavy = pp.price_lyd + pv[1].w_delta_lyd;
+    expect((await page.locator('#pPrice').textContent()).trim() === money(heavy), `اختيار «5 كغ» في صفحة المنتج يغيّر السعر إلى ${money(heavy)}`);
+    await page.locator('.chips[data-opt=size] .chip', { hasText: '1 كغ' }).click();
+    expect((await page.locator('#pPrice').textContent()).trim() === money(pp.price_lyd), 'والعودة إلى «1 كغ» تعيد سعر الأخفّ');
+    await page.locator('.chips[data-opt=size] .chip', { hasText: '5 كغ' }).click();
+    await page.click('#addForm button[type=submit]'); await page.waitForLoadState('networkidle');
+    await page.goto(BASE + '/cart');
+    expect(await has(page, money(heavy)), `السلة تحسب خيار «5 كغ» بسعره (${money(heavy)}) لا بسعر الأخفّ`);
+    dq(`DELETE FROM cart_items WHERE product_id=${pp.id}`);
     const [bb] = dq(`SELECT weight_g,price_lyd FROM products WHERE source_offer_id='${brush}'`);
     expect(bb.weight_g === 20 && bb.price_lyd < 30, `فرشاة بـ0.26 يوان «20 كغ» تُحفظ 20 غ (${bb.price_lyd} د.ل لا 1,685)`);
     // وزن مستحيل محفوظ من قبل يُصحَّح عند مرور الإثراء عليه حتى بلا وزن جديد
@@ -600,7 +619,7 @@ expect(priceBefore === priceAfter, `سعر المنتج لا يتغير عند �
     [t] = dq(`SELECT price_lyd,price_sea_lyd FROM products WHERE source_offer_id='${tie}'`);
     expect(rp.repriced >= 1 && t.price_lyd < 100 && t.price_sea_lyd !== null, `إعادة تسعير «الناقص» تعيد الربطة إلى ${t.price_lyd} د.ل`);
   } finally {
-    dq(`DELETE FROM product_images WHERE product_id IN (SELECT id FROM products WHERE source_offer_id IN ('${tie}','${tent}','${brush}','${canopy}','${knife}','${bell}','${jack}')); DELETE FROM variants WHERE product_id IN (SELECT id FROM products WHERE source_offer_id IN ('${tie}','${tent}','${brush}','${canopy}','${knife}','${bell}','${jack}')); DELETE FROM products WHERE source_offer_id IN ('${tie}','${tent}','${brush}','${canopy}','${knife}','${bell}','${jack}')`);
+    dq(`DELETE FROM cart_items WHERE product_id IN (SELECT id FROM products WHERE source_offer_id IN ('${tie}','${pair}')); DELETE FROM product_images WHERE product_id IN (SELECT id FROM products WHERE source_offer_id IN ('${tie}','${tent}','${brush}','${canopy}','${knife}','${bell}','${jack}','${pair}')); DELETE FROM variants WHERE product_id IN (SELECT id FROM products WHERE source_offer_id IN ('${tie}','${tent}','${brush}','${canopy}','${knife}','${bell}','${jack}','${pair}')); DELETE FROM products WHERE source_offer_id IN ('${tie}','${tent}','${brush}','${canopy}','${knife}','${bell}','${jack}','${pair}')`);
   }
 }
 

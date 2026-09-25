@@ -648,7 +648,7 @@ store.get('/p/:slug', async (c) => {
   if (!p) return c.notFound();
   const [imgs, vars, related, f, reviews, fit] = await Promise.all([
     db.prepare('SELECT url FROM product_images WHERE product_id=? ORDER BY sort').bind(p.id).all<{ url: string }>(),
-    db.prepare('SELECT id,color,size,price_delta_lyd,in_stock,image_url FROM variants WHERE product_id=?').bind(p.id).all<any>(),
+    db.prepare('SELECT id,color,size,price_delta_lyd,in_stock,image_url,weight_g,w_delta_lyd,w_delta_sea_lyd FROM variants WHERE product_id=? ORDER BY COALESCE(weight_g,0),id').bind(p.id).all<any>(),
     db.prepare(`SELECT ${PRODUCT_SELECT} FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE p.status='active' AND p.category_id=? AND p.id<>? ORDER BY p.sales DESC LIMIT 10`).bind(p.category_id, p.id).all<ProductRow>(),
     favs(c),
     db.prepare("SELECT r.*,u.name FROM reviews r JOIN users u ON u.id=r.user_id WHERE r.product_id=? AND r.status='approved' ORDER BY r.id DESC LIMIT 20").bind(p.id).all<any>(),
@@ -691,7 +691,7 @@ store.get('/p/:slug', async (c) => {
           <div class="meta" style="font-size:13px;color:#666">{p.review_count > 0
             ? <><a href="#reviews"><Stars n={p.rating} /> {p.rating.toFixed(1)} ({p.review_count} تقييم)</a> · </>
             : <>لا تقييمات بعد — كن أول من يقيّمه · </>}{p.sales}+ بيعت · {p.views} مشاهدة</div>
-          <div class="price" style="margin-top:8px">{fmt(shown)}{off > 0 && <s>{fmt(p.compare_price_lyd!)}</s>}{off > 0 && <span class="tag" style="position:static;margin-inline-start:8px;font-size:13px;background:var(--brand);color:#fff;padding:2px 8px;border-radius:4px">-{off}%</span>}</div>
+          <div class="price" style="margin-top:8px"><span id="pPrice" data-base={String(shown)} data-mode={mode === 'sea' && p.price_sea_lyd ? 'sea' : 'air'}>{fmt(shown)}</span>{off > 0 && <s>{fmt(p.compare_price_lyd!)}</s>}{off > 0 && <span class="tag" style="position:static;margin-inline-start:8px;font-size:13px;background:var(--brand);color:#fff;padding:2px 8px;border-radius:4px">-{off}%</span>}</div>
           <div class="price-note">السعر شامل الشحن من الصين والجمارك. التوصيل داخل ليبيا {fmt(parseFloat(s.delivery_lyd))} (مجاني فوق {fmt(parseFloat(s.free_ship_over_lyd))}). تكسب <b>{Math.floor(shown * parseFloat(s.points_per_lyd || '1'))} نقطة</b> عند التسليم.</div>
           {seaOn(s) && p.price_sea_lyd ? (
             <form method="post" action="/cart/ship" class="pship">
@@ -858,14 +858,17 @@ async function cartRows(db: D1Database, uid: number, mode: ShipMode = 'air') {
   const { results } = await db.prepare(
     `SELECT ci.id,ci.qty,ci.variant_id,p.id AS product_id,p.slug,p.title_ar,p.price_lyd,p.price_sea_lyd,p.in_stock,p.status,p.source_offer_id,p.source_url,p.min_qty,
             p.source_price_cny,p.weight_g,p.volume_cm3,p.category_id,c.est_weight_g,c.markup_percent,
-            v.color,v.size,COALESCE(v.price_delta_lyd,0) AS delta,
+            v.color,v.size,COALESCE(v.price_delta_lyd,0) AS delta,COALESCE(v.w_delta_lyd,0) AS wd_air,COALESCE(v.w_delta_sea_lyd,0) AS wd_sea,v.weight_g AS v_weight,
             COALESCE(v.image_url,(SELECT url FROM product_images i WHERE i.product_id=p.id ORDER BY sort LIMIT 1)) AS image
      FROM cart_items ci JOIN products p ON p.id=ci.product_id LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN variants v ON v.id=ci.variant_id WHERE ci.user_id=?`,
   ).bind(uid).all<any>();
   // السعر البحري أرخص؛ إن لم يُحسب بعد لمنتج قديم نستخدم الجوي حتى لا يُباع بأقل من تكلفته
   return results.map(r => {
     const base = mode === 'sea' && r.price_sea_lyd ? r.price_sea_lyd : r.price_lyd;
-    return { ...r, unit: base + r.delta, line: (base + r.delta) * r.qty, air_unit: r.price_lyd + r.delta, sea_unit: (r.price_sea_lyd ?? r.price_lyd) + r.delta };
+    // فرق الخيار الموزون («5 كغ» من «دمبل 1 و5 كجم») يختلف بين الجوي والبحري
+    const seaOk = mode === 'sea' && r.price_sea_lyd;
+    const unit = base + r.delta + (seaOk ? r.wd_sea : r.wd_air);
+    return { ...r, unit, line: unit * r.qty, air_unit: r.price_lyd + r.delta + r.wd_air, sea_unit: r.price_sea_lyd ? r.price_sea_lyd + r.delta + r.wd_sea : r.price_lyd + r.delta + r.wd_air };
   });
 }
 
@@ -1154,7 +1157,9 @@ store.post('/checkout', async (c) => {
     db.prepare('UPDATE orders SET code=?,ship_zone_id=?,ship_zone=? WHERE id=?').bind(code, zq.zone?.id ?? null, zq.zone ? zoneLabel(zq.zone) : null, oid),
     // لقطة التكلفة لحظة البيع: تبقى ثابتة في التقارير مهما تغيّرت إعدادات التسعير لاحقًا
     ...rows.map(r => {
-      const br = computePrice(t.s, r.source_price_cny ?? 0, r.weight_g ?? estWeightG(r.est_weight_g, r.source_price_cny ?? 0), r.markup_percent, r.volume_cm3, t.mode, r.min_qty ?? 1);
+      // خيار موزون: بوزنه، وبضاعته بنسبة وزنه إلى أخفّ خيار (كما سُعِّر)
+      const vw = r.v_weight && r.weight_g ? r.v_weight : null;
+      const br = computePrice(t.s, (r.source_price_cny ?? 0) * (vw && !r.delta ? vw / r.weight_g : 1), vw ?? r.weight_g ?? estWeightG(r.est_weight_g, r.source_price_cny ?? 0), r.markup_percent, vw ? null : r.volume_cm3, t.mode, r.min_qty ?? 1);
       return db.prepare(
         `INSERT INTO order_items(order_id,product_id,variant_id,title_ar,color,size,qty,unit_price_lyd,source_offer_id,source_url,unit_cost_lyd,unit_ship_lyd,unit_goods_lyd,ship_method) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       ).bind(oid, r.product_id, r.variant_id, r.title_ar, r.color, r.size, r.qty, r.unit, r.source_offer_id, r.source_url,
