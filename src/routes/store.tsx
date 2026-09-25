@@ -172,7 +172,10 @@ store.get('/how', async (c) => {
       <section class="hm-stats">
         <div><b>{Number(stats?.p ?? 0).toLocaleString('en-US')}+</b><span>منتج بسعر نهائي بالدينار</span></div>
         <div><b>{CITIES.length}</b><span>مدينة ليبية نوصل إليها</span></div>
-        <div><b>{Number(stats?.d ?? 0).toLocaleString('en-US')}</b><span>طلب وصل لصاحبته</span></div>
+        {/* عدد الطلبات المسلَّمة رقم حقيقي — لكن «0 طلب وصل» على صفحة تعريف ينفّر؛ حتى يبلغ 10 نعرض مدة الوصول */}
+        {Number(stats?.d ?? 0) >= 10
+          ? <div><b>{Number(stats.d).toLocaleString('en-US')}</b><span>طلب وصل لصاحبه</span></div>
+          : <div><b>{(s.air_days || '12 — 18 يومًا').replace(/\s*يوم(ًا|ا)?\s*$/, '')}</b><span>يومًا حتى باب بيتك (جوًّا)</span></div>}
         <div><b>100%</b><span>تعويض لأي تالف أو مختلف</span></div>
       </section>
 
