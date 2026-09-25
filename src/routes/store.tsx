@@ -9,7 +9,7 @@ import { Grid, ProductCard } from '../views/product-card';
 import { Stars } from '../views/account';
 import { getCategories, PRODUCT_SELECT, fmt, imgUrl, orderCode, timeAgo, notify, realWa, likePat } from '../lib/db';
 import type { ProductRow } from '../lib/db';
-import { KIND_NOTE, type ListingKind } from '../lib/source';
+import { KIND_NOTE, estWeightG, type ListingKind } from '../lib/source';
 import { loadSettings, computePrice, shipRates, seaOn } from '../lib/pricing';
 import { partnerDelivery, pricingPartnerId, mediaResponse, zoneQuote, zoneLabel, courierTrack } from '../lib/partner';
 import { track } from '../lib/track';
@@ -1154,7 +1154,7 @@ store.post('/checkout', async (c) => {
     db.prepare('UPDATE orders SET code=?,ship_zone_id=?,ship_zone=? WHERE id=?').bind(code, zq.zone?.id ?? null, zq.zone ? zoneLabel(zq.zone) : null, oid),
     // لقطة التكلفة لحظة البيع: تبقى ثابتة في التقارير مهما تغيّرت إعدادات التسعير لاحقًا
     ...rows.map(r => {
-      const br = computePrice(t.s, r.source_price_cny ?? 0, r.weight_g ?? r.est_weight_g ?? 300, r.markup_percent, r.volume_cm3, t.mode, r.min_qty ?? 1);
+      const br = computePrice(t.s, r.source_price_cny ?? 0, r.weight_g ?? estWeightG(r.est_weight_g, r.source_price_cny ?? 0), r.markup_percent, r.volume_cm3, t.mode, r.min_qty ?? 1);
       return db.prepare(
         `INSERT INTO order_items(order_id,product_id,variant_id,title_ar,color,size,qty,unit_price_lyd,source_offer_id,source_url,unit_cost_lyd,unit_ship_lyd,unit_goods_lyd,ship_method) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       ).bind(oid, r.product_id, r.variant_id, r.title_ar, r.color, r.size, r.qty, r.unit, r.source_offer_id, r.source_url,

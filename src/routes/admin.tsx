@@ -11,7 +11,7 @@ import { classifyModesty } from '../lib/modesty';
 import { fingerprint, sameProduct } from '../lib/dedupe';
 import { loadSettings, computePrice } from '../lib/pricing';
 import { requireRole } from '../lib/auth';
-import { attrValue, notRetail, kindOf, plausibleWeightG, MAX_WEIGHT_G } from '../lib/source';
+import { attrValue, notRetail, kindOf, plausibleWeightG, MAX_WEIGHT_G, estWeightG, titleWeightG } from '../lib/source';
 import { junkAttr } from '../lib/attr-en';  // الشظيّة تُحذف قبل الترجمة وإلا صارت «غير قابل للإرجاع» لونًا عربيًا
 import { requirePerm, logActivity } from '../lib/perm';
 import { settleLinkRequests, LINK_SOURCES, LINK_STATUS } from '../lib/link-requests';
@@ -293,7 +293,9 @@ export async function importProducts(db: D1Database, arr: any[], categoryId: num
     // وزن مستحيل (ربطة عنق 40 كغ) لا يُسعَّر به ولا يُحفظ: يُصحَّح غرامات أو يُترك لوزن القسم
     const wIn = it.weightG ? plausibleWeightG(Number(it.weightG), estW, price) : undefined;
     const exW = ex?.weight_g ? plausibleWeightG(ex.weight_g, estW, price) : undefined;
-    const weight = wIn ?? exW ?? estW;
+    // بلا وزن من الصفحة: من العنوان («دمبل 5 كجم»)، وإلا تقدير لا يتجاوز 150 غ لكل يوان
+    const tW = !wIn && !exW ? titleWeightG([it.title, titleAr], useCat?.slug, estW, price) : undefined;
+    const weight = wIn ?? exW ?? tW ?? estWeightG(estW, price);
     const volume = it.volumeCm3 ?? ex?.volume_cm3 ?? null;
     // الشحن الداخلي يُقسَّم على اللوط: الحد الأدنى جزء من التسعير لا معلومة عرض فقط
     const moq = Math.max(1, Number(it.minQty ?? 0) || ex?.min_qty || 1);
@@ -329,7 +331,8 @@ export async function importProducts(db: D1Database, arr: any[], categoryId: num
         if (notRetail(it.title, Number(it.minQty), maxRetail)) upd.push("status=CASE WHEN status='active' THEN 'hidden' ELSE status END");
       }
       if (wIn && (!ex.weight_g || exW !== ex.weight_g)) { upd.push('weight_g=?'); binds.push(wIn); gain.wt++; got = true; }
-      else if (ex.weight_g && exW !== ex.weight_g) { upd.push('weight_g=?'); binds.push(exW ?? null); }   // المحفوظ مستحيل ولم يأتِ بديل
+      else if (ex.weight_g && exW !== ex.weight_g) { upd.push('weight_g=?'); binds.push(exW ?? tW ?? null); }   // المحفوظ مستحيل ولم يأتِ بديل
+      else if (!ex.weight_g && tW) { upd.push('weight_g=?'); binds.push(tW); gain.wt++; got = true; }
       if (it.volumeCm3 && Number(it.volumeCm3) > 0 && !ex.volume_cm3) { upd.push('volume_cm3=?'); binds.push(Math.round(Number(it.volumeCm3))); }
       if (supplierAr && (!cur?.supplier_name || hasCJK(cur.supplier_name))) { upd.push('supplier_name=?'); binds.push(supplierAr); }
       if (it.title) { upd.push('title_src=COALESCE(title_src,?)'); binds.push(String(it.title)); }
@@ -356,7 +359,7 @@ export async function importProducts(db: D1Database, arr: any[], categoryId: num
       `INSERT OR IGNORE INTO products(source,source_offer_id,source_url,slug,title_ar,title_src,description_ar,category_id,source_price_cny,price_lyd,compare_price_lyd,price_sea_lyd,weight_g,volume_cm3,min_qty,in_stock,status,supplier_name,last_checked_at,sales,rating,home_ok,fingerprint,kind)
        VALUES('1688',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL,?,?,?,?,?)`,
     ).bind(offerId, it.url ?? `https://detail.1688.com/offer/${offerId}.html`, slug, titleAr, it.title ?? null, it.descriptionAr ?? null,
-      targetCat, price, pr.total_lyd, Math.random() < 0.4 ? Math.ceil(pr.total_lyd * 1.25 / 5) * 5 : null, prSea.total_lyd, wIn ?? null, it.volumeCm3 ?? null,
+      targetCat, price, pr.total_lyd, Math.random() < 0.4 ? Math.ceil(pr.total_lyd * 1.25 / 5) * 5 : null, prSea.total_lyd, wIn ?? tW ?? null, it.volumeCm3 ?? null,
       moq, it.inStock === false ? 0 : 1, notRetail(it.title, moq, maxRetail) || (wIn ?? 0) > MAX_WEIGHT_G ? 'hidden' : hasCJK(titleAr) || !hasArabic(titleAr) ? 'draft' : 'active', supplierAr, parseInt(it.sales ?? 0) || 0, 0, homeOk, fp || null, kindOf(it.title)).run();
     const pid = ins.meta.last_row_id as number;
     if (!pid || !ins.meta.changes) { skipped++; continue; }   // تجاهل صفّ لم يُدرج (تعارض مع استيراد متزامن)
@@ -515,7 +518,7 @@ admin.get('/products/:id', async (c) => {
   const [cats, imgs, vars] = await Promise.all([getCategories(db), db.prepare('SELECT * FROM product_images WHERE product_id=? ORDER BY sort').bind(p.id).all<any>(), db.prepare('SELECT * FROM variants WHERE product_id=?').bind(p.id).all<any>()]);
   const s = await loadSettings(db);
   const cat = cats.find(x => x.id === p.category_id);
-  const br = computePrice(s, p.source_price_cny, p.weight_g ?? cat?.est_weight_g ?? 300, cat?.markup_percent, p.volume_cm3, 'air', p.min_qty ?? 1);
+  const br = computePrice(s, p.source_price_cny, p.weight_g ?? estWeightG(cat?.est_weight_g, p.source_price_cny), cat?.markup_percent, p.volume_cm3, 'air', p.min_qty ?? 1);
   return shell(c, 'products', p.title_ar, (
     <div class="two">
       <form method="post" class="card-box">
@@ -551,7 +554,7 @@ admin.get('/products/:id', async (c) => {
 admin.post('/products/:id', async (c) => {
   const f = await c.req.parseBody(); const db = c.env.DB; const id = Number(c.req.param('id'));
   const s = await loadSettings(db); const cats = await getCategories(db); const cat = cats.find(x => x.id === Number(f.category_id));
-  const price = f.price_lyd ? parseFloat(String(f.price_lyd)) : computePrice(s, parseFloat(String(f.source_price_cny)), Number(f.weight_g) || cat?.est_weight_g || 300, cat?.markup_percent, null, 'air', Number(f.min_qty) || 1).total_lyd;
+  const price = f.price_lyd ? parseFloat(String(f.price_lyd)) : computePrice(s, parseFloat(String(f.source_price_cny)), Number(f.weight_g) || estWeightG(cat?.est_weight_g, parseFloat(String(f.source_price_cny))), cat?.markup_percent, null, 'air', Number(f.min_qty) || 1).total_lyd;
   await db.prepare(`UPDATE products SET title_ar=?,category_id=?,source_price_cny=?,weight_g=?,min_qty=?,price_lyd=?,compare_price_lyd=?,status=?,in_stock=?,description_ar=?,source_url=?,updated_at=datetime('now') WHERE id=?`)
     .bind(String(f.title_ar), Number(f.category_id), parseFloat(String(f.source_price_cny)), f.weight_g ? Number(f.weight_g) : null, Number(f.min_qty) || 1, price, f.compare_price_lyd ? parseFloat(String(f.compare_price_lyd)) : null, String(f.status), Number(f.in_stock), String(f.description_ar ?? ''), f.source_url ? String(f.source_url) : null, id).run();
   return c.redirect(`/admin/products/${id}?ok=1`);
@@ -560,7 +563,7 @@ admin.post('/products/:id/reprice', async (c) => {
   const db = c.env.DB; const id = Number(c.req.param('id'));
   const p = await db.prepare('SELECT source_price_cny,weight_g,category_id FROM products WHERE id=?').bind(id).first<any>();
   const s = await loadSettings(db); const cats = await getCategories(db); const cat = cats.find(x => x.id === p.category_id);
-  const pr = computePrice(s, p.source_price_cny, p.weight_g ?? cat?.est_weight_g ?? 300, cat?.markup_percent, p.volume_cm3, 'air', p.min_qty ?? 1);
+  const pr = computePrice(s, p.source_price_cny, p.weight_g ?? estWeightG(cat?.est_weight_g, p.source_price_cny), cat?.markup_percent, p.volume_cm3, 'air', p.min_qty ?? 1);
   await db.prepare('UPDATE products SET price_lyd=? WHERE id=?').bind(pr.total_lyd, id).run();
   return c.redirect(`/admin/products/${id}?ok=1`);
 });
@@ -708,7 +711,7 @@ admin.post('/pricing/backfill-costs', async (c) => {
   ).all<any>();
   const stmts = results.map(r => {
     const cat = cats.find(x => x.id === r.category_id);
-    const br = computePrice(s, r.source_price_cny ?? 0, r.weight_g ?? cat?.est_weight_g ?? 300, cat?.markup_percent, r.volume_cm3, 'air', r.min_qty ?? 1);
+    const br = computePrice(s, r.source_price_cny ?? 0, r.weight_g ?? estWeightG(cat?.est_weight_g, r.source_price_cny ?? 0), cat?.markup_percent, r.volume_cm3, 'air', r.min_qty ?? 1);
     return db.prepare('UPDATE order_items SET unit_cost_lyd=?,unit_ship_lyd=?,unit_goods_lyd=? WHERE id=?')
       .bind(br.cost_lyd, br.intl_ship_lyd + br.domestic_ship_lyd, br.goods_lyd, r.id);
   });
@@ -721,7 +724,7 @@ async function repriceAll(db: D1Database) {
   const { results } = await db.prepare('SELECT id,source_price_cny,weight_g,volume_cm3,category_id,min_qty FROM products').all<any>();
   const stmts = results.map(p => {
     const cat = cats.find(x => x.id === p.category_id);
-    const w = p.weight_g ?? cat?.est_weight_g ?? 300;
+    const w = p.weight_g ?? estWeightG(cat?.est_weight_g, p.source_price_cny);
     const air = computePrice(s, p.source_price_cny, w, cat?.markup_percent, p.volume_cm3, 'air', p.min_qty ?? 1);
     const sea = computePrice(s, p.source_price_cny, w, cat?.markup_percent, p.volume_cm3, 'sea', p.min_qty ?? 1);
     return db.prepare('UPDATE products SET price_lyd=?,price_sea_lyd=? WHERE id=?').bind(air.total_lyd, sea.total_lyd, p.id);
@@ -769,7 +772,7 @@ admin.get('/partners', async (c) => {
     const s2: Record<string, string> = { ...s, pricing_partner_id: String(pvp.id) };
     for (const k of RATE_KEYS) s2[PP_KEY[k]] = String(pvp[k] ?? 0);
     sample = (await previewSample(db)).map(p => {
-      const w = p.weight_g ?? p.est_weight_g ?? 300;
+      const w = p.weight_g ?? estWeightG(p.est_weight_g, p.source_price_cny);
       const now = computePrice(s, p.source_price_cny, w, p.markup_percent, p.volume_cm3, 'air', p.min_qty ?? 1);
       const nw = computePrice(s2, p.source_price_cny, w, p.markup_percent, p.volume_cm3, 'air', p.min_qty ?? 1);
       return { ...p, w, now, nw };

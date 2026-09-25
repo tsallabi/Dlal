@@ -91,6 +91,41 @@ export function plausibleWeightG(w: number | null | undefined, estG: number, cny
   return undefined;
 }
 
+// وزن تقديري لمنتج لا يُعرف وزنه (٢٥/٠٩/٢٦): وزن القسم وحده جعل سكين معجون بـ1.5 يوان في «أدوات البناء»
+// (تقديرها 2 كغ) بـ180 د.ل — ألفا منتج رخيص نشط تقريبًا سُعّرت بشحن كيلوغرامين. البضاعة الرخيصة خفيفة بطبعها:
+// لا نفترض أكثر من 150 غ لكل يوان (أثقل ما في الكتالوج، الحديد المصبوب، نحو 8 يوان للكيلو = 125 غ لليوان)، ولا أقل من 100 غ.
+export function estWeightG(estG: number | null | undefined, cny: number): number {
+  const est = Number(estG) > 0 ? Number(estG) : 300;
+  return Math.min(est, Math.max(100, Math.round((Number(cny) || 0) * 150)));
+}
+
+// الوزن من العنوان حين لا تذكره صفحة 1688: «دمبل 5 كجم»، «0.5KG»، «256g»، «2kg3kg» (يؤخذ الأكبر — الأحوط للشحن).
+// يُرفض: المدى («40-50 كغ») والحمولة والسعة ووزن الجسم («يتحمل 20 كجم»، «适合100斤»)، و克 بلا رقم قبله
+// (夹克 جاكيت، 马克笔 قلم، 克米特 كرسي)، و斤 كله (في الملابس وزن لابسها). وأقسام الملابس لا يُقرأ عنوانها أصلًا:
+// «140 جرام» فيها وزن القماش للمتر، و«50-70 كجم» وزن من يلبسها.
+const APPAREL = new Set(['dresses', 'abayas', 'tops', 'lingerie', 'hijab', 'kids', 'shoes']);
+const W_UNIT = /(\d+(?:\.\d+)?)\s*(公斤|千克|kgs?|كيلو\s?(?:غرام|جرام)|كيلوغرام|كيلوجرام|كجم|كغ|كيلو|克|g|grams?|جرام|غرام|جم|غ)(?![a-z؀-ۿ])/gi;
+const W_NOT = /(تتحمل|يتحمل|تحمل|حمولة|سعة|حتى|لوزن|للوزن|وزن الجسم|للأوزان|承重|载重|负重|适合|体重|load|capacity|up to|max|bearing|holds?)\s*$/i;
+export function titleWeightG(titles: (string | null | undefined)[], catSlug: string | null | undefined, estG: number, cny: number): number | undefined {
+  if (catSlug && APPAREL.has(catSlug)) return undefined;
+  let best = 0;
+  for (const t of titles) {
+    if (!t) continue;
+    const s = String(t);
+    for (const m of s.matchAll(W_UNIT)) {
+      const i = m.index ?? 0, before = s.slice(Math.max(0, i - 14), i), after = s.slice(i + m[0].length, i + m[0].length + 3);
+      if (/[-~～–]\s*$/.test(before) || /^\s*[-~～–]\s*\d/.test(after) || W_NOT.test(before)) continue;
+      const v = parseFloat(m[1]); const u = m[2].toLowerCase();
+      const g = /公斤|千克|kg|كيلو|كجم|كغ/.test(u) ? v * 1000 : v;
+      if (g > best) best = g;
+    }
+  }
+  if (!(best >= 5)) return undefined;
+  const g = Math.round(best);
+  // والقاعدة نفسها التي تحرس وزن الإضافة: «40 كغ» في عنوان ربطة عنق ليست وزنها
+  return g <= MAX_WEIGHT_G && plausibleWeightG(g, estG, cny) === g ? g : undefined;
+}
+
 // طبقة مصدر المنتجات — تُبدَّل دون تغيير باقي النظام
 // اليوم: BrowserImportSource (الموظف يتصفح 1688 ويضغط "استورد")
 // غدًا:  Api1688Source (بعد الحصول على AppKey من open.1688.com)

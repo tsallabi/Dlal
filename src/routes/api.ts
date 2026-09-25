@@ -6,7 +6,7 @@ import { importProducts } from './admin';
 import { classifyModesty } from '../lib/modesty';
 import { fingerprint, sameProduct } from '../lib/dedupe';
 import { computePrice, loadSettings } from '../lib/pricing';
-import { normWeightG, attrValue, kindOf } from '../lib/source';
+import { normWeightG, attrValue, kindOf, estWeightG, titleWeightG } from '../lib/source';
 import { getProvider } from '../lib/source-providers';
 import { runServerJobs } from '../lib/crawl';
 import { liveState } from '../lib/crawl-live';
@@ -221,15 +221,19 @@ api.post('/crawl/report', async (c) => {
 export async function repriceRows(db: D1Database, mode: 'all' | 'missing', limit: number, after = 0) {
   const s = await loadSettings(db);
   const cats = await getCategories(db);
+  const cols = 'id,source_price_cny,weight_g,volume_cm3,category_id,min_qty,title_ar,title_src';
   const { results } = mode === 'all'
-    ? await db.prepare('SELECT id,source_price_cny,weight_g,volume_cm3,category_id,min_qty FROM products WHERE id>? ORDER BY id LIMIT ?').bind(after, limit).all<any>()
-    : await db.prepare('SELECT id,source_price_cny,weight_g,volume_cm3,category_id,min_qty FROM products WHERE price_sea_lyd IS NULL ORDER BY id LIMIT ?').bind(limit).all<any>();
+    ? await db.prepare(`SELECT ${cols} FROM products WHERE id>? ORDER BY id LIMIT ?`).bind(after, limit).all<any>()
+    : await db.prepare(`SELECT ${cols} FROM products WHERE price_sea_lyd IS NULL ORDER BY id LIMIT ?`).bind(limit).all<any>();
   const stmts = results.map((p: any) => {
     const cat = cats.find(x => x.id === p.category_id);
-    const w = p.weight_g ?? cat?.est_weight_g ?? 300;
+    // بلا وزن: من العنوان إن ذُكر فيه (ويُحفظ)، وإلا تقدير القسم مسقوفًا بسعر المورد
+    const tW = p.weight_g ? undefined : titleWeightG([p.title_src, p.title_ar], cat?.slug, cat?.est_weight_g ?? 300, p.source_price_cny);
+    const w = p.weight_g ?? tW ?? estWeightG(cat?.est_weight_g, p.source_price_cny);
     const air = computePrice(s, p.source_price_cny, w, cat?.markup_percent, p.volume_cm3, 'air', p.min_qty ?? 1);
     const sea = computePrice(s, p.source_price_cny, w, cat?.markup_percent, p.volume_cm3, 'sea', p.min_qty ?? 1);
-    return db.prepare('UPDATE products SET price_lyd=?,price_sea_lyd=? WHERE id=?').bind(air.total_lyd, sea.total_lyd, p.id);
+    return tW ? db.prepare('UPDATE products SET price_lyd=?,price_sea_lyd=?,weight_g=? WHERE id=?').bind(air.total_lyd, sea.total_lyd, tW, p.id)
+      : db.prepare('UPDATE products SET price_lyd=?,price_sea_lyd=? WHERE id=?').bind(air.total_lyd, sea.total_lyd, p.id);
   });
   for (let i = 0; i < stmts.length; i += 100) await db.batch(stmts.slice(i, i + 100));
   return results as { id: number }[];

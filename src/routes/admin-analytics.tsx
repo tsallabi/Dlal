@@ -45,7 +45,7 @@ an.get('/analytics', async (c) => {
     q(`SELECT lower(ref) k, COUNT(*) n, MIN(n) res, MAX(created_at) last FROM visits WHERE kind='search' AND ref<>'' AND ${T} GROUP BY lower(ref) ORDER BY n DESC, last DESC LIMIT 12`),
     // عند تساوي العدد: الأحدث أولًا — طلب جديد لم نجده أهمّ من قديم، وبلا هذا كان الترتيب عشوائيًا بين المتساويات
     q(`SELECT lower(ref) k, COUNT(*) n, MAX(created_at) last FROM visits WHERE kind='search' AND n=0 AND ref<>'' AND ${T} GROUP BY lower(ref) ORDER BY n DESC, last DESC LIMIT 12`),
-    q(`SELECT ref k, COUNT(*) n, COUNT(DISTINCT vid) who, MAX(created_at) last, MAX(path) path FROM visits WHERE kind='error' AND ${T} GROUP BY ref, CASE WHEN ref LIKE 'صفحة%' THEN path ELSE '' END ORDER BY n DESC LIMIT 15`),
+    q(`SELECT ref k, COUNT(*) n, COUNT(DISTINCT vid) who, MAX(created_at) last, MAX(path) path FROM visits WHERE kind='error' AND ${T} GROUP BY ref, CASE WHEN ref LIKE 'صفحة%' THEN path ELSE '' END ORDER BY n DESC, last DESC LIMIT 15`),
     q(`SELECT a.*, u.name FROM (SELECT v.vid, MAX(v.user_id) uid, MAX(v.city) city, MAX(v.country) country, MAX(v.device) device, COUNT(*) pages,
         MAX(v.created_at) last, SUM(v.kind='cart') carts, SUM(v.kind='checkout') chk, SUM(v.kind='purchase') paid, SUM(v.kind='error') errs
        FROM visits v WHERE v.${T} GROUP BY v.vid ORDER BY last DESC LIMIT 40) a LEFT JOIN users u ON u.id=a.uid ORDER BY a.last DESC`),

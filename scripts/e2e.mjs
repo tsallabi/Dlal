@@ -553,7 +553,7 @@ expect(priceBefore === priceAfter, `سعر المنتج لا يتغير عند �
 {
   const { execFileSync } = await import('node:child_process');
   const dq = (sql) => JSON.parse(execFileSync('npx', ['wrangler', 'd1', 'execute', 'dlal-db', '--local', '-c', 'wrangler.local.toml', '--json', '--command', sql], { stdio: 'pipe' }).toString())[0].results;
-  const tag = String(Date.now()).slice(-7), tie = '97' + tag, tent = '98' + tag, brush = '96' + tag, canopy = '95' + tag;
+  const tag = String(Date.now()).slice(-7), tie = '97' + tag, tent = '98' + tag, brush = '96' + tag, canopy = '95' + tag, knife = '94' + tag, bell = '93' + tag, jack = '92' + tag;
   const imp = (items, cat) => ctx.request.post(BASE + '/api/import', { headers: { 'x-import-token': 'dev-import-token' }, data: { category_id: cat, page_url: 'test', items } });
   try {
     const acc = dq("SELECT id FROM categories WHERE slug='accessories'")[0].id, out = dq("SELECT id FROM categories WHERE slug='outdoor'")[0].id;
@@ -569,6 +569,20 @@ expect(priceBefore === priceAfter, `سعر المنتج لا يتغير عند �
     await imp([{ offerId: canopy, url: `https://detail.1688.com/offer/${canopy}.html`, title: 'مظلة ' + tag, titleAr: 'مظلة مستودع ' + tag, priceCny: 800, weightG: 250000, images: [], variants: [], inStock: true }], out);
     const [cn] = dq(`SELECT weight_g,status FROM products WHERE source_offer_id='${canopy}'`);
     expect(cn.weight_g === 250000 && cn.status === 'hidden', `مظلة مستودع 250 كغ تدخل مخفية (${cn.status})`);
+    // بلا وزن في الصفحة (٢٥/٠٩/٢٦): الوزن من العنوان، وإلا تقدير القسم مسقوفًا بـ150 غ لكل يوان
+    const spt = dq("SELECT id FROM categories WHERE slug='sports'")[0].id, aba = dq("SELECT id FROM categories WHERE slug='abayas'")[0].id;
+    await imp([{ offerId: knife, url: `https://detail.1688.com/offer/${knife}.html`, title: 'سكين ' + tag, titleAr: 'سكين معجون ' + tag, priceCny: 1.5, images: [], variants: [], inStock: true }], bld);
+    await imp([{ offerId: bell, url: `https://detail.1688.com/offer/${bell}.html`, title: '哑铃 5kg ' + tag, titleAr: 'دمبل 5 كجم ' + tag, priceCny: 36, images: [], variants: [], inStock: true }], spt);
+    await imp([{ offerId: jack, url: `https://detail.1688.com/offer/${jack}.html`, title: '夹克外套 ' + tag, titleAr: 'جاكيت ' + tag, priceCny: 58, images: [], variants: [], inStock: true }], aba);
+    const [kn] = dq(`SELECT weight_g,price_lyd FROM products WHERE source_offer_id='${knife}'`), [db5] = dq(`SELECT weight_g,price_lyd FROM products WHERE source_offer_id='${bell}'`), [jk] = dq(`SELECT weight_g FROM products WHERE source_offer_id='${jack}'`);
+    expect(kn.weight_g === null && kn.price_lyd < 40, `سكين بـ1.5 يوان بلا وزن في «أدوات البناء» (تقدير 2 كغ) تُسعَّر ${kn.price_lyd} د.ل لا 180`);
+    expect(db5.weight_g === 5000, `«دمبل 5 كجم» يأخذ وزنه من العنوان (${db5.weight_g} غ · ${db5.price_lyd} د.ل)`);
+    expect(jk.weight_g === null, '«夹克» (جاكيت) لا يُقرأ «克» فيه غرامات، والملابس لا يُقرأ وزنها من العنوان');
+    // وإعادة التسعير تقرأ الوزن من العنوان للمنتج القائم وتحفظه
+    dq(`UPDATE products SET weight_g=NULL, price_sea_lyd=NULL WHERE source_offer_id='${bell}'`);
+    for (let i = 0; i < 40; i++) { const x = await (await ctx.request.post(BASE + '/api/source/reprice', { headers: { 'x-import-token': 'dev-import-token' }, data: { limit: 800 } })).json(); if (!x.missing_sea_left) break; }
+    const [db6] = dq(`SELECT weight_g,price_sea_lyd FROM products WHERE source_offer_id='${bell}'`);
+    expect(db6.weight_g === 5000 && db6.price_sea_lyd !== null, 'إعادة التسعير تحفظ وزن «5 كجم» من العنوان لمنتج قائم بلا وزن');
     const [bb] = dq(`SELECT weight_g,price_lyd FROM products WHERE source_offer_id='${brush}'`);
     expect(bb.weight_g === 20 && bb.price_lyd < 30, `فرشاة بـ0.26 يوان «20 كغ» تُحفظ 20 غ (${bb.price_lyd} د.ل لا 1,685)`);
     // وزن مستحيل محفوظ من قبل يُصحَّح عند مرور الإثراء عليه حتى بلا وزن جديد
@@ -581,11 +595,12 @@ expect(priceBefore === priceAfter, `سعر المنتج لا يتغير عند �
     for (const f of ['0039_impossible_weights.sql', '0040_impossible_weights_cheap.sql']) execFileSync('npx', ['wrangler', 'd1', 'execute', 'dlal-db', '--local', '-c', 'wrangler.local.toml', '--file', 'migrations/' + f], { stdio: 'pipe' });
     [t] = dq(`SELECT id,weight_g,price_sea_lyd FROM products WHERE source_offer_id='${tie}'`); [k] = dq(`SELECT weight_g,price_sea_lyd FROM products WHERE source_offer_id='${tent}'`);
     expect(t.weight_g === 40 && t.price_sea_lyd === null && k.weight_g === 27400 && k.price_sea_lyd !== null, 'ترحيلا 0039 و0040 يصحّحان الربطة ولا يمسّان الخيمة');
-    const rp = await (await ctx.request.post(BASE + '/api/source/reprice', { headers: { 'x-import-token': 'dev-import-token' }, data: { limit: 50 } })).json();
+    // «الناقص» يمضي بالمعرّف: يُكرَّر حتى لا يبقى شيء (ترحيل 0042 يمسح السعر البحري لكل منتج بلا وزن)
+    let rp = { repriced: 0 }; for (let i = 0; i < 40; i++) { const x = await (await ctx.request.post(BASE + '/api/source/reprice', { headers: { 'x-import-token': 'dev-import-token' }, data: { limit: 800 } })).json(); rp.repriced += x.repriced; if (!x.missing_sea_left) break; }
     [t] = dq(`SELECT price_lyd,price_sea_lyd FROM products WHERE source_offer_id='${tie}'`);
     expect(rp.repriced >= 1 && t.price_lyd < 100 && t.price_sea_lyd !== null, `إعادة تسعير «الناقص» تعيد الربطة إلى ${t.price_lyd} د.ل`);
   } finally {
-    dq(`DELETE FROM product_images WHERE product_id IN (SELECT id FROM products WHERE source_offer_id IN ('${tie}','${tent}','${brush}','${canopy}')); DELETE FROM variants WHERE product_id IN (SELECT id FROM products WHERE source_offer_id IN ('${tie}','${tent}','${brush}','${canopy}')); DELETE FROM products WHERE source_offer_id IN ('${tie}','${tent}','${brush}','${canopy}')`);
+    dq(`DELETE FROM product_images WHERE product_id IN (SELECT id FROM products WHERE source_offer_id IN ('${tie}','${tent}','${brush}','${canopy}','${knife}','${bell}','${jack}')); DELETE FROM variants WHERE product_id IN (SELECT id FROM products WHERE source_offer_id IN ('${tie}','${tent}','${brush}','${canopy}','${knife}','${bell}','${jack}')); DELETE FROM products WHERE source_offer_id IN ('${tie}','${tent}','${brush}','${canopy}','${knife}','${bell}','${jack}')`);
   }
 }
 
