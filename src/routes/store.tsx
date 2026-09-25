@@ -158,6 +158,110 @@ store.get('/', async (c) => {
   );
 });
 
+// ---------- «كيف يعمل هدهد» بأسلوب صفحة أميال (٢٥/٠٩/٢٦) ----------
+// قرار صاحب المشروع: «اترك الرئيسية كما هي تعرض البضائع، وضع ما أخذته من أميال في صفحات أخرى — نحن موقع بيع منتجات»
+store.get('/how', async (c) => {
+  const db = c.env.DB; const b = await base(c); const s = await loadSettings(db);
+  const stats = await db.prepare("SELECT (SELECT COUNT(*) FROM products WHERE status='active') p,(SELECT COUNT(*) FROM orders WHERE status='delivered') d").first<any>();
+  return c.html(
+    <Layout {...b} title="كيف يعمل هدهد">
+      <section class="how-hero"><span class="hm-tag">هدهد HUDHUDE — بوابتك إلى الصين</span><h1>من مصانع الصين إلى باب بيتك في ليبيا</h1>
+        <p>نشتري لك مباشرة من المصانع، نفحص كل قطعة ونصوّرها، ونوصلها إليك بسعر نهائي بالدينار تعرفينه قبل أن تدفعي.</p>
+        <div class="hm-cta-b"><a class="btn" href="/">تسوّقي الآن</a><a class="btn ghost" href="/track">تتبّعي طلبك</a></div></section>
+      {/* ===== أقسام بأسلوب صفحة أميال بألوان هدهد (٢٥/٠٩/٢٦): الأرقام، كيف يعمل، التتبّع، المدن، الأسئلة، الدعوة ===== */}
+      <section class="hm-stats">
+        <div><b>{Number(stats?.p ?? 0).toLocaleString('en-US')}+</b><span>منتج بسعر نهائي بالدينار</span></div>
+        <div><b>{CITIES.length}</b><span>مدينة ليبية نوصل إليها</span></div>
+        <div><b>{Number(stats?.d ?? 0).toLocaleString('en-US')}</b><span>طلب وصل لصاحبته</span></div>
+        <div><b>100%</b><span>تعويض لأي تالف أو مختلف</span></div>
+      </section>
+
+      <section class="hm-how">
+        <div class="hm-head"><span class="hm-tag">الخطوات</span><h2>أربع خطوات فقط</h2><p>أربع خطوات، وسعر واحد نهائي بالدينار تعرفينه قبل أن تدفعي.</p></div>
+        <div class="hm-steps">
+          <div class="hm-step hm-feat"><i>🛍️</i><b>اختاري وادفعي بالدينار</b><span>بطاقة، سداد، إدفعلي أو كاش — والسعر شامل الشحن والجمارك.</span></div>
+          <div class="hm-step"><i>🏭</i><b>نشتري لك من المصنع</b><span>مباشرة من 1688 بأسعار المصانع، بالمقاس واللون الذي اخترتِه.</span></div>
+          <div class="hm-step"><i>🔍</i><b>نفحص ونصوّر ونشحن</b><span>نفتح كل طرد في مخزننا بالصين ونصوّره قبل الشحن {seaOn(s) ? 'جوًّا أو بحرًا' : 'جوًّا'}.</span></div>
+          <div class="hm-step"><i>🚚</i><b>يصلك إلى الباب</b><span>في {CITIES.length} مدينة ليبية، وتتابعين طلبك برقمه لحظة بلحظة.</span></div>
+        </div>
+      </section>
+
+      <section class="hm-track">
+        <div class="hm-head"><span class="hm-tag">تتبّع طلبك</span><h2>تعرفين أين طلبك في كل لحظة</h2><p>من لحظة الدفع حتى يطرق مندوب التوصيل بابك — كل مرحلة بوقتها.</p>
+          <form method="get" action="/track" class="trk-form"><input type="text" name="code" placeholder="DL-2026-000123" dir="ltr" required /><input type="tel" name="phone" placeholder="آخر 4 أرقام" maxlength={4} inputmode="numeric" dir="ltr" required /><button class="btn">تتبّعي طلبك</button></form></div>
+        <TrackCard o={{ code: 'DL-2026-000123', status: 'arrived', courier_ref: null }} done={new Map()} />
+      </section>
+
+      <section class="hm-cities">
+        <div class="hm-head"><span class="hm-tag">تغطيتنا</span><h2>نصل إلى كل مدينة ليبية</h2></div>
+        <div class="hm-chips">{CITIES.map(ct => <span>📍 {ct}</span>)}</div>
+      </section>
+
+      <section class="hm-faq">
+        <div class="hm-head"><span class="hm-tag">الأسئلة الشائعة</span><h2>كل ما تحتاجين معرفته</h2></div>
+        <details open><summary>كم يستغرق وصول طلبي؟</summary><p>الشحن الجوي {s.air_days || '12 — 18 يومًا'}{seaOn(s) ? `، والبحري ${s.sea_days || '30 — 45 يومًا'} بسعر أرخص` : ''} من يوم الدفع حتى باب بيتك.</p></details>
+        <details><summary>هل السعر المعروض نهائي؟</summary><p>نعم. السعر يشمل ثمن المنتج والشحن من الصين والجمارك، وتُضاف أجرة التوصيل داخل مدينتك فقط وتظهر لك قبل الدفع.</p></details>
+        <details><summary>كيف أدفع؟</summary><p>ببطاقتك المصرفية المحلية (معاملات)، أو سداد، أو إدفعلي، أو كاش في الفرع — كلها بالدينار الليبي.</p></details>
+        <details><summary>ماذا لو وصل المنتج تالفًا أو مختلفًا؟</summary><p>نعوّضك بالكامل: استبدال أو استرداد. نفحص كل طرد ونصوّره قبل الشحن حتى نحمي حقك. <a href="/pages/returns">سياسة الإرجاع ›</a></p></details>
+        <details><summary>هل أستطيع طلب منتج غير موجود في المتجر؟</summary><p>نعم — الصقي رابطه من 1688 أو تاوباو أو شي إن أو أمازون في <a href="/request">«اطلبي برابط»</a> ونوفّره لك بسعر نهائي.</p></details>
+        <details><summary>كيف أتابع طلبي؟</summary><p>من «طلباتي» في حسابك، أو من <a href="/track">تتبّع الطلب</a> برقمه وآخر 4 أرقام من هاتفك.</p></details>
+      </section>
+
+      <section class="hm-cta">
+        <div><h2>جاهزة لطلبك القادم من الصين؟</h2><p>آلاف المنتجات بسعر نهائي بالدينار — تصلك إلى الباب في كل ليبيا.</p></div>
+        <div class="hm-cta-b"><a class="btn" href="/new">تسوّقي الجديد</a><a class="btn ghost" href="/request">اطلبي برابط</a>
+          {realWa(s.whatsapp_number) ? <a class="btn ghost" href={`https://wa.me/${realWa(s.whatsapp_number)}`}>واتساب</a> : null}</div>
+      </section>
+    </Layout>,
+  );
+});
+
+// ---------- تتبّع الطلب برقمه (بأسلوب «تتبع شحنتك» في أميال، ٢٥/٠٩/٢٦) ----------
+// بلا تسجيل دخول: رقم الطلب + آخر 4 أرقام من هاتف التوصيل، فلا يرى أحد طلب غيره برقم يخمّنه.
+const TRACK_STEPS: [string, string, string][] = [
+  ['paid', '💳', 'استلمنا طلبك ودفعته'], ['purchased', '🛍️', 'اشتريناه من المصنع في الصين'], ['at_warehouse', '🏭', 'وصل مخزننا في الصين وفحصناه'],
+  ['shipped', '✈️', 'في الطريق إلى ليبيا'], ['arrived', '🇱🇾', 'وصل ليبيا وخرج من الجمارك'], ['ready', '🚚', 'مع شركة التوصيل في طريقه إليك'], ['delivered', '✅', 'تم التسليم'],
+];
+export const TrackCard = ({ o, done }: { o: any; done: Map<string, string> }) => {
+  const cur = ORDER_STATUS[o.status]?.step ?? 0;
+  return (
+    <div class="trk-card">
+      <div class="trk-h"><div><small>رقم الطلب</small><b dir="ltr">{o.code}</b></div><span class={`status ${ORDER_STATUS[o.status]?.color}`}>{ORDER_STATUS[o.status]?.ar}</span></div>
+      {o.courier_ref && <p class="trk-courier">🚚 مع {o.courier} — رقم الشحنة <b dir="ltr">{o.courier_ref}</b></p>}
+      <ol class="trk-steps">{TRACK_STEPS.map(([st, ic, ar]) => { const step = ORDER_STATUS[st].step; const isDone = cur >= step; const isNow = !isDone ? false : !TRACK_STEPS.some(([s2]) => ORDER_STATUS[s2].step > step && cur >= ORDER_STATUS[s2].step);
+        return <li class={`${isDone ? 'done' : ''} ${isNow ? 'now' : ''}`}><i>{ic}</i><div><b>{ar}</b>{done.get(st) ? <small>{timeAgo(done.get(st)!)}</small> : st === 'ready' && o.courier_at ? <small>{timeAgo(o.courier_at)}</small> : null}</div></li>; })}</ol>
+    </div>);
+};
+store.get('/track', async (c) => {
+  const b = await base(c);
+  const code = String(c.req.query('code') ?? '').trim().toUpperCase().replace(/\s+/g, '');
+  const ph = String(c.req.query('phone') ?? '').replace(/\D/g, '').slice(-4);
+  let o: any = null, done = new Map<string, string>(), err = '';
+  if (code) {
+    if (!/^DL-\d{4}-\d{6}$/.test(code) || ph.length !== 4) err = 'اكتبي رقم الطلب كما وصلك (مثل DL-2026-000123) وآخر 4 أرقام من هاتف التوصيل.';
+    else {
+      o = await c.env.DB.prepare("SELECT code,status,ship_city,ship_zone,courier,courier_ref,courier_at,id FROM orders WHERE code=? AND substr(replace(ship_phone,' ',''),-4)=? AND status NOT IN ('cancelled')").bind(code, ph).first<any>();
+      if (!o) err = 'لم نجد طلبًا بهذا الرقم وهذا الهاتف. تأكدي منهما أو راسلينا.';
+      else done = new Map((await c.env.DB.prepare('SELECT status,MIN(created_at) t FROM order_events WHERE order_id=? GROUP BY status').bind(o.id).all<any>()).results.map((e: any) => [e.status, e.t]));
+    }
+  }
+  return c.html(
+    <Layout {...b} title="تتبّع طلبك">
+      <section class="trk-page">
+        <div class="trk-intro"><span class="hm-tag">تتبّع لحظة بلحظة</span><h1>أين طلبك الآن؟</h1><p>اكتبي رقم الطلب وآخر 4 أرقام من هاتف التوصيل — تظهر لك كل مرحلة من الصين حتى باب بيتك.</p>
+          <form method="get" action="/track" class="trk-form">
+            <input type="text" name="code" value={code} placeholder="DL-2026-000123" dir="ltr" required />
+            <input type="tel" name="phone" value={ph} placeholder="آخر 4 أرقام" maxlength={4} inputmode="numeric" dir="ltr" required />
+            <button class="btn">تتبّعي</button>
+          </form>
+          {err && <p class="trk-err">{err}</p>}
+        </div>
+        {o ? <TrackCard o={o} done={done} /> : <TrackCard o={{ code: 'DL-2026-000123', status: 'shipped', courier_ref: null }} done={new Map()} />}
+      </section>
+    </Layout>,
+  );
+});
+
 // المشاهدات الأخيرة: كوكي للزائرة + جدول للمسجلة
 async function recentlyViewed(c: Context<Env>, exclude?: number): Promise<ProductRow[]> {
   const ids = (getCookie(c, 'rv') ?? '').split(',').map(Number).filter(n => n && n !== exclude).slice(0, 10);

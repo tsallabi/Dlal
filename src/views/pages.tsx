@@ -2,7 +2,7 @@ import type { FC } from 'hono/jsx';
 
 // روابط تنقل موحّدة بين صفحات المساعدة — تظهر في أعلى كل صفحة
 export const HELP_NAV: [string, string][] = [
-  ['/pages/how', 'كيف نعمل'],
+  ['/how', 'كيف نعمل'],
   ['/pages/how-to-order', 'كيف أطلب'],
   ['/pages/shipping', 'معلومات الشحن'],
   ['/pages/returns', 'الإرجاع والاسترداد'],

@@ -653,7 +653,7 @@ await page.goto(BASE + '/account/orders?stage=cancelled'); expect(await has(page
 
 // ---------- صفحات المساعدة والسياسات بالعربية ----------
 const HELP = [
-  ['/pages/how', 'كيف يعمل هدهد؟', 'شحن جوي إلى ليبيا'],
+  ['/pages/how', 'من مصانع الصين إلى باب بيتك', 'نصل إلى كل مدينة ليبية'],
   ['/pages/how-to-order', 'كيف أطلب من هدهد؟', 'أكّدي الطلب وادفعي'],
   ['/pages/shipping', 'معلومات الشحن', 'التوصيل داخل ليبيا'],
   ['/pages/returns', 'سياسة الإرجاع والاسترداد', 'متى تستحقين تعويضًا كاملًا'],
@@ -2547,6 +2547,32 @@ await mp.screenshot({ path: `${OUT}/${String(++n).padStart(2, '0')}-mobile-order
     d1q("DELETE FROM partner_zones WHERE partner_id=1 AND city='طرابلس'");
     for (const z of oldZones) d1q(`INSERT INTO partner_zones(partner_id,city,zone,km_from,km_to,price_lyd) VALUES(1,'${z.city}','${z.zone}',${z.km_from},${z.km_to},${z.price_lyd})`);
   }
+}
+
+// ---------- تتبّع الطلب برقمه، وأقسام الرئيسية بأسلوب أميال (٢٥/٠٩/٢٦) ----------
+{
+  const { execFileSync } = await import('node:child_process');
+  const d1q = (sql) => JSON.parse(execFileSync('npx', ['wrangler', 'd1', 'execute', 'dlal-db', '--local', '-c', 'wrangler.local.toml', '--json', '--command', sql], { stdio: 'pipe' }).toString())[0].results;
+  const tr = d1q("SELECT code, substr(replace(ship_phone,' ',''),-4) p, status FROM orders WHERE status='delivered' ORDER BY id DESC LIMIT 1")[0];
+  // قرار صاحب المشروع: الرئيسية للبضاعة وحدها، وأقسام أميال في صفحة «كيف يعمل هدهد» (/how)
+  await page.goto(BASE + '/logout'); await page.goto(BASE + '/');
+  expect(!(await page.locator('.hm-stats, .hm-track, .hm-faq').count()) && await page.locator('.card').count() >= 20, 'الرئيسية تبقى للبضاعة وحدها (لا أقسام تتبّع ولا أسئلة)');
+  await page.click('.hdr-strip a[href="/how"] >> nth=0'); await page.waitForLoadState('networkidle');
+  expect(page.url().endsWith('/how'), 'رابط «كيف يعمل هدهد» في الترويسة يفتح صفحته');
+  for (const t of ['أربع خطوات فقط', 'تعرفين أين طلبك في كل لحظة', 'نصل إلى كل مدينة ليبية', 'كل ما تحتاجين معرفته', 'جاهزة لطلبك القادم من الصين؟'])
+    expect(await has(page, t), `صفحة «كيف يعمل هدهد» فيها قسم «${t}»`);
+  expect(await page.locator('.hm-stats > div').count() === 4 && !(await page.locator('.hm-stats').textContent()).includes('undefined'), 'شريط الأرقام الأربعة بأرقام حقيقية');
+  await page.locator('.hm-faq summary', { hasText: 'كيف أدفع' }).click();
+  expect(await page.locator('.hm-faq details', { hasText: 'كيف أدفع' }).getAttribute('open') !== null, 'الأسئلة الشائعة تُفتح بالنقر');
+  const hf = page.locator('.hm-track form.trk-form');
+  await hf.locator('input[name=code]').fill(tr.code); await hf.locator('input[name=phone]').fill(tr.p); await hf.locator('button').click(); await page.waitForLoadState('networkidle');
+  expect(page.url().includes('/track?') && (await page.locator('.trk-card .trk-h').textContent()).includes(tr.code) && await page.locator('.trk-steps li.done').count() === 7, `تتبّع الطلب ${tr.code} برقمه وآخر 4 أرقام يعرض مراحله السبع مكتملة`);
+  await page.goto(BASE + `/track?code=${tr.code}&phone=0000`);
+  expect(await has(page, 'لم نجد طلبًا بهذا الرقم وهذا الهاتف'), 'رقم هاتف خاطئ لا يكشف الطلب');
+  expect(await page.locator('.hdr-strip a[href="/track"]').count() === 1, 'رابط «تتبّعي طلبك» في شريط الترويسة');
+  const tm = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, locale: 'ar' }); const tmp = await tm.newPage();
+  for (const u of ['/how', `/track?code=${tr.code}&phone=${tr.p}`]) { await tmp.goto(BASE + u); const sw = await tmp.evaluate(() => document.documentElement.scrollWidth); expect(sw <= 391, `${u.split('?')[0]} في الجوال بلا تمرير أفقي (${sw})`); }
+  await tm.close();
 }
 
 // ---------- D1 يرفض نمط LIKE فوق 50 بايتًا (المحلي لا يرفضه فلا يراه أي فحص آخر) — ٢٤/٠٩/٢٦ ----------

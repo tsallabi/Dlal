@@ -33,11 +33,15 @@ export const Layout: FC<Props> = ({ title, user, cartCount = 0, wishCount = 0, c
           <div class="wrap">
             <a href="/request" class="strip-req"><i>🔗</i>اطلبي أي منتج برابط</a>
             <span class="sep"></span>
+            <a href="/track"><i>📍</i>تتبّعي طلبك</a>
+            <span class="sep"></span>
+            <a href="/how"><i>🐦</i>كيف يعمل هدهد</a>
+            <span class="sep"></span>
             <a href="/pages/shipping"><i>🚚</i>معلومات الشحن</a>
             <span class="sep"></span>
             <a href="/pages/returns"><i>↩️</i>الإرجاع والاسترداد</a>
             <span class="sep"></span>
-            <a href="/pages/how"><i>🏷️</i>أسعار نهائية شاملة الشحن والجمارك</a>
+            <a href="/how"><i>🏷️</i>أسعار نهائية شاملة الشحن والجمارك</a>
           </div>
         </div>
         {/* الشريط الرئيسي: الشعار + بحث + أيقونات */}
@@ -97,7 +101,7 @@ export const Layout: FC<Props> = ({ title, user, cartCount = 0, wishCount = 0, c
         <div class="ftr-top">
           <div class="ftr-col">
             <h5>عن هدهد</h5>
-            <a href="/pages/how">من نحن وكيف نعمل</a>
+            <a href="/how">من نحن وكيف نعمل</a>
             <a href="/pages/branches">فروعنا في ليبيا</a>
             <a href="/pages/privacy">إشعار الخصوصية</a>
             <a href="/pages/terms">الشروط والأحكام</a>
@@ -108,7 +112,7 @@ export const Layout: FC<Props> = ({ title, user, cartCount = 0, wishCount = 0, c
             <a href="/pages/returns">الإرجاع والاسترداد</a>
             <a href="/pages/how-to-order">كيف أطلب؟</a>
             <a href="/pages/sizes">دليل المقاسات</a>
-            <a href="/account/orders">تتبّع طلبي</a>
+            <a href="/track">تتبّع طلبي</a>
           </div>
           <div class="ftr-col">
             <h5>خدمة الزبائن</h5>

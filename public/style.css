@@ -1139,3 +1139,70 @@ body{background:#fff}
 .admin-body .kpis{grid-template-columns:repeat(auto-fill,minmax(200px,1fr))}
 .admin-body .kpi b{white-space:nowrap;font-size:clamp(20px,2.1vw,28px)}
 @media(max-width:800px){.admin-body .hdr{position:static}.admin-body .hdr-top .logo img{height:40px}.admin-body .hdr-top .logo b{font-size:19px}.admin-body .hdr-top>.pill{padding:5px 12px;font-size:12px}}
+
+/* ===== الصفحة الرئيسية: أقسام بأسلوب صفحة أميال بألوان هدهد (٢٥/٠٩/٢٦) ===== */
+.hm-tag{display:inline-block;background:var(--brand-l);color:var(--brand);font-weight:700;font-size:12.5px;padding:4px 12px;border-radius:999px;margin-bottom:8px}
+.hm-head h2{font-size:clamp(24px,3.2vw,36px);font-weight:900;line-height:1.25;margin:0 0 8px;color:#1d1d1f}
+.hm-head p{color:#6d625a;margin:0 0 16px;font-size:15px}
+.hm-stats,.hm-how,.hm-track,.hm-cities,.hm-faq,.hm-cta{margin:36px 0}
+/* شريط الأرقام: قرفة داكنة متدرّجة مثل شريط «أكثر من 1200 عميل» */
+.hm-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;background:linear-gradient(135deg,#3b1d0b 0%,#6e3512 55%,#9a4d1a 100%);border-radius:28px;padding:28px 20px;color:#fff;box-shadow:0 18px 40px rgba(90,40,10,.25)}
+.hm-stats>div{text-align:center;padding:10px;border-radius:18px;background:rgba(255,255,255,.07);backdrop-filter:blur(2px)}
+.hm-stats b{display:block;font-size:clamp(24px,3vw,34px);font-weight:900;line-height:1.2}
+.hm-stats span{font-size:13px;opacity:.85}
+/* كيف يعمل: أربع بطاقات، الأولى مميّزة متدرّجة مثل «الشحن المحلي» في أميال */
+.hm-steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.hm-step{background:#fff;border:1px solid #f0e6dd;border-radius:22px;padding:20px;display:flex;flex-direction:column;gap:6px;box-shadow:0 6px 24px rgba(110,60,20,.06)}
+.hm-step i{font-style:normal;font-size:22px;width:46px;height:46px;border-radius:14px;display:grid;place-items:center;background:var(--brand-l);margin-bottom:6px}
+.hm-step b{font-size:16.5px;font-weight:800}.hm-step span{color:#6d625a;font-size:14px}
+.hm-step.hm-feat{background:linear-gradient(135deg,#C06828,#8A4416);color:#fff;border:0;box-shadow:0 14px 30px rgba(176,90,32,.3)}
+.hm-step.hm-feat i{background:rgba(255,255,255,.18)}.hm-step.hm-feat span{color:#fbe9dc}
+/* التتبّع: نص ونموذج بجانب بطاقة مراحل مثل بطاقة AMY-284510 */
+.hm-track,.trk-page{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,420px);gap:28px;align-items:center;background:linear-gradient(180deg,#fdf8f4,#faf3ec);border-radius:28px;padding:28px}
+.trk-page{margin:24px 0}
+.trk-intro h1{font-size:clamp(26px,3.4vw,38px);font-weight:900;margin:0 0 8px}.trk-intro p{color:#6d625a}
+.trk-form{display:flex;flex-wrap:wrap;gap:8px}
+.trk-form input{flex:1 1 150px;min-width:0;border:1.5px solid #eadfd5;border-radius:14px;padding:12px 14px;font:inherit;background:#fff}
+.trk-form input:focus{outline:0;border-color:var(--brand);box-shadow:0 0 0 4px rgba(176,90,32,.12)}
+.trk-form .btn{border-radius:14px;background:linear-gradient(135deg,#C06828,#8A4416);border:0;padding:12px 22px}
+.trk-err{color:#a51d1d;font-weight:700;margin-top:8px}
+.trk-card{background:#fff;border-radius:24px;padding:20px;box-shadow:0 16px 40px rgba(110,60,20,.12)}
+.trk-h{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #f3ece6;padding-bottom:12px;margin-bottom:10px}
+.trk-h small{display:block;color:#8a7a6c;font-size:12px}.trk-h b{font-size:18px;font-weight:800}
+.trk-courier{background:var(--brand-l);border-radius:12px;padding:8px 12px;font-size:13px;margin:0 0 10px}
+.trk-steps{list-style:none;margin:0;padding:0;position:relative}
+.trk-steps li{display:flex;gap:12px;align-items:flex-start;padding:8px 0;position:relative;opacity:.45}
+.trk-steps li:not(:last-child)::after{content:"";position:absolute;inset-inline-start:17px;top:44px;bottom:-6px;width:2px;background:#efe4da}
+.trk-steps li.done{opacity:1}.trk-steps li.done:not(:last-child)::after{background:var(--brand)}
+.trk-steps i{font-style:normal;width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:#f4ece5;font-size:16px;flex:none}
+.trk-steps li.done i{background:var(--brand-l);box-shadow:0 0 0 2px var(--brand) inset}
+.trk-steps li.now i{background:linear-gradient(135deg,#C06828,#8A4416);box-shadow:0 6px 14px rgba(176,90,32,.35)}
+.trk-steps b{display:block;font-size:14.5px}.trk-steps small{color:#8a7a6c;font-size:12px}
+/* المدن */
+.hm-chips{display:flex;flex-wrap:wrap;gap:8px}
+.hm-chips span{background:#fff;border:1px solid #eadfd5;border-radius:999px;padding:8px 14px;font-size:14px;font-weight:600}
+/* الأسئلة */
+.hm-faq details{background:#fff;border:1px solid #f0e6dd;border-radius:16px;margin-bottom:10px;padding:0 16px;box-shadow:0 4px 16px rgba(110,60,20,.04)}
+.hm-faq summary{cursor:pointer;list-style:none;padding:14px 0;font-weight:800;display:flex;justify-content:space-between;gap:10px}
+.hm-faq summary::-webkit-details-marker{display:none}
+.hm-faq summary::after{content:"+";color:var(--brand);font-size:22px;line-height:1;font-weight:400}
+.hm-faq details[open] summary::after{content:"−"}
+.hm-faq details p{margin:0 0 14px;color:#5b514a}
+/* الدعوة الأخيرة */
+.hm-cta{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;background:#fff;border:1px solid #f0e6dd;border-radius:28px;padding:26px 28px;box-shadow:0 10px 30px rgba(110,60,20,.07)}
+.hm-cta h2{margin:0 0 6px;font-size:clamp(22px,2.8vw,30px);font-weight:900}.hm-cta p{margin:0;color:#6d625a}
+.hm-cta-b{display:flex;gap:8px;flex-wrap:wrap}
+.hm-cta-b .btn{border-radius:14px}
+.hm-cta-b .btn:not(.ghost){background:linear-gradient(135deg,#C06828,#8A4416);border:0}
+@media(max-width:900px){
+  .hm-stats{grid-template-columns:repeat(2,minmax(0,1fr));padding:18px 12px;border-radius:22px}
+  .hm-steps{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.hm-step{padding:14px;border-radius:18px}
+  .hm-track,.trk-page{grid-template-columns:minmax(0,1fr);padding:18px;border-radius:22px}
+}
+@media(max-width:480px){.hm-steps{grid-template-columns:minmax(0,1fr)}.hm-stats,.hm-how,.hm-track,.hm-cities,.hm-faq,.hm-cta{margin:24px 0}}
+/* صفحة «كيف يعمل هدهد» (/how) */
+.how-hero{text-align:center;padding:40px 16px 8px;max-width:760px;margin:0 auto}
+.how-hero h1{font-size:clamp(28px,4.4vw,48px);font-weight:900;line-height:1.2;margin:0 0 12px}
+.how-hero p{color:#6d625a;font-size:16px;margin:0 0 18px}
+.how-hero .hm-cta-b{justify-content:center}
+.how-hero .btn{border-radius:14px}.how-hero .btn:not(.ghost){background:linear-gradient(135deg,#C06828,#8A4416);border:0}
