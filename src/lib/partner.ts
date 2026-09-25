@@ -161,7 +161,7 @@ export async function testDispatch(p: { api_url: string | null; api_secret: stri
   const body = JSON.stringify({
     event: 'order.test',
     order: { code: 'DL-TEST-000000', paid_at: new Date().toISOString(), ship_method: 'air', note: 'طلب تجريبي — لا تشترِه',
-      customer: { name: 'زبونة تجريبية', phone: '0910000000', city: 'طرابلس', address: 'عنوان تجريبي' },
+      customer: { name: 'زبون تجريبي', phone: '0910000000', city: 'طرابلس', address: 'عنوان تجريبي' },
       items: [{ item_id: 0, title: 'منتج تجريبي', color: 'أسود', size: 'M', qty: 1, offer_id: '000000000', url: 'https://detail.1688.com/offer/000000000.html', supplier_price_cny: 10, weight_g: 300 }],
       dues: null },
     callbacks: { status: `${origin}/api/partner/v1/orders/DL-TEST-000000/status` },
@@ -316,7 +316,7 @@ export async function courierResult(db: D1Database, code: string, result: 'deliv
   if (!o) return false;
   if (result === 'delivered') {
     await db.prepare("UPDATE orders SET courier_status='delivered' WHERE id=?").bind(o.id).run();
-    await setOrderStatus(db, code, 'delivered', byUserId, `سلّمه ${o.courier} للزبونة`);
+    await setOrderStatus(db, code, 'delivered', byUserId, `سلّمه ${o.courier} للزبون`);
   } else {
     await db.batch([
       db.prepare("UPDATE orders SET courier_status='failed',courier_note=?,updated_at=datetime('now') WHERE id=?").bind(note, o.id),

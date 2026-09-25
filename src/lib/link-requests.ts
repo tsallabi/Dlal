@@ -39,7 +39,7 @@ export async function settleLinkRequests(db: D1Database): Promise<number> {
     } else {
       const why = r.status === 'unavailable' ? 'نفد عند المورّد' : (r.min_qty ?? 1) > 1 ? `المورّد يبيعه بالجملة فقط (أقل طلب ${r.min_qty} قطعة)` : 'لا يمكن بيعه بالقطعة';
       await db.prepare("UPDATE link_requests SET status='rejected',product_id=?,admin_note=?,updated_at=datetime('now') WHERE id=?").bind(r.pid, why, r.id).run();
-      await notify(db, r.user_id, 'تعذّر توفير المنتج الذي طلبتِه', `${why}. جرّبي رابطًا من مورّد آخر.`, '/request');
+      await notify(db, r.user_id, 'تعذّر توفير المنتج الذي طلبته', `${why}. جرّب رابطًا من مورّد آخر.`, '/request');
     }
   }
   return results.length;

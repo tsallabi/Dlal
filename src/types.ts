@@ -63,13 +63,13 @@ export const PARTNER_FLOW = ['paid','purchasing','purchased','at_warehouse','con
 
 // طرق الدفع: mypay_* تمر عبر بوابة ماي باي، والباقي يدوي
 export const PAYMENT_METHODS: Record<string, { ar: string; icon: string; online: boolean; gateway?: string; desc: string; hidden?: boolean }> = {
-  mypay_moamalat: { ar: 'بطاقة مصرفية محلية (معاملات)', icon: '💳', online: true, gateway: 'moamalat', desc: 'ادفعي فورًا ببطاقة أي مصرف ليبي عبر ماي باي' },
+  mypay_moamalat: { ar: 'بطاقة مصرفية محلية (معاملات)', icon: '💳', online: true, gateway: 'moamalat', desc: 'ادفع فورًا ببطاقة أي مصرف ليبي عبر ماي باي' },
   mypay_sadad:    { ar: 'سداد', icon: '📱', online: true, gateway: 'sadad', desc: 'دفع فوري عبر تطبيق سداد' },
   mypay_edfali:   { ar: 'إدفعلي', icon: '📲', online: true, gateway: 'edfali', desc: 'دفع فوري عبر إدفعلي' },
   mypay_mobicash: { ar: 'موبي كاش', icon: '📳', online: true, gateway: 'mobicash', desc: 'دفع فوري عبر موبي كاش' },
-  cash_branch:    { ar: 'دفع كاش في أقرب فرع', icon: '🏪', online: false, desc: 'ادفعي نقدًا في أحد فروعنا ويُفعَّل طلبك فورًا' },
+  cash_branch:    { ar: 'دفع كاش في أقرب فرع', icon: '🏪', online: false, desc: 'ادفع نقدًا في أحد فروعنا ويُفعَّل طلبك فورًا' },
   // مخفيّان من الدفع لكن يبقيان معرّفين حتى تظهر الطلبات القديمة بأسمائها الصحيحة
-  transfer:       { ar: 'تحويل مصرفي / إيصال', icon: '🏦', online: false, hidden: true, desc: 'حوّلي المبلغ وأرسلي الإيصال على واتساب، يُفعَّل الطلب خلال ساعات العمل' },
+  transfer:       { ar: 'تحويل مصرفي / إيصال', icon: '🏦', online: false, hidden: true, desc: 'حوّل المبلغ وأرسل الإيصال على واتساب، يُفعَّل الطلب خلال ساعات العمل' },
   cod_deposit:    { ar: 'عربون 30% والباقي عند الاستلام', icon: '🤝', online: false, hidden: true, desc: 'يتواصل معك فريقنا لتأكيد العربون' },
 };
 

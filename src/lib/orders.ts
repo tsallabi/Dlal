@@ -8,7 +8,7 @@ const MSGS: Record<string, string> = {
   paid: 'تم تأكيد دفع طلبك ✓ بدأ فريقنا في الصين شراء منتجاتك.',
   purchasing: 'بدأ فريقنا شراء منتجاتك من الموردين.', purchased: 'تم شراء كل منتجاتك وهي في طريقها إلى مخزننا.', at_warehouse: 'وصلت منتجاتك إلى مخزننا في الصين وجارٍ فحصها.',
   consolidated: 'ضُمّت منتجاتك إلى شحنة متجهة إلى ليبيا.', shipped: 'شُحن طلبك إلى ليبيا ✈️', arrived: 'وصل طلبك إلى ليبيا 🇱🇾', customs: 'طلبك في الجمارك.', ready: 'طلبك جاهز — سيتواصل معك المندوب للتسليم.',
-  delivered: 'تم تسليم طلبك. شكرًا لتسوقك مع هدهد 💕 قيّمي منتجاتك واكسبي نقاطًا.', cancelled: 'أُلغي طلبك.', refunded: 'تم استرجاع قيمة طلبك.',
+  delivered: 'تم تسليم طلبك. شكرًا لتسوقك مع هدهد 💕 قيّم منتجاتك واكسب نقاطًا.', cancelled: 'أُلغي طلبك.', refunded: 'تم استرجاع قيمة طلبك.',
 };
 
 export async function setOrderStatus(db: D1Database, code: string, status: string, byUserId: number | null, note?: string) {
