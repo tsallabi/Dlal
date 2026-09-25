@@ -72,7 +72,7 @@ const proxyImg = (u) => (!u ? u : /(^|\.)(alicdn\.com|1688\.com|taobao\.com|tbcd
     opts.forEach(g => { const first = variants.find(v => v.in_stock && v[g.dataset.opt]); if (first) sel[g.dataset.opt] = first[g.dataset.opt]; });
     refresh();
     $('#addForm')?.addEventListener('submit', (e) => {
-      if (opts.length && !$('#variantId').value) { e.preventDefault(); say('اختاري اللون والمقاس أولًا'); }
+      if (opts.length && !$('#variantId').value) { e.preventDefault(); say('اختر اللون والمقاس أولًا'); }
     });
   }
 
@@ -141,7 +141,7 @@ const proxyImg = (u) => (!u ? u : /(^|\.)(alicdn\.com|1688\.com|taobao\.com|tbcd
     try {
       const r = await fetch('/api/chat?since=' + lastId + (order ? '&order=' + encodeURIComponent(order) : ''));
       const d = await r.json();
-      if (d.needLogin) { sub.textContent = 'سجّلي الدخول لبدء المحادثة'; return; }
+      if (d.needLogin) { sub.textContent = 'سجّل الدخول لبدء المحادثة'; return; }
       if (d.ticket) sub.textContent = 'رقم المحادثة ' + d.ticket.code;
       if (d.messages && d.messages.length) {
         const empty = body.querySelector('.ch-empty'); if (empty) empty.remove();
@@ -165,7 +165,7 @@ const proxyImg = (u) => (!u ? u : /(^|\.)(alicdn\.com|1688\.com|taobao\.com|tbcd
     const text = input.value.trim(); if (!text) return;
     input.value = '';
     const r = await fetch('/api/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ body: text, order }) });
-    if (r.status === 401) { sub.textContent = 'سجّلي الدخول أولًا'; location.href = '/login?next=' + encodeURIComponent(location.pathname); return; }
+    if (r.status === 401) { sub.textContent = 'سجّل الدخول أولًا'; location.href = '/login?next=' + encodeURIComponent(location.pathname); return; }
     await poll();
   });
   // زر «راسلنا عن هذا الطلب» في صفحة الطلب يفتح المحادثة مربوطة بالطلب

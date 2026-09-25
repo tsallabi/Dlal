@@ -13,12 +13,12 @@ auth.get('/login', async (c) => {
     <Layout {...b} title="تسجيل الدخول">
       <form class="form" method="post">
         <h1>تسجيل الدخول</h1>
-        <Flash type="err" msg={c.req.query('err') === 'pending' ? 'حسابك بانتظار موافقة إدارة هدهد — ستتمكن من الدخول فور قبوله.' : c.req.query('err') === 'disabled' ? 'هذا الحساب معطّل. تواصلي مع الدعم.' : c.req.query('err') ? 'رقم الهاتف أو كلمة المرور غير صحيحة' : undefined} />
+        <Flash type="err" msg={c.req.query('err') === 'pending' ? 'حسابك بانتظار موافقة إدارة هدهد — ستتمكن من الدخول فور قبوله.' : c.req.query('err') === 'disabled' ? 'هذا الحساب معطّل. تواصل مع الدعم.' : c.req.query('err') ? 'رقم الهاتف أو كلمة المرور غير صحيحة' : undefined} />
         <input type="hidden" name="next" value={c.req.query('next') ?? '/'} />
         <label>رقم الهاتف</label><input type="tel" name="phone" placeholder="09xxxxxxxx" required autofocus />
         <label>كلمة المرور</label><input type="password" name="password" required />
         <button class="btn" type="submit" style="width:100%;margin-top:16px">دخول</button>
-        <p style="text-align:center;margin-top:14px;font-size:14px">جديدة هنا؟ <a href={`/register?next=${encodeURIComponent(c.req.query('next') ?? '/')}`} style="color:var(--brand);font-weight:700">أنشئي حسابًا</a></p>
+        <p style="text-align:center;margin-top:14px;font-size:14px">جديد هنا؟ <a href={`/register?next=${encodeURIComponent(c.req.query('next') ?? '/')}`} style="color:var(--brand);font-weight:700">أنشئ حسابًا</a></p>
       </form>
     </Layout>,
   );
@@ -45,13 +45,13 @@ auth.get('/register', async (c) => {
     <Layout {...b} title="حساب جديد">
       <form class="form" method="post">
         <h1>إنشاء حساب</h1>
-        <Flash type="err" msg={c.req.query('err') === 'exists' ? 'هذا الرقم مسجّل مسبقًا. سجّلي الدخول.' : c.req.query('err') ? 'تحققي من البيانات' : undefined} />
+        <Flash type="err" msg={c.req.query('err') === 'exists' ? 'هذا الرقم مسجّل مسبقًا. سجّل الدخول.' : c.req.query('err') ? 'تحقق من البيانات' : undefined} />
         <input type="hidden" name="next" value={c.req.query('next') ?? '/'} />
         <label>الاسم</label><input type="text" name="name" required />
         <label>رقم الهاتف</label><input type="tel" name="phone" placeholder="09xxxxxxxx" required />
         <label>كلمة المرور</label><input type="password" name="password" minlength={6} required />
         <button class="btn" type="submit" style="width:100%;margin-top:16px">إنشاء الحساب</button>
-        <p style="text-align:center;margin-top:14px;font-size:14px">عندك حساب؟ <a href="/login" style="color:var(--brand);font-weight:700">سجّلي الدخول</a></p>
+        <p style="text-align:center;margin-top:14px;font-size:14px">عندك حساب؟ <a href="/login" style="color:var(--brand);font-weight:700">سجّل الدخول</a></p>
       </form>
     </Layout>,
   );

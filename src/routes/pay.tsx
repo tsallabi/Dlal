@@ -68,7 +68,7 @@ pay.get('/pay/start/:code', async (c) => {
   if (!r.ok) {
     await db.prepare("UPDATE payments SET status='failed',raw=?,updated_at=datetime('now') WHERE id=?").bind(r.error ?? r.response, pid).run();
     const b = await base(c);
-    return c.html(<Layout {...b} title="تعذر بدء الدفع"><div class="form"><h1>تعذر بدء الدفع</h1><Flash type="err" msg={r.error} /><p style="font-size:14px;color:#666">لم يُخصم منكِ شيء، وطلبكِ <b>{o.code}</b> محفوظ بانتظار الدفع. المرجع <b class="mono" style="display:inline">{trxRef}</b>.</p><a class="btn" href={`/pay/start/${o.code}`}>إعادة المحاولة</a> <a class="btn ghost" href={`/orders/${o.code}`}>صفحة الطلب</a></div></Layout>);
+    return c.html(<Layout {...b} title="تعذر بدء الدفع"><div class="form"><h1>تعذر بدء الدفع</h1><Flash type="err" msg={r.error} /><p style="font-size:14px;color:#666">لم يُخصم منك شيء، وطلبك <b>{o.code}</b> محفوظ بانتظار الدفع. المرجع <b class="mono" style="display:inline">{trxRef}</b>.</p><a class="btn" href={`/pay/start/${o.code}`}>إعادة المحاولة</a> <a class="btn ghost" href={`/orders/${o.code}`}>صفحة الطلب</a></div></Layout>);
   }
   await db.prepare("UPDATE payments SET status='pending',token=?,provider_ref=?,checkout_url=?,raw=?,updated_at=datetime('now') WHERE id=?").bind(r.token ?? null, r.providerRef ?? null, r.url!, r.response, pid).run();
   return c.redirect(r.url!);
@@ -86,7 +86,7 @@ pay.get('/pay/return', async (c) => {
       <div class="form" style="text-align:center" id="payWait" data-ref={ref} data-order={p.code}>
         <div class="spinner"></div>
         <h1>جارٍ تأكيد الدفع…</h1>
-        <p style="color:#666;font-size:14px">ننتظر تأكيد ماي باي لعملية <b class="mono" style="display:inline">{ref}</b>. لا تغلقي الصفحة.</p>
+        <p style="color:#666;font-size:14px">ننتظر تأكيد ماي باي لعملية <b class="mono" style="display:inline">{ref}</b>. لا تغلق الصفحة.</p>
         <p id="payMsg" style="font-size:13px;color:#888"></p>
         <a class="btn ghost sm" href={`/orders/${p.code}`}>الذهاب لصفحة الطلب</a>
       </div>
@@ -119,7 +119,7 @@ export async function handleWebhook(env: Env['Bindings'], rawBody: string, signa
     // لأن الأثر خطير: العملية تنجح عندهم ويُخصم المال، والطلب يبقى «غير مدفوع» عندنا.
     const why = !cfg.webhookSecret ? 'لا يوجد سرّ ويبهوك محفوظ عندنا إطلاقًا'
       : !signature ? 'الإشعار وصل بلا ترويسة توقيع (x-mypay-signature)'
-      : 'التوقيع لا يطابق السرّ المحفوظ — تأكدي أن MYPAY_WEBHOOK_SECRET هو نفسه المعروض في «Configure Webhook» بلوحة ماي باي حرفيًا';
+      : 'التوقيع لا يطابق السرّ المحفوظ — تأكد أن MYPAY_WEBHOOK_SECRET هو نفسه المعروض في «Configure Webhook» بلوحة ماي باي حرفيًا';
     await log(db, p?.id ?? null, 'in', origin + '/api/mypay/webhook', 401, rawBody, `توقيع غير صالح — رُفض. ${why}`, false);
     return { status: 401, body: { ok: false, error: 'invalid signature' } };
   }

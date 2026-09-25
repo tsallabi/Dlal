@@ -73,7 +73,7 @@ store.get('/', async (c) => {
           <span class="ph-tag">عروض</span>
           <h1>أسعار نهائية<br />بالدينار الليبي</h1>
           <p>شاملة الشحن والجمارك — لا مفاجآت عند الاستلام</p>
-          <a class="ph-cta" href="/sale">تسوقي العروض ›</a>
+          <a class="ph-cta" href="/sale">تسوّق العروض ›</a>
         </div>
         <div class="ph-items">
           {banner.results.map(p => (
@@ -128,7 +128,7 @@ store.get('/', async (c) => {
         <div><b>🚚 الشحن مشمول</b><span>جوي {s.air_days || '12 — 18 يومًا'}{seaOn(s) ? ` · بحري ${s.sea_days || '30 — 45 يومًا'} وأرخص` : ''}</span></div>
         <div><b>🔍 فحص قبل الشحن</b><span>نفتح كل طرد ونصوّره لك</span></div>
         <div><b>↩️ تعويض كامل</b><span>لأي تالف أو مختلف عن الوصف</span></div>
-        <div><b>💳 ادفعي بالدينار</b><span>بطاقة · سداد · إدفعلي · كاش في الفرع</span></div>
+        <div><b>💳 ادفع بالدينار</b><span>بطاقة · سداد · إدفعلي · كاش في الفرع</span></div>
       </section>
 
       {/* الشبكة الرئيسية */}
@@ -144,7 +144,7 @@ store.get('/', async (c) => {
         </section>
       ))}
 
-      {recent.length > 0 && <><div class="feed-h"><h2>شاهدتِ مؤخرًا</h2></div><Grid ship={b.ship} items={recent} favs={f} /></>}
+      {recent.length > 0 && <><div class="feed-h"><h2>شاهدت مؤخرًا</h2></div><Grid ship={b.ship} items={recent} favs={f} /></>}
 
       <section class="why">
         <div><b>🏭 مباشرة من مصانع الصين</b><span>نشتري بأسعار الجملة ونبيع بالقطعة.</span></div>
@@ -152,7 +152,7 @@ store.get('/', async (c) => {
         <div><b>📦 {stats?.d ?? 0} طلب مُسلَّم</b><span>إلى كل المدن الليبية.</span></div>
         {realWa(s.whatsapp_number)
           ? <div><b>🤝 واتساب <a href={`https://wa.me/${realWa(s.whatsapp_number)}`} dir="ltr">+{realWa(s.whatsapp_number)}</a></b><span>فريق دعم يرد خلال ساعات العمل.</span></div>
-          : <div><b>💬 دعم مباشر</b><span>زر «تواصلي معنا» أسفل كل صفحة — يرد فريقنا خلال ساعات العمل.</span></div>}
+          : <div><b>💬 دعم مباشر</b><span>زر «تواصل معنا» أسفل كل صفحة — يرد فريقنا خلال ساعات العمل.</span></div>}
       </section>
     </Layout>,
   );
@@ -507,7 +507,7 @@ store.get('/m/menu', async (c) => {
       <Row href="/sale" icon="%" name="عروض وتخفيضات" />
       {tiles.map(t => <Row href={`/c/${t.slug}`} img={t.img} icon={t.icon} name={t.name_ar} />)}
       <Row href="/c/all" icon="▦" name="كل المنتجات" />
-      <Row href="/request" icon="🔗" name="اطلبي أي منتج برابط" />
+      <Row href="/request" icon="🔗" name="اطلب أي منتج برابط" />
     </div>,
   );
 });
@@ -553,7 +553,7 @@ store.get('/p/:slug', async (c) => {
   return c.html(
     <Layout {...b} title={p.title_ar} active={p.cat_slug}>
       <div class="crumbs"><a href="/">الرئيسية</a> › <a href={`/c/${p.cat_slug}`}>{p.cat_name}</a> › <span>{p.title_ar.slice(0, 40)}</span></div>
-      {c.req.query('have') && <div class="flash ok have-it">الرابط الذي لصقتِه لمنتج موجود عندنا — هذا هو، بسعره النهائي بالدينار. أضيفيه للسلة مباشرة.</div>}
+      {c.req.query('have') && <div class="flash ok have-it">الرابط الذي لصقته لمنتج موجود عندنا — هذا هو، بسعره النهائي بالدينار. أضفه للسلة مباشرة.</div>}
       <div class="pd" data-product={p.id}>
         <div class="gallery">
           <div class="main"><img id="mainImg" src={imgUrl(images[0])} alt={p.title_ar} referrerpolicy="no-referrer" />{off > 0 && <span class="tag">-{off}%</span>}</div>
@@ -563,9 +563,9 @@ store.get('/p/:slug', async (c) => {
           <h1>{p.title_ar}</h1>
           <div class="meta" style="font-size:13px;color:#666">{p.review_count > 0
             ? <><a href="#reviews"><Stars n={p.rating} /> {p.rating.toFixed(1)} ({p.review_count} تقييم)</a> · </>
-            : <>لا تقييمات بعد — كوني أول من يقيّمه · </>}{p.sales}+ بيعت · {p.views} مشاهدة</div>
+            : <>لا تقييمات بعد — كن أول من يقيّمه · </>}{p.sales}+ بيعت · {p.views} مشاهدة</div>
           <div class="price" style="margin-top:8px">{fmt(shown)}{off > 0 && <s>{fmt(p.compare_price_lyd!)}</s>}{off > 0 && <span class="tag" style="position:static;margin-inline-start:8px;font-size:13px;background:var(--brand);color:#fff;padding:2px 8px;border-radius:4px">-{off}%</span>}</div>
-          <div class="price-note">السعر شامل الشحن من الصين والجمارك. التوصيل داخل ليبيا {fmt(parseFloat(s.delivery_lyd))} (مجاني فوق {fmt(parseFloat(s.free_ship_over_lyd))}). تكسبين <b>{Math.floor(shown * parseFloat(s.points_per_lyd || '1'))} نقطة</b> عند التسليم.</div>
+          <div class="price-note">السعر شامل الشحن من الصين والجمارك. التوصيل داخل ليبيا {fmt(parseFloat(s.delivery_lyd))} (مجاني فوق {fmt(parseFloat(s.free_ship_over_lyd))}). تكسب <b>{Math.floor(shown * parseFloat(s.points_per_lyd || '1'))} نقطة</b> عند التسليم.</div>
           {seaOn(s) && p.price_sea_lyd ? (
             <form method="post" action="/cart/ship" class="pship">
               <input type="hidden" name="back" value={`/p/${p.slug}`} />
@@ -575,12 +575,12 @@ store.get('/p/:slug', async (c) => {
               </label>
               <label class={mode === 'sea' ? 'on' : ''}>
                 <input type="radio" name="mode" value="sea" checked={mode === 'sea'} onchange="this.form.submit()" />
-                <span class="t">🚢 بحري {fmt(p.price_sea_lyd)}{seaSave > 0 && <b> وفّري {fmt(seaSave)}</b>}</span><span class="d">{s.sea_days || '30 — 45 يومًا'}</span>
+                <span class="t">🚢 بحري {fmt(p.price_sea_lyd)}{seaSave > 0 && <b> وفّر {fmt(seaSave)}</b>}</span><span class="d">{s.sea_days || '30 — 45 يومًا'}</span>
               </label>
               <noscript><button class="btn sm" type="submit">تطبيق</button></noscript>
             </form>
           ) : null}
-          {!p.in_stock && <Flash type="err" msg="هذا المنتج غير متوفر حاليًا عند المورد. أضيفيه للمفضلة وسنخبرك عند توفره." />}
+          {!p.in_stock && <Flash type="err" msg="هذا المنتج غير متوفر حاليًا عند المورد. أضفه للمفضلة وسنخبرك عند توفره." />}
           <form method="post" action="/cart/add" id="addForm" data-px-pid={String(p.id)} data-px-value={String(shown)}>
             <input type="hidden" name="product_id" value={p.id} />
             <input type="hidden" name="variant_id" id="variantId" value="" />
@@ -591,7 +591,7 @@ store.get('/p/:slug', async (c) => {
             {sizes.length > 0 && (
               <div class="opts"><h4>المقاس: <span id="sizeLbl"></span> <a href="#sizeGuide" style="font-weight:400;font-size:12px;color:var(--brand);margin-inline-start:8px">دليل المقاسات</a></h4>
                 <div class="chips" data-opt="size">{sizes.map(sz => <span class="chip" data-val={sz}>{sz}</span>)}</div>
-                {fitTotal > 0 && <div class="fit"><span>رأي الزبونات في المقاس:</span> <b>{fitPct('true')}%</b> مطابق · <b>{fitPct('small')}%</b> أصغر · <b>{fitPct('large')}%</b> أكبر</div>}
+                {fitTotal > 0 && <div class="fit"><span>رأي الزبائن في المقاس:</span> <b>{fitPct('true')}%</b> مطابق · <b>{fitPct('small')}%</b> أصغر · <b>{fitPct('large')}%</b> أكبر</div>}
               </div>
             )}
             {/* صورة المتغيّر تمرّ بالوسيط قبل أن تُكتب في الصفحة: الرابط الخام يكشف مورّد 1688 ورقم حسابه
@@ -606,13 +606,13 @@ store.get('/p/:slug', async (c) => {
               {kn && <div class="kind-note"><b>{kn.tag}</b> — {kn.note}</div>}
             </div>
             <div class="inline" style="margin:16px 0">
-              <button class="btn brand" type="submit" disabled={!p.in_stock} style="flex:1">أضيفي إلى السلة</button>
+              <button class="btn brand" type="submit" disabled={!p.in_stock} style="flex:1">أضف إلى السلة</button>
               <button class="btn ghost" type="button" data-fav={p.id}>{f.has(p.id) ? '♥ في المفضلة' : '♡ المفضلة'}</button>
             </div>
           </form>
           <div class="trust">
             <div>🚚 <b>الوصول خلال {rates.days}</b><br />شحن {rates.ar} مجمّع من الصين</div>
-            <div>💳 <b>ادفعي بالدينار</b><br />بطاقة مصرفية · سداد · إدفعلي · موبي كاش</div>
+            <div>💳 <b>ادفع بالدينار</b><br />بطاقة مصرفية · سداد · إدفعلي · موبي كاش</div>
             <div>🔍 <b>فحص قبل الشحن</b><br />صور للبضاعة من مخزننا في الصين</div>
             <div>↩️ <b>ضمان الوصول</b><br />تعويض كامل لأي تالف أو مختلف</div>
           </div>
@@ -636,13 +636,13 @@ store.get('/p/:slug', async (c) => {
       </div>
       <section id="reviews" class="card-box" style="margin-top:20px">
         <div class="sec-h" style="margin:0 0 10px"><h2>التقييمات ({p.review_count})</h2>{p.review_count > 0 && <span><Stars n={p.rating} size={18} /> <b>{p.rating.toFixed(1)}</b> / 5</span>}</div>
-        {reviews.results.length === 0 ? <p style="color:#888">لا تقييمات منشورة بعد. كوني أول من يقيّم بعد استلام طلبك.</p> : reviews.results.map(r => (
+        {reviews.results.length === 0 ? <p style="color:#888">لا تقييمات منشورة بعد. كن أول من يقيّم بعد استلام طلبك.</p> : reviews.results.map(r => (
           <div class="review"><div class="rv-h"><b>{r.name.split(' ')[0]} {r.name.split(' ')[1]?.slice(0, 1) ?? ''}.</b><Stars n={r.rating} /><small style="color:#888">{timeAgo(r.created_at)}</small>{r.size_fit && <span class="status">{{ small: 'المقاس أصغر', true: 'المقاس مطابق', large: 'المقاس أكبر' }[r.size_fit as string]}</span>}</div><p>{r.body}</p>{r.image_url && <a href={r.image_url} target="_blank"><img src={r.image_url} class="rv-img" alt="" /></a>}</div>
         ))}
       </section>
       <div class="sec-h"><h2>قد يعجبك أيضًا</h2></div>
       <Grid ship={b.ship} items={related.results} favs={f} />
-      {recent.length > 0 && <><div class="sec-h"><h2>شاهدتِ مؤخرًا</h2></div><Grid ship={b.ship} items={recent} favs={f} /></>}
+      {recent.length > 0 && <><div class="sec-h"><h2>شاهدت مؤخرًا</h2></div><Grid ship={b.ship} items={recent} favs={f} /></>}
     </Layout>,
   );
 });
@@ -651,7 +651,7 @@ store.get('/p/:slug', async (c) => {
 store.get('/wishlist', async (c) => {
   const u = c.get('user');
   const b = await base(c);
-  if (!u) return c.html(<Layout {...b} title="المفضلة"><div class="empty"><div class="big">♡</div><a class="btn" href="/login?next=/wishlist">سجّلي الدخول لعرض المفضلة</a></div></Layout>);
+  if (!u) return c.html(<Layout {...b} title="المفضلة"><div class="empty"><div class="big">♡</div><a class="btn" href="/login?next=/wishlist">سجّل الدخول لعرض المفضلة</a></div></Layout>);
   const { results } = await c.env.DB.prepare(`SELECT ${PRODUCT_SELECT} FROM wishlist w JOIN products p ON p.id=w.product_id LEFT JOIN categories c ON c.id=p.category_id WHERE w.user_id=?`).bind(u.id).all<ProductRow>();
   return c.html(<Layout {...b} title="المفضلة"><div class="sec-h"><h2>المفضلة</h2></div><Grid ship={b.ship} items={results} favs={new Set(results.map(r => r.id))} /></Layout>);
 });
@@ -803,7 +803,7 @@ function autoDesc(p: any, s: any, rates: { days: string; ar: string }, colors: s
   const kn = p.kind ? KIND_NOTE[p.kind as ListingKind] : null;
   if (kn) L.push(kn.note);
   if (colors.length) L.push(`الألوان المتاحة: ${colors.slice(0, 8).join('، ')}.`);
-  if (sizes.length) L.push(`المقاسات: ${sizes.slice(0, 10).join('، ')} (مقاسات آسيوية — راجعي دليل المقاسات أدناه).`);
+  if (sizes.length) L.push(`المقاسات: ${sizes.slice(0, 10).join('، ')} (مقاسات آسيوية — راجع دليل المقاسات أدناه).`);
   if (p.min_qty > 1) L.push(`الحد الأدنى للطلب ${p.min_qty} قطع.`);
   L.push(`السعر شامل الشحن ${rates.ar} من الصين والجمارك، ويصل خلال ${rates.days}.`);
   L.push(`نفحص القطعة ونصوّرها في مخزننا بالصين قبل شحنها، ونعوّضك كاملًا عن أي تالف أو مختلف عن الصورة.`);
@@ -820,7 +820,7 @@ const ShipPicker = ({ t, back }: any) => {
     <form method="post" action="/cart/ship" class="card-box" style="margin-bottom:14px">
       <input type="hidden" name="back" value={back} />
       <h3 style="margin:0 0 4px;font-size:16px">طريقة الشحن من الصين</h3>
-      <p style="font-size:12.5px;color:#767676;margin:0 0 12px">السعر المعروض لكل منتج يشمل الشحن — اختاري الطريقة ويتغيّر السعر تلقائيًا.</p>
+      <p style="font-size:12.5px;color:#767676;margin:0 0 12px">السعر المعروض لكل منتج يشمل الشحن — اختر الطريقة ويتغيّر السعر تلقائيًا.</p>
       <div class="shipsel">
         <label class={t.mode === 'air' ? 'on' : ''}>
           <input type="radio" name="mode" value="air" checked={t.mode === 'air'} onchange="this.form.submit()" />
@@ -832,7 +832,7 @@ const ShipPicker = ({ t, back }: any) => {
         <label class={t.mode === 'sea' ? 'on' : ''}>
           <input type="radio" name="mode" value="sea" checked={t.mode === 'sea'} onchange="this.form.submit()" />
           <div>
-            <div class="t">🚢 شحن بحري {t.seaSaving > 0 && <span class="save">وفّري {fmt(t.seaSaving)}</span>}</div>
+            <div class="t">🚢 شحن بحري {t.seaSaving > 0 && <span class="save">وفّر {fmt(t.seaSaving)}</span>}</div>
             <div class="d">يصل خلال <b>{sea}</b> · إجمالي السلة {fmt(t.seaSum)}</div>
           </div>
         </label>
@@ -870,7 +870,7 @@ const CouponBox = ({ c, t, back }: { c: Context<Env>; t: any; back: string }) =>
 store.get('/cart', async (c) => {
   const u = c.get('user');
   const b = await base(c);
-  if (!u) return c.html(<Layout {...b} title="السلة"><div class="empty"><div class="big">🛒</div><a class="btn" href="/login?next=/cart">سجّلي الدخول لعرض السلة</a></div></Layout>);
+  if (!u) return c.html(<Layout {...b} title="السلة"><div class="empty"><div class="big">🛒</div><a class="btn" href="/login?next=/cart">سجّل الدخول لعرض السلة</a></div></Layout>);
   const rows = await cartRows(c.env.DB, u.id, shipMode(c));
   const t = await cartTotals(c, rows, false);
   const unavailable = rows.some(r => !r.in_stock || r.status !== 'active');
@@ -878,7 +878,7 @@ store.get('/cart', async (c) => {
     <Layout {...b} title="السلة">
       <Flash msg={c.req.query('added') ? 'أُضيف المنتج إلى السلة ✓' : c.req.query('cok') ? 'طُبّق الكوبون ✓' : undefined} />
       <div class="sec-h"><h2>سلة التسوق ({rows.length})</h2></div>
-      {rows.length === 0 ? <div class="empty"><div class="big">🛒</div>سلتك فارغة<br /><br /><a class="btn" href="/">ابدئي التسوق</a></div> : (
+      {rows.length === 0 ? <div class="empty"><div class="big">🛒</div>سلتك فارغة<br /><br /><a class="btn" href="/">ابدأ التسوق</a></div> : (
         <div class="two">
           <div>
             {rows.map(r => (
@@ -887,7 +887,7 @@ store.get('/cart', async (c) => {
                 <div>
                   <div class="t"><a href={`/p/${r.slug}`}>{r.title_ar}</a></div>
                   <div class="v">{[r.color, r.size].filter(Boolean).join(' · ')}</div>
-                  {(!r.in_stock || r.status !== 'active') && <div style="color:#d3262b;font-size:12px">غير متوفر حاليًا — احذفيه للمتابعة</div>}
+                  {(!r.in_stock || r.status !== 'active') && <div style="color:#d3262b;font-size:12px">غير متوفر حاليًا — احذفه للمتابعة</div>}
                   <form method="post" action="/cart/update" class="inline" style="margin-top:6px">
                     <input type="hidden" name="id" value={r.id} />
                     <div class="qty"><button type="button" data-q="-1">−</button><input type="number" name="qty" value={r.qty} min={r.min_qty ?? 1} onchange="this.form.submit()" /><button type="button" data-q="1">+</button></div>
@@ -902,7 +902,7 @@ store.get('/cart', async (c) => {
             <CouponBox c={c} t={t} back="/cart" />
             <div><ShipPicker t={t} back="/cart" /><Summary t={t} u={u} rows={rows} /></div>
             <a class={`btn brand ${unavailable ? 'disabled' : ''}`} href={unavailable ? '#' : '/checkout'} style="display:block;text-align:center;margin-top:12px" aria-disabled={unavailable}>إتمام الطلب</a>
-            <p style="font-size:12px;color:#888;margin:10px 0 0">الأسعار شاملة الشحن الدولي والجمارك. لن تُطالبي بأي مبلغ إضافي عند الاستلام.</p>
+            <p style="font-size:12px;color:#888;margin:10px 0 0">الأسعار شاملة الشحن الدولي والجمارك. لن تُطالب بأي مبلغ إضافي عند الاستلام.</p>
           </div>
         </div>
       )}
@@ -944,7 +944,7 @@ store.get('/checkout', async (c) => {
                 </select></>}
               <p style="font-size:12px;color:#666;margin:4px 0 0">أجرة التوصيل إلى <b>{t.city ?? u.city ?? CITIES[0]}</b>: <b>{t.delivery === 0 ? 'مجانًا' : fmt(t.cityFee)}</b>{t.delivery === 0 && t.cityFee > 0 ? ` (مجانية لأن طلبك تجاوز ${fmt(parseFloat(t.s.free_ship_over_lyd))})` : ''}</p>
               <label>العنوان بالتفصيل</label><textarea name="address" rows={2}>{u.address ?? ''}</textarea>
-              <label class="radio" style="border:0;padding:4px 0"><input type="checkbox" name="save_address" value="1" checked /> احفظي هذا العنوان في دفتر عناويني</label>
+              <label class="radio" style="border:0;padding:4px 0"><input type="checkbox" name="save_address" value="1" checked /> احفظ هذا العنوان في دفتر عناويني</label>
             </div>
             <label>ملاحظات (اختياري)</label><input type="text" name="note" />
           </div>
@@ -966,7 +966,7 @@ store.get('/checkout', async (c) => {
           <CouponBox c={c} t={t} back="/checkout" />
           <div><ShipPicker t={t} back="/checkout" /><Summary t={t} u={u} rows={rows} showItems usePointsToggle /></div>
           <button class="btn brand" type="submit" style="width:100%;margin-top:12px;font-size:16px">تأكيد الطلب {t.total > 0 ? `· ${fmt(t.total)}` : ''}</button>
-          <p style="font-size:12px;color:#888;margin:10px 0 0">بتأكيد الطلب توافقين على <a href="/pages/terms" style="color:var(--brand)">الشروط</a> و<a href="/pages/returns" style="color:var(--brand)">سياسة الإرجاع</a>.</p>
+          <p style="font-size:12px;color:#888;margin:10px 0 0">بتأكيد الطلب توافق على <a href="/pages/terms" style="color:var(--brand)">الشروط</a> و<a href="/pages/returns" style="color:var(--brand)">سياسة الإرجاع</a>.</p>
         </div>
       </form>
     </Layout>,
@@ -1039,7 +1039,7 @@ store.post('/checkout', async (c) => {
   }
   await db.batch(stmts);
   deleteCookie(c, 'coupon', { path: '/' });
-  await notify(db, u.id, `طلبك ${code} بانتظار الدفع`, 'أكملي الدفع ليبدأ فريقنا بالشراء.', `/orders/${code}`);
+  await notify(db, u.id, `طلبك ${code} بانتظار الدفع`, 'أكمل الدفع ليبدأ فريقنا بالشراء.', `/orders/${code}`);
   if (PAYMENT_METHODS[method].online) return c.redirect(`/pay/start/${code}`);
   return c.redirect(`/orders/${code}?new=1`);
 });
@@ -1075,8 +1075,8 @@ store.get('/orders/:code', async (c) => {
   const paid = pays.results.find(p => p.status === 'paid');
   return c.html(
     <Layout {...b} title={`الطلب ${o.code}`}>
-      <Flash msg={c.req.query('new') ? '🎉 تم استلام طلبك! أكملي الدفع بالطريقة المختارة ليبدأ الشراء.' : c.req.query('paid') ? '✅ تم الدفع بنجاح! بدأ فريقنا في الصين شراء منتجاتك.' : undefined} />
-      <Flash type="err" msg={c.req.query('pay') === 'cancelled' ? 'أُلغيت عملية الدفع. يمكنك المحاولة مرة أخرى.' : c.req.query('pay') === 'failed' ? 'فشلت عملية الدفع. تحققي من الرصيد وحاولي مجددًا أو اختاري طريقة أخرى.' : c.req.query('err') === 'cancel' ? 'لا يمكن إلغاء الطلب بعد الدفع — افتحي تذكرة إلغاء.' : undefined} />
+      <Flash msg={c.req.query('new') ? '🎉 تم استلام طلبك! أكمل الدفع بالطريقة المختارة ليبدأ الشراء.' : c.req.query('paid') ? '✅ تم الدفع بنجاح! بدأ فريقنا في الصين شراء منتجاتك.' : undefined} />
+      <Flash type="err" msg={c.req.query('pay') === 'cancelled' ? 'أُلغيت عملية الدفع. يمكنك المحاولة مرة أخرى.' : c.req.query('pay') === 'failed' ? 'فشلت عملية الدفع. تحقق من الرصيد وحاول مجددًا أو اختر طريقة أخرى.' : c.req.query('err') === 'cancel' ? 'لا يمكن إلغاء الطلب بعد الدفع — افتح تذكرة إلغاء.' : undefined} />
       <div class="crumbs"><a href="/account">حسابي</a> › <a href="/account/orders">طلباتي</a> › {o.code}</div>
       {/* حدث الشراء لبكسل ميتا (public/app.js يرسله مرة واحدة لكل طلب) */}
       {paid && <i hidden data-px-purchase={o.code} data-px-value={String(o.total_lyd)} data-px-ids={items.results.map((x: any) => x.product_id).join(',')}></i>}
@@ -1091,7 +1091,7 @@ store.get('/orders/:code', async (c) => {
               <p style="font-size:14px">المبلغ: <b>{fmt(o.total_lyd)}</b> · المرجع: <b class="mono" style="display:inline;padding:2px 6px">{o.code}</b></p>
               {pm?.online ? (
                 <>
-                  <a class="btn brand" href={`/pay/start/${o.code}`} style="width:100%;text-align:center;display:block">ادفعي الآن عبر MyPay {pm.icon}</a>
+                  <a class="btn brand" href={`/pay/start/${o.code}`} style="width:100%;text-align:center;display:block">ادفع الآن عبر MyPay {pm.icon}</a>
                   <details style="margin-top:8px"><summary style="font-size:13px;font-weight:400;color:#666">اختيار وسيلة أخرى</summary>
                     <div class="inline">{Object.entries(PAYMENT_METHODS).filter(([k, v]) => v.online && k !== o.payment_method).map(([k, v]) => <a class="btn sm ghost" href={`/pay/start/${o.code}?method=${k}`}>{v.icon} {v.ar}</a>)}</div></details>
                   {pays.results.length > 0 && <p style="font-size:12px;color:#888;margin-top:8px">آخر محاولة: {pays.results[0].trx_ref} — {{ created: 'أُنشئت', pending: 'بانتظار البوابة', paid: 'مدفوعة', failed: 'فشلت', cancelled: 'أُلغيت', refunded: 'مسترجعة' }[pays.results[0].status as string]}</p>}
@@ -1101,7 +1101,7 @@ store.get('/orders/:code', async (c) => {
                   <p style="font-size:13px;color:#666">{pm?.desc}</p>
                   {realWa(s.whatsapp_number)
                     ? <p style="font-size:13px">واتساب التأكيد: <a href={`https://wa.me/${realWa(s.whatsapp_number)}?text=${encodeURIComponent(`طلب ${o.code} — المبلغ ${o.total_lyd} د.ل`)}`} style="color:var(--brand);direction:ltr">+{realWa(s.whatsapp_number)}</a></p>
-                    : <p style="font-size:13px">أرسلي إيصال التحويل من زر <b>«راسلينا عن هذا الطلب»</b> أدناه — تصلنا الرسالة مربوطة برقم طلبك.</p>}
+                    : <p style="font-size:13px">أرسل إيصال التحويل من زر <b>«راسلنا عن هذا الطلب»</b> أدناه — تصلنا الرسالة مربوطة برقم طلبك.</p>}
                 </>
               )}
               <form method="post" action={`/account/orders/${o.code}/cancel`} style="margin-top:10px" onsubmit="return confirm('إلغاء الطلب؟')"><button class="btn sm ghost" style="color:#d3262b">إلغاء الطلب</button></form>
@@ -1129,13 +1129,13 @@ store.get('/orders/:code', async (c) => {
                 {it.proof_image_url && <a href={it.proof_image_url} target="_blank" style="font-size:12px;color:#1c47b3">📷 صورة الفحص من المخزن</a>}
               </div><div style="font-weight:800">{fmt(it.unit_price_lyd * it.qty)}</div></div>
             ))}
-            {o.status === 'delivered' && <div class="inline" style="margin-top:10px"><a class="btn sm brand" href={`/account/reviews?order=${o.code}`}>⭐ قيّمي المنتجات واكسبي نقاطًا</a><a class="btn sm ghost" href={`/account/tickets/new?order=${o.code}&type=return`}>↩️ إرجاع / مشكلة</a></div>}
+            {o.status === 'delivered' && <div class="inline" style="margin-top:10px"><a class="btn sm brand" href={`/account/reviews?order=${o.code}`}>⭐ قيّم المنتجات واكسب نقاطًا</a><a class="btn sm ghost" href={`/account/tickets/new?order=${o.code}&type=return`}>↩️ إرجاع / مشكلة</a></div>}
           </div>
         </div>
         <div>
           <div class="summary"><div class="row"><span>المنتجات</span><span>{fmt(o.subtotal_lyd)}</span></div>{o.discount_lyd > 0 && <div class="row" style="color:#1a9c5b"><span>خصم {o.coupon_code}</span><span>−{fmt(o.discount_lyd)}</span></div>}{o.points_used > 0 && <div class="row" style="color:#1a9c5b"><span>نقاط ({o.points_used})</span><span>−{fmt(o.points_lyd)}</span></div>}<div class="row"><span>التوصيل</span><span>{o.shipping_lyd ? fmt(o.shipping_lyd) : 'مجاني'}</span></div><div class="row tot"><span>الإجمالي</span><span>{fmt(o.total_lyd)}</span></div>{o.points_earned > 0 && <div class="row" style="color:var(--brand)"><span>نقاط مكتسبة</span><span>+{o.points_earned} ⭐</span></div>}</div>
           <div class="card-box" style="margin-top:14px"><h3>التوصيل إلى</h3><div style="font-size:14px">{o.ship_name}<br />{o.ship_phone}<br />{o.ship_city} — {o.ship_address}</div></div>
-          <div class="card-box"><h3>تحتاجين مساعدة؟</h3><button type="button" class="btn sm brand" data-chat-order={o.code} style="margin-bottom:8px">💬 راسلينا عن هذا الطلب</button> <a class="btn sm ghost" href={`/account/tickets/new?order=${o.code}&type=question`}>افتحي تذكرة</a> {realWa(s.whatsapp_number) && <a class="btn sm ghost" href={`https://wa.me/${realWa(s.whatsapp_number)}`}>واتساب</a>}</div>
+          <div class="card-box"><h3>تحتاج مساعدة؟</h3><button type="button" class="btn sm brand" data-chat-order={o.code} style="margin-bottom:8px">💬 راسلنا عن هذا الطلب</button> <a class="btn sm ghost" href={`/account/tickets/new?order=${o.code}&type=question`}>افتح تذكرة</a> {realWa(s.whatsapp_number) && <a class="btn sm ghost" href={`https://wa.me/${realWa(s.whatsapp_number)}`}>واتساب</a>}</div>
         </div>
       </div>
     </Layout>,

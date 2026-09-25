@@ -68,7 +68,7 @@ app.use('*', async (c, next) => {
   const u = c.get('user');
   if (u?.imp_by) {
     const esc = (t: string) => t.replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]!));
-    const role = u.role === 'partner' ? 'موظف شركة شحن' : u.role === 'customer' ? 'زبونة' : 'موظف إدارة';
+    const role = u.role === 'partner' ? 'موظف شركة شحن' : u.role === 'customer' ? 'زبون' : 'موظف إدارة';
     const bar = `<div class="imp-bar" style="position:sticky;top:0;z-index:1000;background:#8c2121;color:#fff;padding:8px 12px;text-align:center;font:600 14px/1.6 Tahoma,sans-serif">👁 أنت الآن داخل حساب <b>${esc(u.name)}</b> (${role} · ${esc(u.phone)}) — كل ما تفعله يُحفظ باسمه. <a href="/impersonate/end" style="color:#fff;text-decoration:underline;margin-inline-start:8px">عودة إلى حسابي ←</a></div>`;
     html = html.replace(/<body([^>]*)>/, `<body$1>${bar}`);
   }

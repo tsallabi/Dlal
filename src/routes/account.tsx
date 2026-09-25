@@ -50,7 +50,7 @@ acct.get('/', async (c) => {
         <a href="/wishlist" class="acct-card"><b>♡</b><span>المفضلة</span></a>
       </div>
       <div class="card-box"><div class="sec-h" style="margin:0 0 8px"><h3 style="margin:0">آخر الطلبات</h3><a href="/account/orders">الكل ›</a></div>
-        {orders.results.length === 0 ? <p style="color:#888">لا طلبات بعد. <a href="/" style="color:var(--brand)">ابدئي التسوق</a></p> : orders.results.map(o => <OrderRow o={o} />)}
+        {orders.results.length === 0 ? <p style="color:#888">لا طلبات بعد. <a href="/" style="color:var(--brand)">ابدأ التسوق</a></p> : orders.results.map(o => <OrderRow o={o} />)}
       </div>
       <div class="card-box"><div class="sec-h" style="margin:0 0 8px"><h3 style="margin:0">الإشعارات</h3><a href="/account/notifications">الكل ›</a></div>
         {notifs.results.length === 0 ? <p style="color:#888">لا إشعارات.</p> : notifs.results.map(n => <div class={`notif ${n.read ? '' : 'unread'}`}><a href={n.link ?? '#'}><b>{n.title}</b></a><span>{n.body}</span><small>{timeAgo(n.created_at)}</small></div>)}
@@ -84,8 +84,8 @@ acct.get('/orders', async (c) => {
           <div class="oc-b"><img src={imgUrl(o.image)} alt="" /><div><div>{o.items} منتج · {fmt(o.total_lyd)}</div><small style="color:#888">{timeAgo(o.created_at)} · {PAYMENT_METHODS[o.payment_method]?.ar}</small></div></div>
           <div class="oc-f">
             <a class="btn sm ghost" href={`/orders/${o.code}`}>التفاصيل والتتبع</a>
-            {o.status === 'pending_payment' && PAYMENT_METHODS[o.payment_method]?.online && <a class="btn sm brand" href={`/pay/start/${o.code}`}>ادفعي الآن</a>}
-            {o.status === 'delivered' && <a class="btn sm" href={`/account/reviews?order=${o.code}`}>قيّمي المنتجات ⭐</a>}
+            {o.status === 'pending_payment' && PAYMENT_METHODS[o.payment_method]?.online && <a class="btn sm brand" href={`/pay/start/${o.code}`}>ادفع الآن</a>}
+            {o.status === 'delivered' && <a class="btn sm" href={`/account/reviews?order=${o.code}`}>قيّم المنتجات ⭐</a>}
             {['delivered', 'ready', 'arrived', 'customs'].includes(o.status) && <a class="btn sm ghost" href={`/account/tickets/new?order=${o.code}&type=return`}>إرجاع / مشكلة</a>}
           </div>
         </div>
@@ -101,7 +101,7 @@ acct.get('/tickets', async (c) => {
   return shell(c, 'tickets', 'الإرجاع والتذاكر', (
     <>
       <Flash msg={c.req.query('ok') ? 'أُنشئت التذكرة وسيرد عليك فريق الدعم ✓' : undefined} />
-      <div class="inline" style="margin-bottom:12px"><a class="btn sm brand" href="/account/tickets/new">+ تذكرة جديدة</a><span style="font-size:13px;color:#666">سياسة الإرجاع: <a href="/pages/returns" style="color:var(--brand)">اقرئيها هنا</a></span></div>
+      <div class="inline" style="margin-bottom:12px"><a class="btn sm brand" href="/account/tickets/new">+ تذكرة جديدة</a><span style="font-size:13px;color:#666">سياسة الإرجاع: <a href="/pages/returns" style="color:var(--brand)">اقرأها هنا</a></span></div>
       {results.length === 0 ? <div class="empty"><div class="big">↩️</div>لا تذاكر</div> : results.map(t => (
         <a href={`/account/tickets/${t.code}`} class="order-row"><div><b>{t.code}</b> · {TICKET_TYPES[t.type]}<br /><small>{t.subject} {t.order_code && `· الطلب ${t.order_code}`}</small></div><span class={`status ${TICKET_STATUS[t.status].color}`}>{TICKET_STATUS[t.status].ar}</span><small>{t.n} رسالة</small><span class="chev">›</span></a>
       ))}
@@ -117,7 +117,7 @@ acct.get('/tickets/new', async (c) => {
       <label>نوع الطلب</label><select name="type">{Object.entries(TICKET_TYPES).map(([k, v]) => <option value={k} selected={k === ty}>{v}</option>)}</select>
       <label>الطلب المرتبط (اختياري)</label><select name="order_code"><option value="">— بدون —</option>{orders.results.map(o => <option value={o.code} selected={o.code === oc}>{o.code}</option>)}</select>
       <label>الموضوع</label><input type="text" name="subject" required placeholder="مثال: المقاس مختلف عن الوصف" />
-      <label>التفاصيل</label><textarea name="body" rows={5} required placeholder="اشرحي المشكلة بالتفصيل…"></textarea>
+      <label>التفاصيل</label><textarea name="body" rows={5} required placeholder="اشرح المشكلة بالتفصيل…"></textarea>
       <label>رابط صورة (اختياري)</label><input type="url" name="image_url" placeholder="https://…" />
       <p style="font-size:12px;color:#888">للإرجاع: البضاعة لا تُعاد إلى الصين، لكن نعوّض أي منتج تالف أو مختلف عن الوصف (استرجاع أو نقاط أو بديل) خلال 7 أيام من التسليم.</p>
       <button class="btn" style="margin-top:8px">إرسال</button>
@@ -148,7 +148,7 @@ acct.get('/tickets/:code', async (c) => {
     <>
       <div class="inline" style="margin-bottom:10px"><span class={`status ${TICKET_STATUS[t.status].color}`}>{TICKET_STATUS[t.status].ar}</span><span class="status">{TICKET_TYPES[t.type]}</span>{t.order_code && <a href={`/orders/${t.order_code}`} class="status blue">الطلب {t.order_code}</a>}
         {t.resolution && <span class="status green">القرار: {{ refund: `استرجاع ${fmt(t.refund_lyd ?? 0)}`, replacement: 'إرسال بديل', points: `تعويض ${t.points_awarded} نقطة`, none: 'بدون تعويض' }[t.resolution as string]}</span>}</div>
-      <div class="chat">{msgs.results.map(m => <div class={`msg ${m.is_staff ? 'staff' : 'me'}`}><div class="who">{m.is_staff ? `فريق هدهد — ${m.name ?? ''}` : 'أنتِ'} · {timeAgo(m.created_at)}</div><div>{m.body}</div>{m.image_url && <a href={m.image_url} target="_blank">📷 صورة</a>}</div>)}</div>
+      <div class="chat">{msgs.results.map(m => <div class={`msg ${m.is_staff ? 'staff' : 'me'}`}><div class="who">{m.is_staff ? `فريق هدهد — ${m.name ?? ''}` : 'أنت'} · {timeAgo(m.created_at)}</div><div>{m.body}</div>{m.image_url && <a href={m.image_url} target="_blank">📷 صورة</a>}</div>)}</div>
       {t.status !== 'closed' && <form method="post" action={`/account/tickets/${t.code}/reply`} class="card-box"><label>رد</label><textarea name="body" rows={3} required></textarea><button class="btn sm" style="margin-top:8px">إرسال</button></form>}
     </>
   ));
@@ -174,7 +174,7 @@ acct.get('/reviews', async (c) => {
   const s = await loadSettings(db);
   return shell(c, 'reviews', 'تقييماتي', (
     <>
-      <Flash msg={c.req.query('ok') ? `شكرًا! أُضيف تقييمك وحصلتِ على ${c.req.query('pts')} نقطة. يظهر بعد مراجعة الفريق.` : undefined} />
+      <Flash msg={c.req.query('ok') ? `شكرًا! أُضيف تقييمك وحصلت على ${c.req.query('pts')} نقطة. يظهر بعد مراجعة الفريق.` : undefined} />
       <div class="card-box"><h3>بانتظار تقييمك ({pending.results.length}) <small style="color:#888;font-weight:400">— {s.review_points} نقاط لكل تقييم، {s.review_photo_points} مع صورة</small></h3>
         {pending.results.length === 0 ? <p style="color:#888">لا منتجات بانتظار التقييم.</p> : pending.results.map(it => (
           <form method="post" action="/account/reviews" class="review-form">
@@ -233,7 +233,7 @@ acct.get('/points', async (c) => {
   return shell(c, 'points', 'نقاطي', (
     <>
       <div class="acct-cards"><div class="acct-card"><b>{u.points}</b><span>رصيد النقاط</span></div><div class="acct-card"><b>{fmt(u.points / 100 * parseFloat(s.points_value_per_100 || '1'))}</b><span>قيمتها عند الدفع</span></div><div class="acct-card"><b>{s.points_max_percent}%</b><span>أقصى نسبة تُدفع بالنقاط</span></div></div>
-      <div class="card-box"><h3>كيف تكسبين النقاط؟</h3><ul style="font-size:14px;line-height:1.9"><li>{s.points_per_lyd} نقطة لكل دينار عند تسليم الطلب.</li><li>{s.review_points} نقاط لكل تقييم، و{s.review_photo_points} إن أضفتِ صورة.</li><li>تعويضات فريق الدعم عند أي مشكلة.</li><li>كل 100 نقطة = {s.points_value_per_100} د.ل تُخصم من طلبك التالي.</li></ul></div>
+      <div class="card-box"><h3>كيف تكسب النقاط؟</h3><ul style="font-size:14px;line-height:1.9"><li>{s.points_per_lyd} نقطة لكل دينار عند تسليم الطلب.</li><li>{s.review_points} نقاط لكل تقييم، و{s.review_photo_points} إن أضفت صورة.</li><li>تعويضات فريق الدعم عند أي مشكلة.</li><li>كل 100 نقطة = {s.points_value_per_100} د.ل تُخصم من طلبك التالي.</li></ul></div>
       <div class="card-box"><h3>السجل</h3>{results.length === 0 ? <p style="color:#888">لا حركات بعد.</p> : <table class="tbl"><tr><th>التاريخ</th><th>السبب</th><th>الطلب</th><th>النقاط</th></tr>{results.map(l => <tr><td>{timeAgo(l.created_at)}</td><td>{l.reason}</td><td>{l.code ?? '—'}</td><td style={`font-weight:800;color:${l.delta > 0 ? '#1a9c5b' : '#d3262b'}`}>{l.delta > 0 ? '+' : ''}{l.delta}</td></tr>)}</table>}</div>
     </>
   ));
@@ -248,12 +248,12 @@ acct.get('/addresses', async (c) => {
       <Flash msg={c.req.query('ok') ? 'تم الحفظ ✓' : undefined} />
       <div class="addr-grid">{results.map(a => (
         <div class={`addr ${a.is_default ? 'def' : ''}`}>{a.is_default ? <span class="status green">الافتراضي</span> : null}<b>{a.label || a.name}</b><div>{a.name} · {a.phone}</div><div>{a.city} — {a.address}</div>
-          <form method="post" action={`/account/addresses/${a.id}`} class="inline" style="margin-top:8px">{!a.is_default && <button class="btn sm ghost" name="action" value="default">اجعليه الافتراضي</button>}<button class="btn sm ghost" name="action" value="delete" style="color:#d3262b">حذف</button></form></div>
+          <form method="post" action={`/account/addresses/${a.id}`} class="inline" style="margin-top:8px">{!a.is_default && <button class="btn sm ghost" name="action" value="default">اجعله الافتراضي</button>}<button class="btn sm ghost" name="action" value="delete" style="color:#d3262b">حذف</button></form></div>
       ))}</div>
       <form method="post" action="/account/addresses/new" class="card-box" style="max-width:560px"><h3>+ عنوان جديد</h3>
         <label>تسمية (بيت/عمل)</label><input type="text" name="label" placeholder="البيت" /><label>الاسم</label><input type="text" name="name" value={u.name} required /><label>الهاتف</label><input type="tel" name="phone" value={u.phone} required />
         <label>المدينة</label><select name="city">{CITIES.map(ct => <option>{ct}</option>)}</select><label>العنوان بالتفصيل</label><textarea name="address" rows={2} required></textarea>
-        <label class="radio" style="border:0;padding:6px 0"><input type="checkbox" name="is_default" value="1" /> اجعليه العنوان الافتراضي</label><button class="btn sm">حفظ العنوان</button></form>
+        <label class="radio" style="border:0;padding:6px 0"><input type="checkbox" name="is_default" value="1" /> اجعله العنوان الافتراضي</label><button class="btn sm">حفظ العنوان</button></form>
     </>
   ));
 });
@@ -287,7 +287,7 @@ acct.get('/profile', async (c) => {
   return shell(c, 'profile', 'بياناتي وكلمة المرور', (
     <div class="two">
       <form method="post" action="/account/profile" class="card-box"><h3>البيانات</h3><Flash msg={c.req.query('ok') === '1' ? 'تم الحفظ ✓' : undefined} />
-        <label>الاسم</label><input type="text" name="name" value={u.name} required /><label>البريد (اختياري — للإيصالات)</label><input type="email" name="email" value={u.email ?? ''} /><label>الهاتف</label><input type="tel" value={u.phone} disabled /><small style="color:#888">لتغيير رقم الهاتف تواصلي مع الدعم.</small><br /><button class="btn sm" style="margin-top:10px">حفظ</button></form>
+        <label>الاسم</label><input type="text" name="name" value={u.name} required /><label>البريد (اختياري — للإيصالات)</label><input type="email" name="email" value={u.email ?? ''} /><label>الهاتف</label><input type="tel" value={u.phone} disabled /><small style="color:#888">لتغيير رقم الهاتف تواصل مع الدعم.</small><br /><button class="btn sm" style="margin-top:10px">حفظ</button></form>
       <form method="post" action="/account/password" class="card-box"><h3>كلمة المرور</h3><Flash msg={c.req.query('ok') === '2' ? 'غُيّرت كلمة المرور ✓' : undefined} type={c.req.query('err') ? 'err' : 'ok'} /><Flash type="err" msg={c.req.query('err') ? 'كلمة المرور الحالية غير صحيحة' : undefined} />
         <label>الحالية</label><input type="password" name="current" required /><label>الجديدة</label><input type="password" name="password" minlength={6} required /><button class="btn sm" style="margin-top:10px">تغيير</button></form>
     </div>
@@ -308,8 +308,8 @@ acct.post('/orders/:code/cancel', async (c) => {
   const o = await c.env.DB.prepare("SELECT id,status FROM orders WHERE code=? AND user_id=?").bind(c.req.param('code'), u.id).first<any>();
   if (!o) return c.notFound();
   if (o.status !== 'pending_payment') return c.redirect(`/orders/${c.req.param('code')}?err=cancel`);
-  await c.env.DB.prepare('UPDATE orders SET cancel_reason=? WHERE id=?').bind(f.reason ? String(f.reason) : 'إلغاء من الزبونة', o.id).run();
-  await setOrderStatus(c.env.DB, c.req.param('code'), 'cancelled', u.id, 'إلغاء من الزبونة قبل الدفع');
+  await c.env.DB.prepare('UPDATE orders SET cancel_reason=? WHERE id=?').bind(f.reason ? String(f.reason) : 'إلغاء من الزبون', o.id).run();
+  await setOrderStatus(c.env.DB, c.req.param('code'), 'cancelled', u.id, 'إلغاء من الزبون قبل الدفع');
   return c.redirect(`/orders/${c.req.param('code')}`);
 });
 
