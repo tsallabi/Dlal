@@ -43,15 +43,15 @@ ops.get('/coupons', async (c) => {
 <Flash type="err" msg={c.req.query('err') ? 'الكود مستخدم مسبقًا' : undefined} />
       <div class="two" style="grid-template-columns:1fr 360px">
         <div class="tbl-wrap"><table class="tbl"><tr><th>الكود</th><th>النوع</th><th>القيمة</th><th>شروط</th><th>الاستخدام</th><th>إجمالي الخصم</th><th>الحالة</th><th class="acts"></th></tr>
-          {rows.results.map(cp => <tr><td><b class="mono" style="display:inline">{cp.code}</b><br /><small>{cp.note}</small></td><td>{T[cp.type]}</td><td>{cp.type === 'percent' ? `${cp.value}%` : cp.type === 'fixed' ? fmt(cp.value) : '—'}{cp.max_discount_lyd ? <><br /><small>حد أقصى {fmt(cp.max_discount_lyd)}</small></> : null}</td><td><small>حد أدنى {fmt(cp.min_order_lyd)}<br />{cp.per_user_limit}/زبونة{cp.ends_at ? ` · حتى ${cp.ends_at.slice(0, 10)}` : ''}</small></td><td>{cp.used_count}{cp.usage_limit ? ` / ${cp.usage_limit}` : ''}</td><td>{fmt(cp.total_disc)}</td><td><span class={`status ${cp.active ? 'green' : 'gray'}`}>{cp.active ? 'نشط' : 'موقوف'}</span></td><td><form method="post" action={`/admin/coupons/${cp.id}/toggle`}><button class="btn sm ghost">{cp.active ? 'إيقاف' : 'تفعيل'}</button></form></td></tr>)}
+          {rows.results.map(cp => <tr><td><b class="mono" style="display:inline">{cp.code}</b><br /><small>{cp.note}</small></td><td>{T[cp.type]}</td><td>{cp.type === 'percent' ? `${cp.value}%` : cp.type === 'fixed' ? fmt(cp.value) : '—'}{cp.max_discount_lyd ? <><br /><small>حد أقصى {fmt(cp.max_discount_lyd)}</small></> : null}</td><td><small>حد أدنى {fmt(cp.min_order_lyd)}<br />{cp.per_user_limit}/زبون{cp.ends_at ? ` · حتى ${cp.ends_at.slice(0, 10)}` : ''}</small></td><td>{cp.used_count}{cp.usage_limit ? ` / ${cp.usage_limit}` : ''}</td><td>{fmt(cp.total_disc)}</td><td><span class={`status ${cp.active ? 'green' : 'gray'}`}>{cp.active ? 'نشط' : 'موقوف'}</span></td><td><form method="post" action={`/admin/coupons/${cp.id}/toggle`}><button class="btn sm ghost">{cp.active ? 'إيقاف' : 'تفعيل'}</button></form></td></tr>)}
         </table></div>
         <form method="post" action="/admin/coupons/new" class="card-box"><h3>+ كوبون جديد</h3>
           <label>الكود</label><input type="text" name="code" required style="text-transform:uppercase" placeholder="EID20" />
           <label>النوع</label><select name="type"><option value="percent">نسبة %</option><option value="fixed">مبلغ ثابت (د.ل)</option><option value="free_ship">توصيل مجاني</option></select>
           <div class="inline"><div><label>القيمة</label><input type="number" step="0.5" name="value" value="10" /></div><div><label>حد أقصى للخصم</label><input type="number" name="max_discount_lyd" placeholder="—" /></div></div>
-          <div class="inline"><div><label>حد أدنى للطلب</label><input type="number" name="min_order_lyd" value="0" /></div><div><label>مرات لكل زبونة</label><input type="number" name="per_user_limit" value="1" /></div></div>
+          <div class="inline"><div><label>حد أدنى للطلب</label><input type="number" name="min_order_lyd" value="0" /></div><div><label>مرات لكل زبون</label><input type="number" name="per_user_limit" value="1" /></div></div>
           <div class="inline"><div><label>إجمالي الاستخدامات</label><input type="number" name="usage_limit" placeholder="بلا حد" /></div><div><label>ينتهي في</label><input type="date" name="ends_at" /></div></div>
-          <label>ملاحظة تظهر للزبونة</label><input type="text" name="note" /><button class="btn sm" style="margin-top:10px">إنشاء</button></form>
+          <label>ملاحظة تظهر للزبون</label><input type="text" name="note" /><button class="btn sm" style="margin-top:10px">إنشاء</button></form>
       </div>
     </>
   ));
@@ -93,7 +93,7 @@ ops.post('/reviews/:id', async (c) => {
   await db.prepare('UPDATE reviews SET status=? WHERE id=?').bind(st, id).run();
   // تحديث متوسط التقييم وعدده على المنتج
   await db.prepare("UPDATE products SET review_count=(SELECT COUNT(*) FROM reviews WHERE product_id=? AND status='approved'),rating=COALESCE((SELECT ROUND(AVG(rating),1) FROM reviews WHERE product_id=? AND status='approved'),rating) WHERE id=?").bind(r.product_id, r.product_id, r.product_id).run();
-  if (st === 'approved') await notify(db, r.user_id, 'نُشر تقييمك ⭐', 'شكرًا لمشاركة رأيك، يساعد الزبونات الأخريات.', '/account/reviews');
+  if (st === 'approved') await notify(db, r.user_id, 'نُشر تقييمك ⭐', 'شكرًا لمشاركة رأيك، يساعد الزبائن الآخرين.', '/account/reviews');
   await logActivity(db, c.get('user')!.id, `review.${st}`, String(id));
   return c.redirect('/admin/reviews?status=pending');
 });
@@ -107,7 +107,7 @@ ops.get('/tickets', async (c) => {
   return shell(c, 'tickets', 'التذاكر والإرجاع', (
     <>
       <div class="tabs">{[['open', 'مفتوحة'], ['resolved', 'تم الحل'], ['closed', 'مغلقة'], ['all', 'الكل']].map(([k, l]) => <a href={`/admin/tickets?status=${k}`} class={st === k ? 'on' : ''}>{l}</a>)}</div>
-      <div class="tbl-wrap"><table class="tbl"><tr><th>التذكرة</th><th>النوع</th><th>الزبونة</th><th>الطلب</th><th>الموضوع</th><th>الحالة</th><th>المسؤول</th><th>آخر تحديث</th></tr>
+      <div class="tbl-wrap"><table class="tbl"><tr><th>التذكرة</th><th>النوع</th><th>الزبون</th><th>الطلب</th><th>الموضوع</th><th>الحالة</th><th>المسؤول</th><th>آخر تحديث</th></tr>
         {rows.results.map(t => <tr><td><a href={`/admin/tickets/${t.code}`} style="color:var(--brand);font-weight:700">{t.code}</a></td><td>{TICKET_TYPES[t.type]}</td><td>{t.name}<br /><small>{t.phone}</small></td><td>{t.order_code ? <a href={`/admin/orders/${t.order_code}`}>{t.order_code}</a> : '—'}</td><td>{t.subject}</td><td><span class={`status ${TICKET_STATUS[t.status].color}`}>{TICKET_STATUS[t.status].ar}</span></td><td>{t.agent ?? '—'}</td><td><small>{timeAgo(t.updated_at)}</small></td></tr>)}
       </table></div>
       {rows.results.length === 0 && <div class="empty">لا تذاكر</div>}
@@ -126,16 +126,16 @@ ops.get('/tickets/:code', async (c) => {
     <div class="two">
       <div>
         <div class="inline" style="margin-bottom:10px"><span class={`status ${TICKET_STATUS[t.status].color}`}>{TICKET_STATUS[t.status].ar}</span><span class="status">{TICKET_TYPES[t.type]}</span>{t.order_code && <a href={`/admin/orders/${t.order_code}`} class="status blue">الطلب {t.order_code} — {ORDER_STATUS[t.order_status]?.ar} — {fmt(t.total_lyd)}</a>}</div>
-        <div class="chat">{msgs.results.map(m => <div class={`msg ${m.is_staff ? 'staff' : 'me'}`}><div class="who">{m.is_staff ? `${m.name} (فريق)` : `${t.name} (الزبونة)`} · {timeAgo(m.created_at)}</div><div>{m.body}</div>{m.image_url && <a href={m.image_url} target="_blank">📷 صورة</a>}</div>)}</div>
-        <form method="post" action={`/admin/tickets/${t.code}/reply`} class="card-box"><label>رد للزبونة</label><textarea name="body" rows={3} required></textarea><div class="inline" style="margin-top:8px"><button class="btn sm">إرسال الرد</button><label class="radio" style="border:0;padding:0"><input type="checkbox" name="in_progress" value="1" checked /> وضع "قيد المعالجة"</label></div></form>
+        <div class="chat">{msgs.results.map(m => <div class={`msg ${m.is_staff ? 'staff' : 'me'}`}><div class="who">{m.is_staff ? `${m.name} (فريق)` : `${t.name} (الزبون)`} · {timeAgo(m.created_at)}</div><div>{m.body}</div>{m.image_url && <a href={m.image_url} target="_blank">📷 صورة</a>}</div>)}</div>
+        <form method="post" action={`/admin/tickets/${t.code}/reply`} class="card-box"><label>رد للزبون</label><textarea name="body" rows={3} required></textarea><div class="inline" style="margin-top:8px"><button class="btn sm">إرسال الرد</button><label class="radio" style="border:0;padding:0"><input type="checkbox" name="in_progress" value="1" checked /> وضع "قيد المعالجة"</label></div></form>
       </div>
       <div>
-        <div class="card-box"><h3>الزبونة</h3>{t.name}<br />{t.phone}<br />رصيد النقاط: {t.points}<br /><a href={`/admin/customers/${t.user_id}`}>ملف الزبونة ›</a></div>
+        <div class="card-box"><h3>الزبون</h3>{t.name}<br />{t.phone}<br />رصيد النقاط: {t.points}<br /><a href={`/admin/customers/${t.user_id}`}>ملف الزبون ›</a></div>
         <form method="post" action={`/admin/tickets/${t.code}/assign`} class="card-box"><h3>المسؤول</h3><div class="inline"><select name="assigned_to"><option value="">—</option>{agents.results.map(a => <option value={a.id} selected={a.id === t.assigned_to}>{a.name}</option>)}</select><button class="btn sm ghost">تعيين</button></div></form>
         <form method="post" action={`/admin/tickets/${t.code}/resolve`} class="card-box" style="border-color:#1a9c5b"><h3>القرار النهائي</h3>
           <label>الإجراء</label><select name="resolution"><option value="none">بدون تعويض (حل بالتوضيح)</option><option value="points">تعويض بالنقاط</option><option value="refund">استرجاع مبلغ (يدوي عبر المالية)</option><option value="replacement">إرسال بديل</option>{t.order_status === 'pending_payment' || t.order_status === 'paid' ? <option value="cancel">إلغاء الطلب</option> : null}</select>
           <div class="inline"><div><label>نقاط</label><input type="number" name="points" placeholder="0" /></div><div><label>مبلغ الاسترجاع (د.ل)</label><input type="number" step="0.5" name="refund_lyd" placeholder="0" /></div></div>
-          <label>رسالة الإغلاق للزبونة</label><textarea name="body" rows={2} required>تم حل تذكرتك. شكرًا لصبرك 💕</textarea>
+          <label>رسالة الإغلاق للزبون</label><textarea name="body" rows={2} required>تم حل تذكرتك. شكرًا لصبرك 💕</textarea>
           <button class="btn sm ok" style="margin-top:8px">إغلاق التذكرة بالقرار</button></form>
       </div>
     </div>
@@ -213,18 +213,18 @@ ops.get('/payments', async (c) => {
             <p style="font-size:12px;color:#666;margin:4px 0 0">العنوان الفعلي المستعمل الآن: <b class="mono" style="direction:ltr;display:inline-block">{mypayBase(s)}</b></p>
             <label>Client ID {c.env.MYPAY_CLIENT_ID && <small style="color:#1a9c5b">— مضبوط كسرّ في Cloudflare</small>}</label><input type="password" name="mypay_client_id" value={s.mypay_client_id ?? ''} dir="ltr" placeholder="••••••" disabled={!canManage} />
             <label>Secret ID (يسمّى Client Secret في لوحتهم) {c.env.MYPAY_SECRET_ID && <small style="color:#1a9c5b">— مضبوط كسرّ في Cloudflare</small>}</label><input type="password" name="mypay_secret_id" value={s.mypay_secret_id ?? ''} dir="ltr" placeholder="••••••" disabled={!canManage} />
-            <label>سر الويبهوك (Webhook Secret) {c.env.MYPAY_WEBHOOK_SECRET && <small style="color:#1a9c5b">— مضبوط كسرّ في Cloudflare، اتركيه فارغًا</small>}</label><input type="password" name="mypay_webhook_secret" value={s.mypay_webhook_secret ?? ''} dir="ltr" placeholder={c.env.MYPAY_WEBHOOK_SECRET ? '•••••• (من Cloudflare)' : 'انسخيه من زر Configure Webhook في لوحة ماي باي'} disabled={!canManage} />
+            <label>سر الويبهوك (Webhook Secret) {c.env.MYPAY_WEBHOOK_SECRET && <small style="color:#1a9c5b">— مضبوط كسرّ في Cloudflare، اتركه فارغًا</small>}</label><input type="password" name="mypay_webhook_secret" value={s.mypay_webhook_secret ?? ''} dir="ltr" placeholder={c.env.MYPAY_WEBHOOK_SECRET ? '•••••• (من Cloudflare)' : 'انسخه من زر Configure Webhook في لوحة ماي باي'} disabled={!canManage} />
             <label>الوسائل المفعّلة (aliases مفصولة بفاصلة)</label><input type="text" name="mypay_gateways" value={s.mypay_gateways ?? ''} dir="ltr" disabled={!canManage} />
             <p style="font-size:12px;color:#666">عنوان الويبهوك الذي تسجّله في لوحة ماي باي: <b class="mono" style="display:inline">{origin}/api/mypay/webhook</b></p>
             {canManage && <div class="inline" style="margin-top:8px"><button class="btn sm">حفظ</button><button class="btn sm ghost" formaction="/admin/payments/test">اختبار الاتصال</button></div>}
           </form>
           <form method="post" action="/admin/payments/settings" class="card-box"><h3>فروع الدفع نقدًا</h3>
-            <p style="font-size:12px;color:#666;margin:0 0 6px">سطر لكل فرع بالصيغة: <span class="mono" dir="rtl">المدينة — العنوان | الهاتف</span> (الهاتف اختياري). تظهر للزبونة في صفحة الدفع تحت «دفع كاش في أقرب فرع» وفي صفحة <a href="/pages/branches" target="_blank">فروعنا</a>.</p>
+            <p style="font-size:12px;color:#666;margin:0 0 6px">سطر لكل فرع بالصيغة: <span class="mono" dir="rtl">المدينة — العنوان | الهاتف</span> (الهاتف اختياري). تظهر للزبون في صفحة الدفع تحت «دفع كاش في أقرب فرع» وفي صفحة <a href="/pages/branches" target="_blank">فروعنا</a>.</p>
             <p style="font-size:12px;color:#666;margin:0 0 6px">مثال: <span class="mono" dir="rtl">طرابلس — شارع المخازن، الفرناج | 0910000000</span></p>
             <textarea name="branches" rows={5} dir="rtl" disabled={!canManage} style="width:100%;font-family:inherit">{s.branches ?? ''}</textarea>
             {canManage && <button class="btn sm" style="margin-top:8px">حفظ الفروع</button>}
           </form>
-          <div class="card-box"><h3>كيف يعمل التكامل</h3><ol style="font-size:13px;line-height:1.8;padding-inline-start:18px"><li>الزبونة تختار وسيلة فورية عند الدفع → هدهد ينشئ دفعة بمرجع فريد ويطلب رابط الدفع من ماي باي.</li><li>تُحوَّل لصفحة ماي باي وتدفع.</li><li>ماي باي يرسل Webhook موقّعًا (HMAC-SHA256 في X-MyPay-Signature) → هدهد يتحقق من التوقيع والمبلغ ويحوّل الطلب إلى "مدفوع" ويُبلغ الزبونة وشريك الشراء.</li><li>عودة المتصفح وحدها لا تؤكد الدفع — الويبهوك هو مصدر الحقيقة.</li></ol></div>
+          <div class="card-box"><h3>كيف يعمل التكامل</h3><ol style="font-size:13px;line-height:1.8;padding-inline-start:18px"><li>الزبون يختار وسيلة فورية عند الدفع → هدهد ينشئ دفعة بمرجع فريد ويطلب رابط الدفع من ماي باي.</li><li>يُحوَّل لصفحة ماي باي ويدفع.</li><li>ماي باي يرسل Webhook موقّعًا (HMAC-SHA256 في X-MyPay-Signature) → هدهد يتحقق من التوقيع والمبلغ ويحوّل الطلب إلى "مدفوع" ويُبلغ الزبون وشريك الشراء.</li><li>عودة المتصفح وحدها لا تؤكد الدفع — الويبهوك هو مصدر الحقيقة.</li></ol></div>
         </div>
       </div>
     </>
@@ -247,11 +247,11 @@ ops.post('/payments/test', requirePerm('payments.manage'), async (c) => {
   const cfg = loadMyPay({ ...s, mypay_mode: String(f.mypay_mode), mypay_base_url: String(f.mypay_base_url), mypay_sandbox: String(f.mypay_sandbox ?? s.mypay_sandbox ?? 'yes'), mypay_client_id: String(f.mypay_client_id ?? s.mypay_client_id ?? ''), mypay_secret_id: String(f.mypay_secret_id ?? s.mypay_secret_id ?? '') }, c.env);
   const r = await checkConnection(cfg);
   // المحاكاة ليست اتصالًا بماي باي: إظهارها خضراء يوهم صاحب المشروع أن البوابة اختُبرت وهي لم تُلمس
-  if (cfg.mode === 'mock') return c.redirect('/admin/payments?test=mock&detail=' + encodeURIComponent('لم يُختبر شيء: الوضع «محاكاة» فلا يخرج أي طلب إلى ماي باي. غيّري الوضع إلى «حقيقي» واحفظي ثم اختبري.'));
+  if (cfg.mode === 'mock') return c.redirect('/admin/payments?test=mock&detail=' + encodeURIComponent('لم يُختبر شيء: الوضع «محاكاة» فلا يخرج أي طلب إلى ماي باي. غيّر الوضع إلى «حقيقي» واحفظ ثم اختبر.'));
   // ماي باي ترد بالعربية مُرمَّزة \uXXXX، فتظهر طلاسم ولا يفهم صاحب المشروع سبب الرفض
   const readable = r.detail.replace(/\\u([0-9a-fA-F]{4})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
   // الاختبار يستعمل ما في النموذج لا ما هو محفوظ: ذكر العنوان المستعمل فعلًا يكشف خطأ البيئة فورًا
-  const hint = !r.ok && cfg.baseUrl.includes('/pay/api/v1') ? ' — تنبيه: اختبرتِ على بيئة الإنتاج؛ مفاتيح الساندبوكس تُرفض هنا. اختاري البيئة «ساندبوكس».' : '';
+  const hint = !r.ok && cfg.baseUrl.includes('/pay/api/v1') ? ' — تنبيه: اختبرت على بيئة الإنتاج؛ مفاتيح الساندبوكس تُرفض هنا. اختر البيئة «ساندبوكس».' : '';
   return c.redirect(`/admin/payments?test=${r.ok ? 'ok' : 'fail'}&detail=${encodeURIComponent(`${r.status} — ${cfg.baseUrl} — ${readable}${hint}`.slice(0, 400))}`);
 });
 
@@ -307,7 +307,7 @@ ops.get('/reports', async (c) => {
         <table class="tbl"><tr><th>الشريك</th><th>طلبات</th><th>ثمن البضاعة</th><th>مستحق الشحن الآن</th><th>✈️ جوي</th><th>🚢 بحري</th><th>إجمالي الشحن المتوقع</th><th>المجموع المستحق الآن</th></tr>
           {owed.results.map(r => <tr><td><b>{r.name}</b></td><td>{r.orders}</td><td>{fmt(r.goods_due)}</td><td><b style="color:#d3262b">{fmt(r.shipped_due)}</b></td><td>{fmt(r.air_due)}</td><td>{fmt(r.sea_due)}</td><td>{fmt(r.all_due)}</td><td><b>{fmt(r.goods_due + r.shipped_due)}</b></td></tr>)}
         </table>
-        <p style="font-size:12px;color:#666">عمودا «جوي» و«بحري» يقسمان إجمالي الشحن المتوقع حسب طريقة الشحن التي اختارتها الزبونة، لتطابق فاتورة الشريك التي تفصل الطريقتين.</p>
+        <p style="font-size:12px;color:#666">عمودا «جوي» و«بحري» يقسمان إجمالي الشحن المتوقع حسب طريقة الشحن التي اختارها الزبون، لتطابق فاتورة الشريك التي تفصل الطريقتين.</p>
       </div>
       <div class="card-box"><h3>الأعلى ربحًا</h3>
         <table class="tbl"><tr><th>المنتج</th><th>قطع</th><th>مبيعات</th><th>تكلفة</th><th>ربح</th><th>هامش</th></tr>
@@ -345,7 +345,7 @@ ops.get('/customers/:id', async (c) => {
   ]);
   const canM = permsOf(c.get('user')).has('customers.manage');
   const spent = orders.results.filter(o => !['pending_payment', 'cancelled', 'refunded'].includes(o.status)).reduce((a, o) => a + o.total_lyd, 0);
-  return shell(c, 'customers', `الزبونة: ${u.name}`, (
+  return shell(c, 'customers', `الزبون: ${u.name}`, (
     <div class="two">
       <div>
         <div class="kpis"><div class="kpi"><b>{orders.results.length}</b><span>طلب</span></div><div class="kpi"><b>{fmt(spent)}</b><span>مشتريات</span></div><div class="kpi"><b>{u.points}</b><span>نقطة</span></div><div class="kpi"><b class={u.active ? '' : 'red'}>{u.active ? 'نشط' : 'معطّل'}</b><span>الحساب</span></div></div>
@@ -353,9 +353,9 @@ ops.get('/customers/:id', async (c) => {
         <div class="card-box"><h3>التذاكر</h3>{tickets.results.length === 0 ? <p style="color:#888">لا تذاكر</p> : <table class="tbl"><tr><th>التذكرة</th><th>النوع</th><th>الموضوع</th><th>الحالة</th></tr>{tickets.results.map(t => <tr><td><a href={`/admin/tickets/${t.code}`}>{t.code}</a></td><td>{TICKET_TYPES[t.type]}</td><td>{t.subject}</td><td><span class={`status ${TICKET_STATUS[t.status].color}`}>{TICKET_STATUS[t.status].ar}</span></td></tr>)}</table>}</div>
       </div>
       <div>
-        <div class="card-box"><h3>البيانات</h3>{u.phone}<br />{u.email ?? '—'}<br />{u.city ?? '—'}<br /><small>مسجلة {timeAgo(u.created_at)}</small><hr />{addrs.results.map(a => <div style="font-size:13px">📍 {a.name} · {a.phone} · {a.city} — {a.address}</div>)}</div>
+        <div class="card-box"><h3>البيانات</h3>{u.phone}<br />{u.email ?? '—'}<br />{u.city ?? '—'}<br /><small>مسجّل {timeAgo(u.created_at)}</small><hr />{addrs.results.map(a => <div style="font-size:13px">📍 {a.name} · {a.phone} · {a.city} — {a.address}</div>)}</div>
         {canM && <form method="post" action={`/admin/customers/${id}/points`} class="card-box"><h3>تعديل النقاط</h3><div class="inline"><input type="number" name="delta" placeholder="+50 أو -20" required /><input type="text" name="reason" placeholder="السبب" required /><button class="btn sm">تطبيق</button></div></form>}
-        {c.get('user')!.staff_role === 'owner' && !c.get('user')!.imp_by && u.active ? <form method="post" action={`/admin/as/${id}`} class="card-box"><h3>جرّب الموقع بحسابها</h3><p style="font-size:12px;color:#666;margin:0 0 8px">يفتح المتجر كما تراه هي: سلتها وطلباتها وإشعاراتها. ما تفعله يُحفظ باسمها — لا تدفع ولا تلغِ طلبًا. «عودة إلى حسابي» من الشريط الأحمر.</p><button class="btn sm ok">👁 ادخل باسمها</button></form> : null}
+        {c.get('user')!.staff_role === 'owner' && !c.get('user')!.imp_by && u.active ? <form method="post" action={`/admin/as/${id}`} class="card-box"><h3>جرّب الموقع بحسابه</h3><p style="font-size:12px;color:#666;margin:0 0 8px">يفتح المتجر كما يراه هو: سلته وطلباته وإشعاراته. ما تفعله يُحفظ باسمه — لا تدفع ولا تلغِ طلبًا. «عودة إلى حسابي» من الشريط الأحمر.</p><button class="btn sm ok">👁 ادخل باسمه</button></form> : null}
         {canM && <form method="post" action={`/admin/customers/${id}/toggle`} class="card-box"><h3>الحساب</h3><button class="btn sm ghost" style={u.active ? 'color:#d3262b' : ''}>{u.active ? 'تعطيل الحساب' : 'تفعيل الحساب'}</button></form>}
         <div class="card-box"><h3>سجل النقاط</h3>{pts.results.map(l => <div style="font-size:13px;display:flex;justify-content:space-between;border-bottom:1px solid #eee;padding:4px 0"><span>{l.reason}</span><b style={`color:${l.delta > 0 ? '#1a9c5b' : '#d3262b'}`}>{l.delta > 0 ? '+' : ''}{l.delta}</b></div>)}</div>
       </div>
@@ -790,25 +790,25 @@ ops.get('/source', async (c) => {
             <label>عنوان API الأساسي</label><input type="url" name="src_base_url" value={s.src_base_url ?? ''} placeholder="https://otapi.net أو https://api.tmapi.top" dir="ltr" />
             <label>المفتاح (instanceKey / apiToken)</label><input type="password" name="src_key" value={s.src_key ?? ''} dir="ltr" />
             <label>سقف استدعاءات المزوّد في الشهر (0 = بلا سقف)</label><input type="number" name="src_month_limit" value={s.src_month_limit ?? '0'} min="0" dir="ltr" />
-            <p style="font-size:12px;color:#666;margin:4px 0 0">يحمي حصة اشتراكك: عند بلوغ السقف يتوقف الاستيراد والإثراء التلقائيان حتى أول الشهر أو حتى ترفعيه. الترجمة لا تُحسب لأنها لا تستهلك من الحصة.</p>
+            <p style="font-size:12px;color:#666;margin:4px 0 0">يحمي حصة اشتراكك: عند بلوغ السقف يتوقف الاستيراد والإثراء التلقائيان حتى أول الشهر أو حتى ترفعه. الترجمة لا تُحسب لأنها لا تستهلك من الحصة.</p>
             <label>لغة البيانات المطلوبة من المزوّد</label><select name="src_lang"><option value="zh" selected={(s.src_lang ?? 'zh') === 'zh'}>صينية (ثم تُترجم عندنا بالذكاء الاصطناعي)</option><option value="en" selected={s.src_lang === 'en'}>إنجليزية</option><option value="ar" selected={s.src_lang === 'ar'}>عربية (إن دعمها المزوّد)</option></select>
             <div class="inline" style="margin-top:10px"><button class="btn sm">حفظ</button>
               <input type="text" name="test_id" placeholder="معرف منتج 1688 للاختبار" style="width:200px" dir="ltr" /><button class="btn sm ghost" formaction="/admin/source/test">اختبار: جلب منتج</button>
               <input type="text" name="test_kw" placeholder="كلمة بحث صينية" style="width:160px" /><button class="btn sm ghost" formaction="/admin/source/test">اختبار: بحث</button></div>
           </form>
           <div class="card-box"><h3>صحة الكتالوج</h3>
-            {h.wallet && <Flash type="err" msg={`المزوّد يرفض الطلبات: «${h.wallet}» (آخر محاولة ${timeAgo(h.walletAt)}). اشحني رصيد حساب TMAPI ثم أعيدي التشغيل — الاستيراد والإثراء متوقفان حتى ذلك، والترجمة تعمل لأنها لا تحتاج المزوّد.`} />}
+            {h.wallet && <Flash type="err" msg={`المزوّد يرفض الطلبات: «${h.wallet}» (آخر محاولة ${timeAgo(h.walletAt)}). اشحن رصيد حساب TMAPI ثم أعد التشغيل — الاستيراد والإثراء متوقفان حتى ذلك، والترجمة تعمل لأنها لا تحتاج المزوّد.`} />}
             <div class="kpis">
-              <div class="kpi"><b>{h.active}</b><span>منتج معروض للزبونة</span></div>
+              <div class="kpi"><b>{h.active}</b><span>منتج معروض للزبون</span></div>
               <div class="kpi"><b style={h.cn_live ? 'color:#d3262b' : 'color:#1a9c5b'}>{h.cn_live}</b><span>عنوان صيني ظاهر (يجب أن يكون صفرًا)</span></div>
               <div class="kpi"><b>{h.draft}</b><span>محجوز حتى تكتمل ترجمته</span></div>
               <div class="kpi"><b>{h.thin}</b><span>ينقصه صور/مقاسات/وزن</span></div>
-              <div class="kpi"><b style={h.stuck ? 'color:#c77700' : ''}>{h.stuck}</b><span>تعذّر إثراؤه (3 محاولات) — <a href="/admin/products?stuck=1">اعرضيها</a></span></div>
+              <div class="kpi"><b style={h.stuck ? 'color:#c77700' : ''}>{h.stuck}</b><span>تعذّر إثراؤه (3 محاولات) — <a href="/admin/products?stuck=1">اعرضها</a></span></div>
               <div class="kpi"><b>{h.oos}</b><span>نفد عند المورد</span></div>
               <div class="kpi"><b>{h.calls}</b><span>استدعاء للمزوّد (الكل)</span></div>
               <div class="kpi"><b style={h.left <= 0 ? 'color:#d3262b' : ''}>{h.month} / {h.budget}</b><span>هذا الشهر{h.left <= 0 ? ' — انتهت الميزانية' : ` (${(h.left * h.credits).toLocaleString('en-US')} كريدت متبقٍ)`}</span></div>
             </div>
-            {!h.cap && <Flash msg={`لا يوجد سقف شهري مضبوط، فنعمل على ميزانية افتراضية ${h.budget} استدعاء. اكتبي السقف في الحقل أعلاه ليطابق باقتك: الباقة 200000 كريدت ÷ 20 كريدت للاستدعاء = 10000 استدعاء.`} />}
+            {!h.cap && <Flash msg={`لا يوجد سقف شهري مضبوط، فنعمل على ميزانية افتراضية ${h.budget} استدعاء. اكتب السقف في الحقل أعلاه ليطابق باقتك: الباقة 200000 كريدت ÷ 20 كريدت للاستدعاء = 10000 استدعاء.`} />}
             <p style="font-size:12px;color:#666;margin-top:8px">
               التكلفة: <b>{h.credits} كريدت لكل استدعاء</b> (استدعاء واحد لكل منتج). الإثراء التلقائي يأخذ <b>{h.perHour}</b> منتجًا كل ساعة
               ليوزّع الميزانية على الشهر — المتبقي يكفي نحو <b>{h.days}</b> يومًا. ضغطة «أثرِ 10 منتجات» تكلّف <b>{10 * h.credits}</b> كريدت.
@@ -818,7 +818,7 @@ ops.get('/source', async (c) => {
               <form method="post" action="/admin/source/enrich" class="inline"><button class="btn sm ok" disabled={!prov || !h.stockJob}>أثرِ 10 منتجات الآن</button></form>
               <form method="post" action="/admin/source/translate" class="inline"><button class="btn sm ghost" disabled={!c.env.AI}>ترجم 20 عنوانًا الآن</button></form>
             </div>
-            <p style="font-size:12px;color:#666;margin-top:8px">كل ضغطة تأخذ دفعة واحدة وتعود بالنتيجة، فاضغطي مرة بعد مرة. الإثراء يبدأ بالمحجوزات: يجلب الصور والمقاسات والوزن ويُخرجها للمتجر. الوزن هو ما يُحسب عليه الشحن، فإثراؤه يصحّح السعر.</p>
+            <p style="font-size:12px;color:#666;margin-top:8px">كل ضغطة تأخذ دفعة واحدة وتعود بالنتيجة، فاضغط مرة بعد مرة. الإثراء يبدأ بالمحجوزات: يجلب الصور والمقاسات والوزن ويُخرجها للمتجر. الوزن هو ما يُحسب عليه الشحن، فإثراؤه يصحّح السعر.</p>
           </div>
           <form method="post" action="/admin/source/run" class="card-box"><h3>تشغيل من الخادم الآن</h3><p style="font-size:13px;color:#666">ينفذ المهام المستحقة في صفحة الزاحف عبر المزوّد (حتى 3 مهام في الضغطة الواحدة).</p><button class="btn sm ok" disabled={!prov}>شغّل المهام المستحقة</button> <a class="btn sm ghost" href="/admin/crawler">صفحة الزاحف ›</a></form>
         </div>
@@ -826,7 +826,7 @@ ops.get('/source', async (c) => {
           <div class="card-box"><h3>المزوّدون المدعومون</h3><table class="tbl"><tr><th>المزوّد</th><th>الموقع</th><th>المفتاح</th></tr>{Object.entries(PROVIDERS).map(([k, v]) => <tr><td>{v.ar}</td><td><a href={v.site} target="_blank" class="src-link">{v.site}</a></td><td class="mono" style="display:table-cell">{v.keyLabel}</td></tr>)}</table>
             <p style="font-size:12px;color:#666;margin-top:8px">سجّل عند المزوّد، خذ المفتاح، الصقه هنا، ثم "اختبار: جلب منتج". إن ظهر الرد بشكل مختلف عن المتوقع فالرد الخام أدناه يوضح الحقول وسنعدّل الموصّل.</p></div>
           <div class="card-box"><h3>تشخيص صفحات 1688 من متصفحك</h3>
-            <p style="font-size:12px;color:#666">افتحي صفحة منتج على 1688 ثم اضغطي في الإضافة «فحص صفحة 1688 المفتوحة». ما تقرأه الإضافة يظهر هنا، ومنه نضبط القارئ على بنية الصفحة الحقيقية.</p>
+            <p style="font-size:12px;color:#666">افتح صفحة منتج على 1688 ثم اضغط في الإضافة «فحص صفحة 1688 المفتوحة». ما تقرأه الإضافة يظهر هنا، ومنه نضبط القارئ على بنية الصفحة الحقيقية.</p>
             {probes.results.length === 0 ? <p style="color:#888">لا تشخيص بعد.</p> : probes.results.map(l => <details class="plog"><summary><small>{l.url.slice(6, 90)} · {timeAgo(l.created_at)}</small></summary><pre class="mono">{l.response}</pre></details>)}</div>
           <div class="card-box"><h3>آخر الردود الخام من المزوّد</h3>{logs.results.length === 0 ? <p style="color:#888">لا استدعاءات بعد.</p> : logs.results.map(l => <details class="plog"><summary><span class={`status ${l.ok ? 'green' : 'red'}`}>{l.status_code}</span> <small>{l.url.slice(0, 90)} · {timeAgo(l.created_at)}</small></summary><pre class="mono">{l.response}</pre></details>)}</div>
         </div>
