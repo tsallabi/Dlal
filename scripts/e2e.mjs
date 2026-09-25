@@ -553,7 +553,7 @@ expect(priceBefore === priceAfter, `سعر المنتج لا يتغير عند �
 {
   const { execFileSync } = await import('node:child_process');
   const dq = (sql) => JSON.parse(execFileSync('npx', ['wrangler', 'd1', 'execute', 'dlal-db', '--local', '-c', 'wrangler.local.toml', '--json', '--command', sql], { stdio: 'pipe' }).toString())[0].results;
-  const tag = String(Date.now()).slice(-7), tie = '97' + tag, tent = '98' + tag;
+  const tag = String(Date.now()).slice(-7), tie = '97' + tag, tent = '98' + tag, brush = '96' + tag;
   const imp = (items, cat) => ctx.request.post(BASE + '/api/import', { headers: { 'x-import-token': 'dev-import-token' }, data: { category_id: cat, page_url: 'test', items } });
   try {
     const acc = dq("SELECT id FROM categories WHERE slug='accessories'")[0].id, out = dq("SELECT id FROM categories WHERE slug='outdoor'")[0].id;
@@ -562,6 +562,11 @@ expect(priceBefore === priceAfter, `سعر المنتج لا يتغير عند �
     let [t] = dq(`SELECT id,weight_g,price_lyd FROM products WHERE source_offer_id='${tie}'`), [k] = dq(`SELECT weight_g,price_lyd FROM products WHERE source_offer_id='${tent}'`);
     expect(t.weight_g === 40 && t.price_lyd < 100, `ربطة عنق «40 كغ» بـ11 يوان تُحفظ 40 غ وتُسعَّر ${t.price_lyd} د.ل لا بالآلاف`);
     expect(k.weight_g === 27400, 'خيمة حقيقية 27.4 كغ بـ1400 يوان يبقى وزنها كما هو');
+    // قسم ثقيل (أدوات البناء 2 كغ تقديرًا): فرشاة بـ0.26 يوان «20 كغ» كانت تفلت من القاعدة الأولى
+    const bld = dq("SELECT id FROM categories WHERE slug='building'")[0].id;
+    await imp([{ offerId: brush, url: `https://detail.1688.com/offer/${brush}.html`, title: 'فرشاة ' + tag, titleAr: 'فرشاة دهان ' + tag, priceCny: 0.26, weightG: 20000, images: [], variants: [], inStock: true }], bld);
+    const [bb] = dq(`SELECT weight_g,price_lyd FROM products WHERE source_offer_id='${brush}'`);
+    expect(bb.weight_g === 20 && bb.price_lyd < 30, `فرشاة بـ0.26 يوان «20 كغ» تُحفظ 20 غ (${bb.price_lyd} د.ل لا 1,685)`);
     // وزن مستحيل محفوظ من قبل يُصحَّح عند مرور الإثراء عليه حتى بلا وزن جديد
     dq(`UPDATE products SET weight_g=40000 WHERE id=${t.id}`);
     await ctx.request.post(BASE + '/api/import', { headers: { 'x-import-token': 'dev-import-token' }, data: { category_id: null, page_url: 'ext:stock', items: [{ offerId: tie, url: `https://detail.1688.com/offer/${tie}.html`, title: 'ربطة ' + tag, priceCny: 11, images: [], variants: [], inStock: true }] } });
@@ -569,14 +574,14 @@ expect(priceBefore === priceAfter, `سعر المنتج لا يتغير عند �
     expect(t.weight_g === 40 && t.price_lyd < 100, `الإثراء يصحّح الوزن المستحيل المحفوظ (${t.weight_g} غ · ${t.price_lyd} د.ل)`);
     // جملة ترحيل 0039 نفسها على صف مستحيل، ثم إعادة تسعير «الناقص» كما يفعل الكرون
     dq(`UPDATE products SET weight_g=40000, price_lyd=3380 WHERE id=${t.id}`);
-    execFileSync('npx', ['wrangler', 'd1', 'execute', 'dlal-db', '--local', '-c', 'wrangler.local.toml', '--file', 'migrations/0039_impossible_weights.sql'], { stdio: 'pipe' });
+    for (const f of ['0039_impossible_weights.sql', '0040_impossible_weights_cheap.sql']) execFileSync('npx', ['wrangler', 'd1', 'execute', 'dlal-db', '--local', '-c', 'wrangler.local.toml', '--file', 'migrations/' + f], { stdio: 'pipe' });
     [t] = dq(`SELECT id,weight_g,price_sea_lyd FROM products WHERE source_offer_id='${tie}'`); [k] = dq(`SELECT weight_g,price_sea_lyd FROM products WHERE source_offer_id='${tent}'`);
-    expect(t.weight_g === 40 && t.price_sea_lyd === null && k.weight_g === 27400 && k.price_sea_lyd !== null, 'ترحيل 0039 يصحّح الربطة ولا يمسّ الخيمة');
+    expect(t.weight_g === 40 && t.price_sea_lyd === null && k.weight_g === 27400 && k.price_sea_lyd !== null, 'ترحيلا 0039 و0040 يصحّحان الربطة ولا يمسّان الخيمة');
     const rp = await (await ctx.request.post(BASE + '/api/source/reprice', { headers: { 'x-import-token': 'dev-import-token' }, data: { limit: 50 } })).json();
     [t] = dq(`SELECT price_lyd,price_sea_lyd FROM products WHERE source_offer_id='${tie}'`);
     expect(rp.repriced >= 1 && t.price_lyd < 100 && t.price_sea_lyd !== null, `إعادة تسعير «الناقص» تعيد الربطة إلى ${t.price_lyd} د.ل`);
   } finally {
-    dq(`DELETE FROM product_images WHERE product_id IN (SELECT id FROM products WHERE source_offer_id IN ('${tie}','${tent}')); DELETE FROM variants WHERE product_id IN (SELECT id FROM products WHERE source_offer_id IN ('${tie}','${tent}')); DELETE FROM products WHERE source_offer_id IN ('${tie}','${tent}')`);
+    dq(`DELETE FROM product_images WHERE product_id IN (SELECT id FROM products WHERE source_offer_id IN ('${tie}','${tent}','${brush}')); DELETE FROM variants WHERE product_id IN (SELECT id FROM products WHERE source_offer_id IN ('${tie}','${tent}','${brush}')); DELETE FROM products WHERE source_offer_id IN ('${tie}','${tent}','${brush}')`);
   }
 }
 

@@ -82,10 +82,12 @@ export function normWeightG(raw: number | null | undefined, unit: 'kg' | 'raw' =
 export function plausibleWeightG(w: number | null | undefined, estG: number, cny: number): number | undefined {
   const v = Math.round(Number(w));
   if (!isFinite(v) || v <= 0) return undefined;
-  const est = estG > 0 ? estG : 300;
-  if (v <= Math.max(est * 10, 3000)) return v;
-  if (!(est <= 900 || cny < (v / 1000) * 2)) return v;
-  if (v <= MAX_WEIGHT_G && v % 1000 === 0 && v / 1000 >= est / 5) return v / 1000;
+  const est = estG > 0 ? estG : 300, kg = v / 1000;
+  // وقاعدة ثانية لا تعرف القسم: أقل من نصف يوان للكيلو في 5 كغ فأكثر (فرشاة دهان بـ0.26 يوان «20 كغ» في أدوات البناء)
+  const tooHeavy = (v > Math.max(est * 10, 3000) && (est <= 900 || cny < kg * 2)) || (v >= 5000 && cny < kg * 0.5);
+  if (!tooHeavy) return v;
+  // غرامات إن كانت معقولة للقسم، أو القطعة رخيصة (أقل من 5 يوان = صغيرة: رأس مفك 10 غ، إسفنجة 6 غ)
+  if (v <= MAX_WEIGHT_G && v % 1000 === 0 && (kg >= est / 5 || cny < 5)) return kg;
   return undefined;
 }
 
