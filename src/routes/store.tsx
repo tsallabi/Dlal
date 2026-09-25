@@ -1209,7 +1209,7 @@ store.get('/orders/:code', async (c) => {
       {paid && <i hidden data-px-purchase={o.code} data-px-value={String(o.total_lyd)} data-px-ids={items.results.map((x: any) => x.product_id).join(',')}></i>}
       <div class="sec-h"><h2>الطلب {o.code}</h2><span class={`status ${ORDER_STATUS[o.status]?.color}`}>{ORDER_STATUS[o.status]?.ar}</span></div>
       <p style="margin:-6px 0 14px;font-size:13.5px;color:var(--ink-2)">
-        {o.ship_method === 'sea' ? '🚢 شحن بحري' : '✈️ شحن جوي'} · مدة الوصول المتوقعة <b>{o.ship_method === 'sea' ? (s.sea_days || '30 — 45 يومًا') : (s.air_days || '12 — 18 يومًا')}</b>
+        <Ic n={o.ship_method === 'sea' ? 'box' : 'plane'} s={16} /> {o.ship_method === 'sea' ? 'شحن بحري' : 'شحن جوي'} · مدة الوصول المتوقعة <b>{o.ship_method === 'sea' ? (s.sea_days || '30 — 45 يومًا') : (s.air_days || '12 — 18 يومًا')}</b>
       </p>
       <div class="two">
         <div>
@@ -1262,7 +1262,7 @@ store.get('/orders/:code', async (c) => {
         <div>
           <div class="summary"><div class="row"><span>المنتجات</span><span>{fmt(o.subtotal_lyd)}</span></div>{o.discount_lyd > 0 && <div class="row" style="color:#1a9c5b"><span>خصم {o.coupon_code}</span><span>−{fmt(o.discount_lyd)}</span></div>}{o.points_used > 0 && <div class="row" style="color:#1a9c5b"><span>نقاط ({o.points_used})</span><span>−{fmt(o.points_lyd)}</span></div>}<div class="row"><span>التوصيل</span><span>{o.shipping_lyd ? fmt(o.shipping_lyd) : 'مجاني'}</span></div><div class="row tot"><span>الإجمالي</span><span>{fmt(o.total_lyd)}</span></div>{o.points_earned > 0 && <div class="row" style="color:var(--brand)"><span>نقاط مكتسبة</span><span>+{o.points_earned} ⭐</span></div>}</div>
           <div class="card-box" style="margin-top:14px"><h3>التوصيل إلى</h3><div style="font-size:14px">{o.ship_name}<br />{o.ship_phone}<br />{o.ship_city} — {o.ship_address}</div></div>
-          <div class="card-box"><h3>تحتاج مساعدة؟</h3><button type="button" class="btn sm brand" data-chat-order={o.code} style="margin-bottom:8px">💬 راسلنا عن هذا الطلب</button> <a class="btn sm ghost" href={`/account/tickets/new?order=${o.code}&type=question`}>افتح تذكرة</a> {realWa(s.whatsapp_number) && <a class="btn sm ghost" href={`https://wa.me/${realWa(s.whatsapp_number)}`}>واتساب</a>}</div>
+          <div class="card-box"><h3>تحتاج مساعدة؟</h3><button type="button" class="btn sm brand" data-chat-order={o.code} style="margin-bottom:8px"><Ic n="chat" s={16} /> راسلنا عن هذا الطلب</button> <a class="btn sm ghost" href={`/account/tickets/new?order=${o.code}&type=question`}>افتح تذكرة</a> {realWa(s.whatsapp_number) && <a class="btn sm ghost" href={`https://wa.me/${realWa(s.whatsapp_number)}`}>واتساب</a>}</div>
         </div>
       </div>
     </Layout>,

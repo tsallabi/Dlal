@@ -1509,3 +1509,56 @@ body:not(.admin-body) .chat-panel{border-radius:22px;overflow:hidden;box-shadow:
   body:not(.admin-body) .why div>i{width:38px;height:38px;border-radius:12px}
   body:not(.admin-body) .form{padding:20px 16px}
 }
+/* ===== حسابي والطلبات — ٢٥/٠٩/٢٦ («طبّق نفس التصميم على صفحات حسابي والطلبات») =====
+   مركز الحساب (/account/*) وصفحة الطلب (/orders/:code): عنوان بشريط قرفي، بطاقات الطلبات بيضاء برأس دافئ،
+   الكوبونات تذاكر متدرّجة، العناوين بطاقات، الإشعارات صفوف مستديرة، الدردشة فقاعات، ومراحل الطلب خط زمني متصل. */
+body:not(.admin-body) .pc-main>h2{display:flex;align-items:center;justify-content:center;gap:10px;font-weight:800}
+body:not(.admin-body) .pc-main>h2::before,body:not(.admin-body) .pc-main>h2::after{content:"";width:28px;height:4px;border-radius:999px;background:var(--brand-grad)}
+body:not(.admin-body) .acct-stages{gap:12px}
+body:not(.admin-body) .acct-stages a{padding:14px 8px;transition:transform .12s,box-shadow .15s}
+body:not(.admin-body) .acct-stages a:hover{transform:translateY(-2px);box-shadow:var(--sh-h)}
+body:not(.admin-body) .acct-stages .i{width:44px;height:44px;border-radius:14px;background:var(--tint);margin-bottom:4px}
+body:not(.admin-body) .acct-card{padding:16px}
+body:not(.admin-body) .acct-card b{font-size:26px}
+/* قائمة الطلبات */
+body:not(.admin-body) .order-row{border-bottom:1px solid #f3ece6;padding:12px 6px;border-radius:12px;transition:background .15s}
+body:not(.admin-body) .order-row:hover{background:#fffaf6}
+body:not(.admin-body) .order-row .chev{color:var(--brand)}
+body:not(.admin-body) .order-card{border:0;border-radius:var(--r);box-shadow:var(--sh);margin-bottom:14px}
+body:not(.admin-body) .oc-h{background:linear-gradient(90deg,#fdf1e6,#fff8f2);padding:12px 16px;font-weight:700}
+body:not(.admin-body) .oc-b{padding:14px 16px}
+body:not(.admin-body) .oc-b img{border-radius:12px;box-shadow:0 3px 10px rgba(110,60,20,.08)}
+body:not(.admin-body) .oc-f{padding:0 16px 14px}
+body:not(.admin-body) .status{padding:3px 12px;font-weight:700}
+/* الإشعارات */
+body:not(.admin-body) .notif{border-bottom:1px solid #f3ece6;padding:12px 8px;border-radius:12px}
+body:not(.admin-body) .notif.unread{background:var(--tint);border-inline-start:4px solid var(--brand);padding:12px}
+/* الكوبونات: تذكرة بجانبها قيمة متدرّجة */
+body:not(.admin-body) .coupon{border:0;border-radius:var(--r);box-shadow:var(--sh);padding:12px;position:relative;overflow:hidden}
+body:not(.admin-body) .coupon .cv{background:var(--brand-grad);border-radius:14px;box-shadow:0 6px 14px rgba(176,90,32,.25)}
+body:not(.admin-body) .coupon.used .cv{background:#b9aca1;box-shadow:none}
+/* دفتر العناوين */
+body:not(.admin-body) .addr{border:0;border-radius:var(--r);box-shadow:var(--sh);padding:16px;border-top:4px solid transparent}
+body:not(.admin-body) .addr.def{border-top-color:var(--brand)}
+/* التذاكر والدردشة */
+body:not(.admin-body) .msg{border-radius:18px;box-shadow:0 2px 8px rgba(110,60,20,.05)}
+body:not(.admin-body) .msg.me{background:var(--tint);border:0;border-end-start-radius:6px}
+body:not(.admin-body) .msg.staff{background:#fff;border:1px solid var(--edge);border-end-end-radius:6px}
+body:not(.admin-body) .tabs{gap:8px}
+/* التقييمات */
+body:not(.admin-body) .review-form{padding:14px;margin-bottom:12px;border-bottom:0}
+body:not(.admin-body) .review-form img{border-radius:12px}
+/* صفحة الطلب: خط زمني متصل للمراحل، وبطاقة الدفع وبطاقة التوصيل بحدّ قرفي */
+body:not(.admin-body) .track .st{position:relative;padding:10px 0}
+body:not(.admin-body) .track .st:not(:last-child)::after{content:"";position:absolute;inset-inline-start:8px;top:30px;bottom:-8px;width:2px;background:#efe4da}
+body:not(.admin-body) .track .st.done:not(:last-child)::after{background:var(--brand)}
+body:not(.admin-body) .track .st .dotl{width:18px;height:18px;margin-top:3px;background:#efe4da;box-shadow:inset 0 0 0 4px #fff}
+body:not(.admin-body) .track .st.done .dotl{background:var(--brand)}
+body:not(.admin-body) .track .st.now .dotl{background:var(--brand-grad);box-shadow:0 0 0 5px rgba(176,90,32,.18)}
+body:not(.admin-body) .track .st .lbl{font-weight:700}
+body:not(.admin-body) .pay-box{border:0!important;background:linear-gradient(135deg,#fff,#fdf3ea);box-shadow:var(--sh),inset 0 0 0 1.5px #e8c9ae}
+body:not(.admin-body) .courier-box{box-shadow:var(--sh),inset 0 0 0 1.5px #e8c9ae}
+body:not(.admin-body) .order-photos img{border-radius:14px;box-shadow:0 3px 10px rgba(110,60,20,.08)}
+@media(max-width:900px){body:not(.admin-body) .pc.sub>.pc-main{order:-1}body:not(.admin-body) .pc.sub>.pc-side{margin-top:6px}}
+body:not(.admin-body) .btn .si{vertical-align:-3px}
+@media(max-width:600px){body:not(.admin-body) .pc-main>h2{font-size:19px;line-height:1.5;margin-bottom:14px}body:not(.admin-body) .pc-main>h2::before,body:not(.admin-body) .pc-main>h2::after{width:16px;flex:none}}

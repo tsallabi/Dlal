@@ -47,7 +47,8 @@ export const AccountShell: FC<{ user: User; cartCount: number; wishCount?: numbe
   return (
     <Layout user={user} cartCount={cartCount} wishCount={wishCount} categories={categories} title={title}>
       <nav class="crumbs"><a href="/">الرئيسية</a> / <span>{title}</span></nav>
-      <div class="pc">
+      {/* في الجوال: الصفحات الداخلية (تذكرة، طلبات، عناوين) تُظهر المحتوى أولًا — القائمة الطويلة كانت تسبقه فيمرّ الزبون بها كل مرة */}
+      <div class={`pc ${active === 'home' ? '' : 'sub'}`}>
         <aside class="pc-side">
           <h3>مركز الحساب</h3>
           <div class="acct-me"><div class="av">{user.name.slice(0, 1)}</div><div><b>{user.name}</b><br /><small>{user.phone}</small></div></div>

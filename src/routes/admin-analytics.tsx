@@ -41,8 +41,9 @@ an.get('/analytics', async (c) => {
     q(`SELECT city k, country, COUNT(DISTINCT vid) n FROM visits WHERE ${T} GROUP BY city, country ORDER BY n DESC LIMIT 10`),
     q(`SELECT v.ref k, c.name_ar t, COUNT(DISTINCT v.vid) n FROM visits v LEFT JOIN categories c ON c.slug=v.ref WHERE v.kind='category' AND v.${T} GROUP BY v.ref ORDER BY n DESC LIMIT 10`),
     q(`SELECT v.ref k, p.title_ar t, COUNT(DISTINCT v.vid) n, SUM(v.kind='cart') carts FROM visits v LEFT JOIN products p ON p.slug=v.ref WHERE v.kind IN ('product','cart') AND v.${T} GROUP BY v.ref ORDER BY n DESC LIMIT 10`),
-    q(`SELECT lower(ref) k, COUNT(*) n, MIN(n) res FROM visits WHERE kind='search' AND ref<>'' AND ${T} GROUP BY lower(ref) ORDER BY n DESC LIMIT 12`),
-    q(`SELECT lower(ref) k, COUNT(*) n FROM visits WHERE kind='search' AND n=0 AND ref<>'' AND ${T} GROUP BY lower(ref) ORDER BY n DESC LIMIT 12`),
+    q(`SELECT lower(ref) k, COUNT(*) n, MIN(n) res, MAX(created_at) last FROM visits WHERE kind='search' AND ref<>'' AND ${T} GROUP BY lower(ref) ORDER BY n DESC, last DESC LIMIT 12`),
+    // عند تساوي العدد: الأحدث أولًا — طلب جديد لم نجده أهمّ من قديم، وبلا هذا كان الترتيب عشوائيًا بين المتساويات
+    q(`SELECT lower(ref) k, COUNT(*) n, MAX(created_at) last FROM visits WHERE kind='search' AND n=0 AND ref<>'' AND ${T} GROUP BY lower(ref) ORDER BY n DESC, last DESC LIMIT 12`),
     q(`SELECT ref k, COUNT(*) n, COUNT(DISTINCT vid) who, MAX(created_at) last, MAX(path) path FROM visits WHERE kind='error' AND ${T} GROUP BY ref, CASE WHEN ref LIKE 'صفحة%' THEN path ELSE '' END ORDER BY n DESC LIMIT 15`),
     q(`SELECT a.*, u.name FROM (SELECT v.vid, MAX(v.user_id) uid, MAX(v.city) city, MAX(v.country) country, MAX(v.device) device, COUNT(*) pages,
         MAX(v.created_at) last, SUM(v.kind='cart') carts, SUM(v.kind='checkout') chk, SUM(v.kind='purchase') paid, SUM(v.kind='error') errs
