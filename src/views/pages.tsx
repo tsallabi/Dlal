@@ -10,7 +10,7 @@ export const HELP_NAV: [string, string][] = [
   ['/pages/points', 'نقاط المكافآت'],
   ['/pages/sizes', 'دليل المقاسات'],
   ['/pages/faq', 'الأسئلة الشائعة'],
-  ['/pages/contact', 'تواصلي معنا'],
+  ['/pages/contact', 'تواصل معنا'],
   ['/pages/branches', 'فروعنا'],
 ];
 

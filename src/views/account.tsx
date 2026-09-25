@@ -33,7 +33,7 @@ export const AccountShell: FC<{ user: User; cartCount: number; wishCount?: numbe
     ['خدمة الزبائن', ['tickets', 'notifications'], <>
       {L('/account/tickets', 'tickets', '↩️', 'الإرجاع والتذاكر', counts.tickets)}
       {L('/account/notifications', 'notifications', '🔔', 'الإشعارات', counts.notifications)}
-      <a href="/pages/contact"><i>🎧</i>تواصلي معنا</a>
+      <a href="/pages/contact"><i>🎧</i>تواصل معنا</a>
     </>],
     ['السياسات', [], <>
       <a href="/pages/shipping"><i>🚚</i>معلومات الشحن</a>

@@ -31,7 +31,7 @@ export const Layout: FC<Props> = ({ title, user, cartCount = 0, wishCount = 0, c
         {/* شريط علوي: معلومات تطمئن الزبونة قبل أي شيء */}
         <div class="hdr-strip">
           <div class="wrap">
-            <a href="/request" class="strip-req"><i>🔗</i>اطلبي أي منتج برابط</a>
+            <a href="/request" class="strip-req"><i>🔗</i>اطلب أي منتج برابط</a>
             <span class="sep"></span>
             <a href="/track"><i>📍</i>تتبّعي طلبك</a>
             <span class="sep"></span>
@@ -49,7 +49,7 @@ export const Layout: FC<Props> = ({ title, user, cartCount = 0, wishCount = 0, c
           <button type="button" class="burger" data-drawer aria-label="الأقسام"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16" /></svg></button>
           <a href="/" class="logo" aria-label="هدهد HUDHUDE"><img src="/hudhud-logo.svg" alt="" width="77" height="64" /><span class="t"><b>هدهد</b><i>HUDHUDE</i><u>بوابتك إلى الصين</u></span></a>
           <form class="search" action="/search" method="get" role="search">
-            <input name="q" placeholder="ابحثي عن فستان، عباية، حقيبة…" value={q ?? ''} aria-label="ابحثي عن منتج" />
+            <input name="q" placeholder="ابحث عن فستان، عباية، حقيبة…" value={q ?? ''} aria-label="ابحث عن منتج" />
             <button type="submit" aria-label="بحث"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.2-3.2" stroke-linecap="round" /></svg></button>
           </form>
           <nav class="hdr-icons">
@@ -116,13 +116,13 @@ export const Layout: FC<Props> = ({ title, user, cartCount = 0, wishCount = 0, c
           </div>
           <div class="ftr-col">
             <h5>خدمة الزبائن</h5>
-            <a href="/pages/contact">تواصلي معنا</a>
+            <a href="/pages/contact">تواصل معنا</a>
             <a href="/pages/payment">طرق الدفع والرسوم</a>
             <a href="/account/points">نقاط المكافآت</a>
             <a href="/pages/faq">الأسئلة الشائعة</a>
           </div>
           <div class="ftr-col">
-            <h5>تابعينا</h5>
+            <h5>تابعنا</h5>
             <div class="ftr-social">
               {/* الروابط تمرّ بالخادم: يقرأ الحساب الحقيقي من الإعدادات، وبلا حساب يفتح صفحة التواصل بدل صفحة فارغة */}
               <a href="/pages/go/facebook" target="_blank" rel="noopener" aria-label="فيسبوك">f</a>
@@ -139,7 +139,7 @@ export const Layout: FC<Props> = ({ title, user, cartCount = 0, wishCount = 0, c
             </div>
           </div>
           <div class="ftr-col">
-            <h5>ادفعي كما يناسبك</h5>
+            <h5>ادفع كما يناسبك</h5>
             <a href="/pages/payment">بطاقة مصرفية محلية (معاملات)</a>
             <a href="/pages/payment">سداد · إدفعلي · موبي كاش</a>
             <a href="/pages/branches">كاش في أقرب فرع</a>
@@ -178,13 +178,13 @@ export const Layout: FC<Props> = ({ title, user, cartCount = 0, wishCount = 0, c
         <a href="/cart"><span>🛒</span>السلة{cartCount > 0 && <i class="dot">{cartCount}</i>}</a>
         <a href={user ? '/account' : '/login'}><span>👤</span>حسابي</a>
       </nav>
-      <div class="chat-fab" id="chatFab" role="button" tabindex={0} aria-label="الدردشة المباشرة" title="تواصلي معنا">
-        <span class="ic">💬</span><span class="lbl">تواصلي معنا</span><i class="dot" id="chatDot" hidden></i>
+      <div class="chat-fab" id="chatFab" role="button" tabindex={0} aria-label="الدردشة المباشرة" title="تواصل معنا">
+        <span class="ic">💬</span><span class="lbl">تواصل معنا</span><i class="dot" id="chatDot" hidden></i>
       </div>
       <div class="chat-panel" id="chatPanel" hidden>
         <div class="ch-h"><b>خدمة زبائن هدهد</b><span id="chatSub">نرد خلال ساعات العمل</span><button type="button" id="chatClose" aria-label="إغلاق">✕</button></div>
-        <div class="ch-body" id="chatBody"><div class="ch-empty">اكتبي رسالتك وسيصلك الرد هنا وفي «التذاكر والإرجاع» داخل حسابك.</div></div>
-        <form class="ch-f" id="chatForm"><input id="chatInput" placeholder="اكتبي رسالتك…" autocomplete="off" maxlength={1000} /><button class="btn brand sm" type="submit">إرسال</button></form>
+        <div class="ch-body" id="chatBody"><div class="ch-empty">اكتب رسالتك وسيصلك الرد هنا وفي «التذاكر والإرجاع» داخل حسابك.</div></div>
+        <form class="ch-f" id="chatForm"><input id="chatInput" placeholder="اكتب رسالتك…" autocomplete="off" maxlength={1000} /><button class="btn brand sm" type="submit">إرسال</button></form>
       </div>
       <script src="/app.js"></script>
     </body>
