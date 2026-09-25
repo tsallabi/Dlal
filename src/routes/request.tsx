@@ -3,6 +3,7 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import type { Env } from '../types';
 import { Layout, Flash } from '../views/layout';
+import { Ic } from '../views/icons';
 import { getCategories, timeAgo } from '../lib/db';
 import { parseLink, settleLinkRequests, LINK_SOURCES, LINK_STATUS } from '../lib/link-requests';
 
@@ -24,7 +25,7 @@ req.get('/', async (c) => {
   return c.html(
     <Layout {...await base(c)} title="اطلب برابط" active="/request">
       <div class="lr wrap">
-        <h1>🔗 اطلب أي منتج برابط</h1>
+        <h1><Ic n="link" s={26} /> اطلب أي منتج برابط</h1>
         <p class="lr-sub">رأيت قطعة في <b>1688</b> أو <b>تاوباو</b> أو <b>شي إن</b> أو <b>أمازون</b> وليست عندنا؟ الصق رابطها هنا، ونوفّرها لك بسعر نهائي <b>بالدينار الليبي</b> شامل الشحن والجمارك — تدفع بعد أن ترى السعر، لا قبله.</p>
         <Flash msg={ok ? 'وصلنا طلبك ✓ — نجهّزه ويصلك إشعار حين يصير جاهزًا للشراء.' : undefined} />
         <Flash type="err" msg={err || undefined} />

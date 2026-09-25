@@ -344,6 +344,9 @@ async function openProductWithVariants(cat = 'dresses') {
 }
 expect(await openProductWithVariants(), 'يوجد منتج بألوان ومقاسات في قسم فساتين');
 expect(await page.locator('.pd h1').isVisible(), 'صفحة المنتج تفتح');
+// صفحة المنتج في الحاسوب: الصورة والتفاصيل عمودان متجاوران. قاعدة «.pd» في لوحة الشريك (24/09) جعلتها عمودًا واحدًا بصورة بعرض الشاشة
+{ const vw = page.viewportSize()?.width ?? 0; const cols = await page.evaluate(() => getComputedStyle(document.querySelector('.pd')).gridTemplateColumns.split(' ').length);
+  expect(vw < 900 || cols === 2, `صفحة المنتج في الحاسوب عمودان: الصورة بجانب التفاصيل (${cols} عند ${vw}px)`); }
 expect(await has(page, 'التقييمات ('), 'صفحة المنتج تعرض قسم التقييمات');
 expect(!(await has(page, 'detail.1688.com')), 'رابط المصدر مخفي عن الزبونة');
 const productSlug = page.url().split('/p/')[1];

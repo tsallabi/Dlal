@@ -1,46 +1,47 @@
 import type { FC } from 'hono/jsx';
 import type { User } from '../types';
 import { Layout } from './layout';
+import { Ic } from './icons';
 
 // قشرة حسابي — بأسلوب SHEIN: قائمة جانبية + محتوى
 export const AccountShell: FC<{ user: User; cartCount: number; wishCount?: number; categories: any[]; active: string; title: string; children: any; counts?: Record<string, number> }> = ({ user, cartCount, wishCount = 0, categories, active, title, children, counts = {} }) => {
   const L = (href: string, key: string, icon: string, label: string, n?: number) =>
-    <a href={href} class={active === key ? 'on' : ''}><i>{icon}</i>{label}{n ? <span class="cnt">{n}</span> : null}</a>;
+    <a href={href} class={active === key ? 'on' : ''}><i><Ic n={icon} s={17} /></i>{label}{n ? <span class="cnt">{n}</span> : null}</a>;
   // مجموعات مركز الحساب: كل مجموعة تُطوى وتنفتح، والمجموعة التي تحوي الصفحة الحالية مفتوحة
   const GROUPS: [string, string[], any][] = [
     ['حسابي', ['home', 'profile', 'addresses'], <>
-      {L('/account', 'home', '👤', 'نظرة عامة')}
-      {L('/account/profile', 'profile', '📝', 'بياناتي وكلمة المرور')}
-      {L('/account/addresses', 'addresses', '📍', 'دفتر العناوين')}
+      {L('/account', 'home', 'user', 'نظرة عامة')}
+      {L('/account/profile', 'profile', 'doc', 'بياناتي وكلمة المرور')}
+      {L('/account/addresses', 'addresses', 'pin', 'دفتر العناوين')}
     </>],
     ['أرصدتي', ['coupons', 'points'], <>
-      {L('/account/coupons', 'coupons', '🎟️', 'كوبوناتي')}
-      {L('/account/points', 'points', '💎', 'نقاطي')}
+      {L('/account/coupons', 'coupons', 'tag', 'كوبوناتي')}
+      {L('/account/points', 'points', 'gift', 'نقاطي')}
     </>],
     ['طلباتي', ['orders'], <>
-      {L('/account/orders', 'orders', '📦', 'كل الطلبات', counts.orders)}
-      <a href="/request"><i>🔗</i>طلباتي بالرابط</a>
-      <a href="/account/orders?stage=pending_payment"><i>💳</i>بانتظار الدفع</a>
-      <a href="/account/orders?stage=buying"><i>🛒</i>قيد الشراء</a>
-      <a href="/account/orders?stage=shipping"><i>✈️</i>في الطريق</a>
-      <a href="/account/orders?stage=ready"><i>🏠</i>جاهز للتسليم</a>
-      <a href="/account/orders?stage=delivered"><i>✅</i>تم التسليم</a>
+      {L('/account/orders', 'orders', 'box', 'كل الطلبات', counts.orders)}
+      <a href="/request"><i><Ic n="link" s={17} /></i>طلباتي بالرابط</a>
+      <a href="/account/orders?stage=pending_payment"><i><Ic n="card" s={17} /></i>بانتظار الدفع</a>
+      <a href="/account/orders?stage=buying"><i><Ic n="cart" s={17} /></i>قيد الشراء</a>
+      <a href="/account/orders?stage=shipping"><i><Ic n="plane" s={17} /></i>في الطريق</a>
+      <a href="/account/orders?stage=ready"><i><Ic n="home" s={17} /></i>جاهز للتسليم</a>
+      <a href="/account/orders?stage=delivered"><i><Ic n="check" s={17} /></i>تم التسليم</a>
     </>],
     ['مفضلتي', ['wishlist', 'reviews'], <>
-      {L('/wishlist', 'wishlist', '♡', 'قائمة المفضلة', wishCount)}
-      {L('/account/reviews', 'reviews', '⭐', 'تقييماتي', counts.reviews)}
+      {L('/wishlist', 'wishlist', 'heart', 'قائمة المفضلة', wishCount)}
+      {L('/account/reviews', 'reviews', 'star', 'تقييماتي', counts.reviews)}
     </>],
     ['خدمة الزبائن', ['tickets', 'notifications'], <>
-      {L('/account/tickets', 'tickets', '↩️', 'الإرجاع والتذاكر', counts.tickets)}
-      {L('/account/notifications', 'notifications', '🔔', 'الإشعارات', counts.notifications)}
-      <a href="/pages/contact"><i>🎧</i>تواصل معنا</a>
+      {L('/account/tickets', 'tickets', 'ret', 'الإرجاع والتذاكر', counts.tickets)}
+      {L('/account/notifications', 'notifications', 'mail', 'الإشعارات', counts.notifications)}
+      <a href="/pages/contact"><i><Ic n="chat" s={17} /></i>تواصل معنا</a>
     </>],
     ['السياسات', [], <>
-      <a href="/pages/shipping"><i>🚚</i>معلومات الشحن</a>
-      <a href="/pages/returns"><i>↩️</i>سياسة الإرجاع</a>
-      <a href="/pages/payment"><i>💳</i>طرق الدفع والرسوم</a>
-      <a href="/pages/privacy"><i>🔒</i>إشعار الخصوصية</a>
-      <a href="/pages/terms"><i>📄</i>الشروط والأحكام</a>
+      <a href="/pages/shipping"><i><Ic n="truck" s={17} /></i>معلومات الشحن</a>
+      <a href="/pages/returns"><i><Ic n="ret" s={17} /></i>سياسة الإرجاع</a>
+      <a href="/pages/payment"><i><Ic n="card" s={17} /></i>طرق الدفع والرسوم</a>
+      <a href="/pages/privacy"><i><Ic n="lock" s={17} /></i>إشعار الخصوصية</a>
+      <a href="/pages/terms"><i><Ic n="doc" s={17} /></i>الشروط والأحكام</a>
     </>],
   ];
   return (

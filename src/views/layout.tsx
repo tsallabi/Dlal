@@ -1,5 +1,6 @@
 import type { FC } from 'hono/jsx';
 import type { User } from '../types';
+import { Ic } from './icons';
 
 type Props = {
   title?: string;
@@ -31,17 +32,17 @@ export const Layout: FC<Props> = ({ title, user, cartCount = 0, wishCount = 0, c
         {/* شريط علوي: معلومات تطمئن الزبونة قبل أي شيء */}
         <div class="hdr-strip">
           <div class="wrap">
-            <a href="/request" class="strip-req"><i>🔗</i>اطلب أي منتج برابط</a>
+            <a href="/request" class="strip-req"><Ic n="link" s={15} />اطلب أي منتج برابط</a>
             <span class="sep"></span>
-            <a href="/track"><i>📍</i>تتبّع طلبك</a>
+            <a href="/track"><Ic n="pin" s={15} />تتبّع طلبك</a>
             <span class="sep"></span>
-            <a href="/how"><i>🐦</i>كيف يعمل هدهد</a>
+            <a href="/how"><Ic n="bird" s={15} />كيف يعمل هدهد</a>
             <span class="sep"></span>
-            <a href="/pages/shipping"><i>🚚</i>معلومات الشحن</a>
+            <a href="/pages/shipping"><Ic n="truck" s={15} />معلومات الشحن</a>
             <span class="sep"></span>
-            <a href="/pages/returns"><i>↩️</i>الإرجاع والاسترداد</a>
+            <a href="/pages/returns"><Ic n="ret" s={15} />الإرجاع والاسترداد</a>
             <span class="sep"></span>
-            <a href="/how"><i>🏷️</i>أسعار نهائية شاملة الشحن والجمارك</a>
+            <a href="/how"><Ic n="tag" s={15} />أسعار نهائية شاملة الشحن والجمارك</a>
           </div>
         </div>
         {/* الشريط الرئيسي: الشعار + بحث + أيقونات */}
@@ -98,16 +99,24 @@ export const Layout: FC<Props> = ({ title, user, cartCount = 0, wishCount = 0, c
       </header>
       <main class="wrap">{children}</main>
       <footer class="ftr">
+        <div class="ftr-brand">
+          <a href="/" class="ftr-logo" aria-label="هدهد HUDHUDE"><img src="/hudhud-logo.svg" alt="" width="58" height="48" loading="lazy" /><span><b>هدهد</b><i>بوابتك إلى الصين</i></span></a>
+          <div class="ftr-trust">
+            <span><Ic n="tag" s={18} />أسعار نهائية بالدينار</span>
+            <span><Ic n="shield" s={18} />فحص وتصوير قبل الشحن</span>
+            <span><Ic n="truck" s={18} />توصيل لكل مدن ليبيا</span>
+          </div>
+        </div>
         <div class="ftr-top">
           <div class="ftr-col">
-            <h5>عن هدهد</h5>
+            <h5><Ic n="bird" s={16} />عن هدهد</h5>
             <a href="/how">من نحن وكيف نعمل</a>
             <a href="/pages/branches">فروعنا في ليبيا</a>
             <a href="/pages/privacy">إشعار الخصوصية</a>
             <a href="/pages/terms">الشروط والأحكام</a>
           </div>
           <div class="ftr-col">
-            <h5>المساعدة والدعم</h5>
+            <h5><Ic n="help" s={16} />المساعدة والدعم</h5>
             <a href="/pages/shipping">معلومات الشحن</a>
             <a href="/pages/returns">الإرجاع والاسترداد</a>
             <a href="/pages/how-to-order">كيف أطلب؟</a>
@@ -115,31 +124,31 @@ export const Layout: FC<Props> = ({ title, user, cartCount = 0, wishCount = 0, c
             <a href="/track">تتبّع طلبي</a>
           </div>
           <div class="ftr-col">
-            <h5>خدمة الزبائن</h5>
+            <h5><Ic n="chat" s={16} />خدمة الزبائن</h5>
             <a href="/pages/contact">تواصل معنا</a>
             <a href="/pages/payment">طرق الدفع والرسوم</a>
             <a href="/account/points">نقاط المكافآت</a>
             <a href="/pages/faq">الأسئلة الشائعة</a>
           </div>
           <div class="ftr-col">
-            <h5>تابعنا</h5>
+            <h5><Ic n="heart" s={16} />تابعنا</h5>
             <div class="ftr-social">
               {/* الروابط تمرّ بالخادم: يقرأ الحساب الحقيقي من الإعدادات، وبلا حساب يفتح صفحة التواصل بدل صفحة فارغة */}
-              <a href="/pages/go/facebook" target="_blank" rel="noopener" aria-label="فيسبوك">f</a>
-              <a href="/pages/go/instagram" target="_blank" rel="noopener" aria-label="إنستغرام">◎</a>
-              <a href="/pages/go/whatsapp" target="_blank" rel="noopener" aria-label="واتساب">✆</a>
-              <a href="/pages/go/tiktok" target="_blank" rel="noopener" aria-label="تيك توك">♪</a>
+              <a href="/pages/go/facebook" target="_blank" rel="noopener" aria-label="فيسبوك"><Ic n="fb" /></a>
+              <a href="/pages/go/instagram" target="_blank" rel="noopener" aria-label="إنستغرام"><Ic n="ig" /></a>
+              <a href="/pages/go/whatsapp" target="_blank" rel="noopener" aria-label="واتساب"><Ic n="wa" /></a>
+              <a href="/pages/go/tiktok" target="_blank" rel="noopener" aria-label="تيك توك"><Ic n="tt" /></a>
             </div>
             <div class="ftr-news">
               <h5>وصلك كل جديد وعروضنا</h5>
               <form method="post" action="/subscribe">
                 <input type="tel" name="phone" placeholder="رقم واتساب أو هاتف" inputmode="tel" aria-label="رقم الهاتف" />
-                <button type="submit">اشتراك</button>
+                <button type="submit"><Ic n="send" s={16} />اشتراك</button>
               </form>
             </div>
           </div>
           <div class="ftr-col">
-            <h5>ادفع كما يناسبك</h5>
+            <h5><Ic n="wallet" s={16} />ادفع كما يناسبك</h5>
             <a href="/pages/payment">بطاقة مصرفية محلية (معاملات)</a>
             <a href="/pages/payment">سداد · إدفعلي · موبي كاش</a>
             <a href="/pages/branches">كاش في أقرب فرع</a>
@@ -149,7 +158,7 @@ export const Layout: FC<Props> = ({ title, user, cartCount = 0, wishCount = 0, c
           <div class="wrap">
             <h5>نقبل الدفع بـ</h5>
             <div class="pay-logos">
-              <span>💳 معاملات</span><span>📱 سداد</span><span>📲 إدفعلي</span><span>📳 موبي كاش</span><span>🏪 كاش في الفرع</span>
+              <span><Ic n="card" s={16} />معاملات</span><span><Ic n="phone" s={16} />سداد</span><span><Ic n="wallet" s={16} />إدفعلي</span><span><Ic n="phone" s={16} />موبي كاش</span><span><Ic n="store" s={16} />كاش في الفرع</span>
             </div>
           </div>
         </div>
@@ -172,14 +181,14 @@ export const Layout: FC<Props> = ({ title, user, cartCount = 0, wishCount = 0, c
         </aside>
       </div>
       <nav class="bottom-nav">
-        <a href="/" class={!active ? 'on' : ''}><span>🏠</span>الرئيسية</a>
-        <a href="/c/all" data-drawer><span>▦</span>الأقسام</a>
-        <a href="/wishlist"><span>♡</span>المفضلة</a>
-        <a href="/cart"><span>🛒</span>السلة{cartCount > 0 && <i class="dot">{cartCount}</i>}</a>
-        <a href={user ? '/account' : '/login'}><span>👤</span>حسابي</a>
+        <a href="/" class={!active ? 'on' : ''}><span><Ic n="home" s={22} /></span>الرئيسية</a>
+        <a href="/c/all" data-drawer><span><Ic n="grid" s={22} /></span>الأقسام</a>
+        <a href="/wishlist"><span><Ic n="heart" s={22} /></span>المفضلة</a>
+        <a href="/cart"><span><Ic n="cart" s={22} /></span>السلة{cartCount > 0 && <i class="dot">{cartCount}</i>}</a>
+        <a href={user ? '/account' : '/login'}><span><Ic n="user" s={22} /></span>حسابي</a>
       </nav>
       <div class="chat-fab" id="chatFab" role="button" tabindex={0} aria-label="الدردشة المباشرة" title="تواصل معنا">
-        <span class="ic">💬</span><span class="lbl">تواصل معنا</span><i class="dot" id="chatDot" hidden></i>
+        <span class="ic"><Ic n="chat" s={22} /></span><span class="lbl">تواصل معنا</span><i class="dot" id="chatDot" hidden></i>
       </div>
       <div class="chat-panel" id="chatPanel" hidden>
         <div class="ch-h"><b>خدمة زبائن هدهد</b><span id="chatSub">نرد خلال ساعات العمل</span><button type="button" id="chatClose" aria-label="إغلاق">✕</button></div>

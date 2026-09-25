@@ -1,4 +1,5 @@
 import type { FC } from 'hono/jsx';
+import { Ic } from './icons';
 import type { ProductRow } from '../lib/db';
 import { fmt, imgUrl } from '../lib/db';
 import { KIND_NOTE, type ListingKind } from '../lib/source';
@@ -49,8 +50,8 @@ export const ProductCard: FC<{ p: ProductRow; fav?: boolean; ship?: ShipCtx; bes
           <button class="add" type="button" data-add={p.id} aria-label="أضف إلى السلة" title="أضف إلى السلة"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h2l2.2 10.3a1.8 1.8 0 0 0 1.8 1.4h7.6a1.8 1.8 0 0 0 1.8-1.4L20 8H9.5" /><circle cx="9.5" cy="19.5" r="1.3" fill="currentColor" stroke="none" /><circle cx="16.5" cy="19.5" r="1.3" fill="currentColor" stroke="none" /><path d="M14 3.5v5M11.5 6h5" /></svg></button>
         </div>
         <span class="ship"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="M2 6h11v10H2zM13 9h4.5L21 12.5V16h-8" /><circle cx="6" cy="17.5" r="1.7" fill="#fff" /><circle cx="17" cy="17.5" r="1.7" fill="#fff" /></svg>{sh.mode === 'sea' && sea ? 'بحري' : 'جوي'}<i> · يصل خلال</i> {sh.mode === 'sea' && sea ? sh.sea : sh.air}</span>
-        {sea && sh.mode === 'air' ? <span class="ship sea">🚢 بحري {fmt(sea)}<i> · {sh.sea}</i></span> : null}
-        {sea && sh.mode === 'sea' ? <span class="ship sea">✈️ جوي {fmt(p.price_lyd)}<i> · {sh.air}</i></span> : null}
+        {sea && sh.mode === 'air' ? <span class="ship sea"><Ic n="box" s={12} /> بحري {fmt(sea)}<i> · {sh.sea}</i></span> : null}
+        {sea && sh.mode === 'sea' ? <span class="ship sea"><Ic n="plane" s={12} /> جوي {fmt(p.price_lyd)}<i> · {sh.air}</i></span> : null}
       </div>
     </a>
   );
@@ -64,6 +65,6 @@ export const Grid: FC<{ items: ProductRow[]; favs?: Set<number>; ship?: ShipCtx 
   return items.length ? (
     <div class="grid">{items.map(p => <ProductCard p={p} fav={favs?.has(p.id)} ship={ship} best={bestIds.has(p.id)} />)}</div>
   ) : (
-    <div class="empty"><div class="big">🛍️</div>لا توجد منتجات هنا بعد</div>
+    <div class="empty"><div class="big"><Ic n="cart" s={44} /></div>لا توجد منتجات هنا بعد</div>
   );
 };

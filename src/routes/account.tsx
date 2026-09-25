@@ -3,6 +3,7 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import type { Env } from '../types';
 import { ORDER_STATUS, TICKET_TYPES, TICKET_STATUS, CITIES, PAYMENT_METHODS } from '../types';
+import { Ic } from '../views/icons';
 import { AccountShell, Stars } from '../views/account';
 import { Flash } from '../views/layout';
 import { getCategories, fmt, imgUrl, timeAgo, notify } from '../lib/db';
@@ -40,8 +41,8 @@ acct.get('/', async (c) => {
   return shell(c, 'home', `مرحبًا ${u.name.split(' ')[0]} 👋`, (
     <>
       <div class="acct-stages">
-        {[['pending_payment', '💳', stages.pending_payment, cnt.a], ['buying', '🛒', stages.buying, cnt.b], ['shipping', '✈️', stages.shipping, cnt.c], ['ready', '🏠', stages.ready, cnt.d]].map(([k, i, l, n]) => (
-          <a href={`/account/orders?stage=${k}`}><span class="i">{i}</span><b>{n || 0}</b><small>{l}</small></a>
+        {[['pending_payment', 'card', stages.pending_payment, cnt.a], ['buying', 'cart', stages.buying, cnt.b], ['shipping', 'plane', stages.shipping, cnt.c], ['ready', 'home', stages.ready, cnt.d]].map(([k, i, l, n]) => (
+          <a href={`/account/orders?stage=${k}`}><span class="i"><Ic n={String(i)} s={22} /></span><b>{n || 0}</b><small>{l}</small></a>
         ))}
       </div>
       <div class="acct-cards">
@@ -78,7 +79,7 @@ acct.get('/orders', async (c) => {
   return shell(c, 'orders', 'طلباتي', (
     <>
       <div class="tabs">{[['', 'الكل'], ['pending_payment', 'بانتظار الدفع'], ['buying', 'قيد الشراء'], ['shipping', 'في الطريق'], ['ready', 'جاهز'], ['delivered', 'مُسلَّم'], ['cancelled', 'ملغي']].map(([k, l]) => <a href={`/account/orders?stage=${k}`} class={stage === k ? 'on' : ''}>{l}</a>)}</div>
-      {results.length === 0 ? <div class="empty"><div class="big">📦</div>لا طلبات هنا</div> : results.map(o => (
+      {results.length === 0 ? <div class="empty"><div class="big"><Ic n="box" s={44} /></div>لا طلبات هنا</div> : results.map(o => (
         <div class="order-card">
           <div class="oc-h"><b>{o.code}</b><span class={`status ${ORDER_STATUS[o.status]?.color}`}>{ORDER_STATUS[o.status]?.ar}</span></div>
           <div class="oc-b"><img src={imgUrl(o.image)} alt="" /><div><div>{o.items} منتج · {fmt(o.total_lyd)}</div><small style="color:#888">{timeAgo(o.created_at)} · {PAYMENT_METHODS[o.payment_method]?.ar}</small></div></div>

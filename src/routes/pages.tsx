@@ -4,6 +4,7 @@ import type { Context } from 'hono';
 import type { Env } from '../types';
 import { Layout } from '../views/layout';
 import { Doc, Step, Faq } from '../views/pages';
+import { Ic } from '../views/icons';
 import { getCategories, fmt, realWa, realSocial } from '../lib/db';
 import { loadSettings } from '../lib/pricing';
 
@@ -153,10 +154,10 @@ pages.get('/payment', async (c) => {
         <h2>الدفع الإلكتروني الفوري</h2>
         <p>كل المدفوعات الإلكترونية تمر عبر بوابة <b>ماي باي</b> المرخّصة. نحن لا نرى ولا نخزّن رقم بطاقتك إطلاقًا.</p>
         <div class="paycards">
-          <div class="paycard"><b>💳 بطاقة مصرفية محلية (معاملات)</b><span>بطاقة أي مصرف ليبي. يُفعَّل طلبك في نفس اللحظة.</span></div>
-          <div class="paycard"><b>📱 سداد</b><span>ادفع من تطبيق سداد بخطوة واحدة.</span></div>
-          <div class="paycard"><b>📲 إدفعلي</b><span>تأكيد فوري عبر تطبيق إدفعلي.</span></div>
-          <div class="paycard"><b>📳 موبي كاش</b><span>محفظة موبي كاش — دفع لحظي.</span></div>
+          <div class="paycard"><b><i><Ic n="card" /></i>بطاقة مصرفية محلية (معاملات)</b><span>بطاقة أي مصرف ليبي. يُفعَّل طلبك في نفس اللحظة.</span></div>
+          <div class="paycard"><b><i><Ic n="phone" /></i>سداد</b><span>ادفع من تطبيق سداد بخطوة واحدة.</span></div>
+          <div class="paycard"><b><i><Ic n="wallet" /></i>إدفعلي</b><span>تأكيد فوري عبر تطبيق إدفعلي.</span></div>
+          <div class="paycard"><b><i><Ic n="phone" /></i>موبي كاش</b><span>محفظة موبي كاش — دفع لحظي.</span></div>
         </div>
         <h2>الدفع كاش في أحد فروعنا</h2>
         <p>تفضّل الدفع نقدًا؟ أكّد طلبك واختر «دفع كاش في أقرب فرع»، ثم توجّه بالرقم الذي يظهر لك إلى أحد فروعنا. يُفعَّل طلبك فور استلام المبلغ.</p>
@@ -318,16 +319,16 @@ pages.get('/contact', async (c) => { const wa = realWa((await loadSettings(c.env
   <Layout {...await base(c)} title="خدمة الزبائن">
     <Doc title="خدمة الزبائن" sub="نحن هنا — اختر ما تحتاجه." active="/pages/contact">
       <div class="svc-grid">
-        <a href="/account/orders"><span class="ic">📦</span>طلباتي</a>
-        <a href="/account/orders?stage=shipping"><span class="ic">✈️</span>تتبّع الشحن</a>
-        <a href="/account/tickets/new"><span class="ic">↩️</span>إرجاع أو تعويض</a>
-        <a href="/pages/shipping"><span class="ic">🚚</span>معلومات الشحن</a>
-        <a href="/pages/payment"><span class="ic">💳</span>الدفع والرسوم</a>
-        <a href="/account/points"><span class="ic">💎</span>نقاطي</a>
-        <a href="/account/coupons"><span class="ic">🎟️</span>كوبوناتي</a>
-        <a href="/pages/sizes"><span class="ic">📏</span>دليل المقاسات</a>
-        <a href="/pages/branches"><span class="ic">🏪</span>فروعنا</a>
-        <a href="/account/tickets"><span class="ic">🎧</span>تذاكري</a>
+        <a href="/account/orders"><span class="ic"><Ic n="box" s={24} /></span>طلباتي</a>
+        <a href="/account/orders?stage=shipping"><span class="ic"><Ic n="plane" s={24} /></span>تتبّع الشحن</a>
+        <a href="/account/tickets/new"><span class="ic"><Ic n="ret" s={24} /></span>إرجاع أو تعويض</a>
+        <a href="/pages/shipping"><span class="ic"><Ic n="truck" s={24} /></span>معلومات الشحن</a>
+        <a href="/pages/payment"><span class="ic"><Ic n="card" s={24} /></span>الدفع والرسوم</a>
+        <a href="/account/points"><span class="ic"><Ic n="gift" s={24} /></span>نقاطي</a>
+        <a href="/account/coupons"><span class="ic"><Ic n="tag" s={24} /></span>كوبوناتي</a>
+        <a href="/pages/sizes"><span class="ic"><Ic n="ruler" s={24} /></span>دليل المقاسات</a>
+        <a href="/pages/branches"><span class="ic"><Ic n="store" s={24} /></span>فروعنا</a>
+        <a href="/account/tickets"><span class="ic"><Ic n="chat" s={24} /></span>تذاكري</a>
       </div>
       <h2>تواصل معنا مباشرة</h2>
       <table>
@@ -350,7 +351,7 @@ pages.get('/how', (c) => c.redirect('/how', 301));
 
 pages.get('/privacy', async (c) => c.html(
   <Layout {...await base(c)} title="إشعار الخصوصية">
-    <Doc title="إشعار الخصوصية" sub="ما نجمعه، ولماذا، ومن يراه.">
+    <Doc title="إشعار الخصوصية" sub="ما نجمعه، ولماذا، ومن يراه." active="/pages/privacy">
       <h2>1. ما الذي نجمعه؟</h2>
       <ul>
         <li><b>بيانات الحساب:</b> اسمك ورقم هاتفك وبريدك إن أضفته، وكلمة مرور مُشفّرة (لا نراها أبدًا).</li>
@@ -389,7 +390,7 @@ pages.get('/privacy', async (c) => c.html(
 
 pages.get('/terms', async (c) => c.html(
   <Layout {...await base(c)} title="الشروط والأحكام">
-    <Doc title="الشروط والأحكام">
+    <Doc title="الشروط والأحكام" sub="شروط استخدام هدهد والشراء منه." active="/pages/terms">
       <h2>1. طبيعة الخدمة</h2>
       <p>هدهد <b>وكيل شراء</b>: يشتري المنتج نيابةً عنك من مورد في الصين، ويتولى الفحص والشحن والتخليص الجمركي والتوصيل. البضاعة تصبح ملكك من لحظة شرائها من المورد.</p>
       <h2>2. الأسعار</h2>

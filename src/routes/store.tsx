@@ -4,6 +4,7 @@ import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 import type { Env } from '../types';
 import { ORDER_STATUS, PAYMENT_METHODS, CITIES } from '../types';
 import { Layout, Flash } from '../views/layout';
+import { Ic } from '../views/icons';
 import { Grid, ProductCard } from '../views/product-card';
 import { Stars } from '../views/account';
 import { getCategories, PRODUCT_SELECT, fmt, imgUrl, orderCode, timeAgo, notify, realWa, likePat } from '../lib/db';
@@ -125,10 +126,10 @@ store.get('/', async (c) => {
 
       {/* شريط الثقة */}
       <section class="trust">
-        <div><b>🚚 الشحن مشمول</b><span>جوي {s.air_days || '12 — 18 يومًا'}{seaOn(s) ? ` · بحري ${s.sea_days || '30 — 45 يومًا'} وأرخص` : ''}</span></div>
-        <div><b>🔍 فحص قبل الشحن</b><span>نفتح كل طرد ونصوّره لك</span></div>
-        <div><b>↩️ تعويض كامل</b><span>لأي تالف أو مختلف عن الوصف</span></div>
-        <div><b>💳 ادفع بالدينار</b><span>بطاقة · سداد · إدفعلي · كاش في الفرع</span></div>
+        <div><i><Ic n="truck" s={20} /></i><b>الشحن مشمول</b><span>جوي {s.air_days || '12 — 18 يومًا'}{seaOn(s) ? ` · بحري ${s.sea_days || '30 — 45 يومًا'} وأرخص` : ''}</span></div>
+        <div><i><Ic n="shield" s={20} /></i><b>فحص قبل الشحن</b><span>نفتح كل طرد ونصوّره لك</span></div>
+        <div><i><Ic n="ret" s={20} /></i><b>تعويض كامل</b><span>لأي تالف أو مختلف عن الوصف</span></div>
+        <div><i><Ic n="card" s={20} /></i><b>ادفع بالدينار</b><span>بطاقة · سداد · إدفعلي · كاش في الفرع</span></div>
       </section>
 
       {/* الشبكة الرئيسية */}
@@ -147,12 +148,14 @@ store.get('/', async (c) => {
       {recent.length > 0 && <><div class="feed-h"><h2>شاهدت مؤخرًا</h2></div><Grid ship={b.ship} items={recent} favs={f} /></>}
 
       <section class="why">
-        <div><b>🏭 مباشرة من مصانع الصين</b><span>نشتري بأسعار الجملة ونبيع بالقطعة.</span></div>
-        <div><b>🔢 {stats?.p ?? 0} منتج</b><span>يزداد كل يوم بمنتجات جديدة.</span></div>
-        <div><b>📦 {stats?.d ?? 0} طلب مُسلَّم</b><span>إلى كل المدن الليبية.</span></div>
+        <div><i><Ic n="store" s={22} /></i><b>مباشرة من مصانع الصين</b><span>نشتري بأسعار الجملة ونبيع بالقطعة.</span></div>
+        <div><i><Ic n="grid" s={22} /></i><b>{Number(stats?.p ?? 0).toLocaleString('en-US')} منتج</b><span>يزداد كل يوم بمنتجات جديدة.</span></div>
+        {Number(stats?.d ?? 0) >= 10
+          ? <div><i><Ic n="box" s={22} /></i><b>{Number(stats.d).toLocaleString('en-US')} طلب مُسلَّم</b><span>إلى كل المدن الليبية.</span></div>
+          : <div><i><Ic n="truck" s={22} /></i><b>توصيل لكل مدن ليبيا</b><span>{s.air_days || '12 — 18 يومًا'} جوًّا حتى باب بيتك.</span></div>}
         {realWa(s.whatsapp_number)
-          ? <div><b>🤝 واتساب <a href={`https://wa.me/${realWa(s.whatsapp_number)}`} dir="ltr">+{realWa(s.whatsapp_number)}</a></b><span>فريق دعم يرد خلال ساعات العمل.</span></div>
-          : <div><b>💬 دعم مباشر</b><span>زر «تواصل معنا» أسفل كل صفحة — يرد فريقنا خلال ساعات العمل.</span></div>}
+          ? <div><i><Ic n="wa" s={22} /></i><b>واتساب <a href={`https://wa.me/${realWa(s.whatsapp_number)}`} dir="ltr">+{realWa(s.whatsapp_number)}</a></b><span>فريق دعم يرد خلال ساعات العمل.</span></div>
+          : <div><i><Ic n="chat" s={22} /></i><b>دعم مباشر</b><span>زر «تواصل معنا» أسفل كل صفحة — يرد فريقنا خلال ساعات العمل.</span></div>}
       </section>
     </Layout>,
   );
@@ -182,10 +185,10 @@ store.get('/how', async (c) => {
       <section class="hm-how">
         <div class="hm-head"><span class="hm-tag">الخطوات</span><h2>أربع خطوات فقط</h2><p>أربع خطوات، وسعر واحد نهائي بالدينار تعرفه قبل أن تدفع.</p></div>
         <div class="hm-steps">
-          <div class="hm-step hm-feat"><i>🛍️</i><b>اختر وادفع بالدينار</b><span>بطاقة، سداد، إدفعلي أو كاش — والسعر شامل الشحن والجمارك.</span></div>
-          <div class="hm-step"><i>🏭</i><b>نشتري لك من المصنع</b><span>مباشرة من 1688 بأسعار المصانع، بالمقاس واللون الذي اخترته.</span></div>
-          <div class="hm-step"><i>🔍</i><b>نفحص ونصوّر ونشحن</b><span>نفتح كل طرد في مخزننا بالصين ونصوّره قبل الشحن {seaOn(s) ? 'جوًّا أو بحرًا' : 'جوًّا'}.</span></div>
-          <div class="hm-step"><i>🚚</i><b>يصلك إلى الباب</b><span>في {CITIES.length} مدينة ليبية، وتتابع طلبك برقمه لحظة بلحظة.</span></div>
+          <div class="hm-step hm-feat"><i><Ic n="cart" s={24} /></i><b>اختر وادفع بالدينار</b><span>بطاقة، سداد، إدفعلي أو كاش — والسعر شامل الشحن والجمارك.</span></div>
+          <div class="hm-step"><i><Ic n="store" s={24} /></i><b>نشتري لك من المصنع</b><span>مباشرة من 1688 بأسعار المصانع، بالمقاس واللون الذي اخترته.</span></div>
+          <div class="hm-step"><i><Ic n="shield" s={24} /></i><b>نفحص ونصوّر ونشحن</b><span>نفتح كل طرد في مخزننا بالصين ونصوّره قبل الشحن {seaOn(s) ? 'جوًّا أو بحرًا' : 'جوًّا'}.</span></div>
+          <div class="hm-step"><i><Ic n="truck" s={24} /></i><b>يصلك إلى الباب</b><span>في {CITIES.length} مدينة ليبية، وتتابع طلبك برقمه لحظة بلحظة.</span></div>
         </div>
       </section>
 
@@ -197,7 +200,7 @@ store.get('/how', async (c) => {
 
       <section class="hm-cities">
         <div class="hm-head"><span class="hm-tag">تغطيتنا</span><h2>نصل إلى كل مدينة ليبية</h2></div>
-        <div class="hm-chips">{CITIES.map(ct => <span>📍 {ct}</span>)}</div>
+        <div class="hm-chips">{CITIES.map(ct => <span><Ic n="pin" s={15} />{ct}</span>)}</div>
       </section>
 
       <section class="hm-faq">
@@ -222,17 +225,17 @@ store.get('/how', async (c) => {
 // ---------- تتبّع الطلب برقمه (بأسلوب «تتبع شحنتك» في أميال، ٢٥/٠٩/٢٦) ----------
 // بلا تسجيل دخول: رقم الطلب + آخر 4 أرقام من هاتف التوصيل، فلا يرى أحد طلب غيره برقم يخمّنه.
 const TRACK_STEPS: [string, string, string][] = [
-  ['paid', '💳', 'استلمنا طلبك ودفعته'], ['purchased', '🛍️', 'اشتريناه من المصنع في الصين'], ['at_warehouse', '🏭', 'وصل مخزننا في الصين وفحصناه'],
-  ['shipped', '✈️', 'في الطريق إلى ليبيا'], ['arrived', '🇱🇾', 'وصل ليبيا وخرج من الجمارك'], ['ready', '🚚', 'مع شركة التوصيل في طريقه إليك'], ['delivered', '✅', 'تم التسليم'],
+  ['paid', 'card', 'استلمنا طلبك ودفعته'], ['purchased', 'cart', 'اشتريناه من المصنع في الصين'], ['at_warehouse', 'box', 'وصل مخزننا في الصين وفحصناه'],
+  ['shipped', 'plane', 'في الطريق إلى ليبيا'], ['arrived', 'pin', 'وصل ليبيا وخرج من الجمارك'], ['ready', 'truck', 'مع شركة التوصيل في طريقه إليك'], ['delivered', 'check', 'تم التسليم'],
 ];
 export const TrackCard = ({ o, done }: { o: any; done: Map<string, string> }) => {
   const cur = ORDER_STATUS[o.status]?.step ?? 0;
   return (
     <div class="trk-card">
       <div class="trk-h"><div><small>رقم الطلب</small><b dir="ltr">{o.code}</b></div><span class={`status ${ORDER_STATUS[o.status]?.color}`}>{ORDER_STATUS[o.status]?.ar}</span></div>
-      {o.courier_ref && <p class="trk-courier">🚚 مع {o.courier} — رقم الشحنة <b dir="ltr">{o.courier_ref}</b></p>}
+      {o.courier_ref && <p class="trk-courier"><Ic n="truck" s={16} /> مع {o.courier} — رقم الشحنة <b dir="ltr">{o.courier_ref}</b></p>}
       <ol class="trk-steps">{TRACK_STEPS.map(([st, ic, ar]) => { const step = ORDER_STATUS[st].step; const isDone = cur >= step; const isNow = !isDone ? false : !TRACK_STEPS.some(([s2]) => ORDER_STATUS[s2].step > step && cur >= ORDER_STATUS[s2].step);
-        return <li class={`${isDone ? 'done' : ''} ${isNow ? 'now' : ''}`}><i>{ic}</i><div><b>{ar}</b>{done.get(st) ? <small>{timeAgo(done.get(st)!)}</small> : st === 'ready' && o.courier_at ? <small>{timeAgo(o.courier_at)}</small> : null}</div></li>; })}</ol>
+        return <li class={`${isDone ? 'done' : ''} ${isNow ? 'now' : ''}`}><i><Ic n={ic} s={17} /></i><div><b>{ar}</b>{done.get(st) ? <small>{timeAgo(done.get(st)!)}</small> : st === 'ready' && o.courier_at ? <small>{timeAgo(o.courier_at)}</small> : null}</div></li>; })}</ol>
     </div>);
 };
 store.get('/track', async (c) => {
@@ -678,11 +681,11 @@ store.get('/p/:slug', async (c) => {
               <input type="hidden" name="back" value={`/p/${p.slug}`} />
               <label class={mode === 'air' ? 'on' : ''}>
                 <input type="radio" name="mode" value="air" checked={mode === 'air'} onchange="this.form.submit()" />
-                <span class="t">✈️ جوي {fmt(p.price_lyd)}</span><span class="d">{s.air_days || '12 — 18 يومًا'}</span>
+                <span class="t"><Ic n="plane" s={17} /> جوي {fmt(p.price_lyd)}</span><span class="d">{s.air_days || '12 — 18 يومًا'}</span>
               </label>
               <label class={mode === 'sea' ? 'on' : ''}>
                 <input type="radio" name="mode" value="sea" checked={mode === 'sea'} onchange="this.form.submit()" />
-                <span class="t">🚢 بحري {fmt(p.price_sea_lyd)}{seaSave > 0 && <b> وفّر {fmt(seaSave)}</b>}</span><span class="d">{s.sea_days || '30 — 45 يومًا'}</span>
+                <span class="t"><Ic n="box" s={17} /> بحري {fmt(p.price_sea_lyd)}{seaSave > 0 && <b> وفّر {fmt(seaSave)}</b>}</span><span class="d">{s.sea_days || '30 — 45 يومًا'}</span>
               </label>
               <noscript><button class="btn sm" type="submit">تطبيق</button></noscript>
             </form>
@@ -718,10 +721,10 @@ store.get('/p/:slug', async (c) => {
             </div>
           </form>
           <div class="trust">
-            <div>🚚 <b>الوصول خلال {rates.days}</b><br />شحن {rates.ar} مجمّع من الصين</div>
-            <div>💳 <b>ادفع بالدينار</b><br />بطاقة مصرفية · سداد · إدفعلي · موبي كاش</div>
-            <div>🔍 <b>فحص قبل الشحن</b><br />صور للبضاعة من مخزننا في الصين</div>
-            <div>↩️ <b>ضمان الوصول</b><br />تعويض كامل لأي تالف أو مختلف</div>
+            <div><Ic n="truck" s={18} /> <b>الوصول خلال {rates.days}</b><br />شحن {rates.ar} مجمّع من الصين</div>
+            <div><Ic n="card" s={18} /> <b>ادفع بالدينار</b><br />بطاقة مصرفية · سداد · إدفعلي · موبي كاش</div>
+            <div><Ic n="shield" s={18} /> <b>فحص قبل الشحن</b><br />صور للبضاعة من مخزننا في الصين</div>
+            <div><Ic n="ret" s={18} /> <b>ضمان الوصول</b><br />تعويض كامل لأي تالف أو مختلف</div>
           </div>
           <details open><summary>الوصف</summary><div style="font-size:14px;white-space:pre-line">{p.description_ar || autoDesc(p, s, rates, colors, sizes)}</div></details>
           {isClothing && (
@@ -932,14 +935,14 @@ const ShipPicker = ({ t, back }: any) => {
         <label class={t.mode === 'air' ? 'on' : ''}>
           <input type="radio" name="mode" value="air" checked={t.mode === 'air'} onchange="this.form.submit()" />
           <div>
-            <div class="t">✈️ شحن جوي <span class="fast">الأسرع</span></div>
+            <div class="t"><Ic n="plane" s={18} /> شحن جوي <span class="fast">الأسرع</span></div>
             <div class="d">يصل خلال <b>{air}</b> · إجمالي السلة {fmt(t.airSum)}</div>
           </div>
         </label>
         <label class={t.mode === 'sea' ? 'on' : ''}>
           <input type="radio" name="mode" value="sea" checked={t.mode === 'sea'} onchange="this.form.submit()" />
           <div>
-            <div class="t">🚢 شحن بحري {t.seaSaving > 0 && <span class="save">وفّر {fmt(t.seaSaving)}</span>}</div>
+            <div class="t"><Ic n="box" s={18} /> شحن بحري {t.seaSaving > 0 && <span class="save">وفّر {fmt(t.seaSaving)}</span>}</div>
             <div class="d">يصل خلال <b>{sea}</b> · إجمالي السلة {fmt(t.seaSum)}</div>
           </div>
         </label>
@@ -977,7 +980,7 @@ const CouponBox = ({ c, t, back }: { c: Context<Env>; t: any; back: string }) =>
 store.get('/cart', async (c) => {
   const u = c.get('user');
   const b = await base(c);
-  if (!u) return c.html(<Layout {...b} title="السلة"><div class="empty"><div class="big">🛒</div><a class="btn" href="/login?next=/cart">سجّل الدخول لعرض السلة</a></div></Layout>);
+  if (!u) return c.html(<Layout {...b} title="السلة"><div class="empty"><div class="big"><Ic n="cart" s={44} /></div><a class="btn" href="/login?next=/cart">سجّل الدخول لعرض السلة</a></div></Layout>);
   const rows = await cartRows(c.env.DB, u.id, shipMode(c));
   const t = await cartTotals(c, rows, false);
   const unavailable = rows.some(r => !r.in_stock || r.status !== 'active');
@@ -985,7 +988,7 @@ store.get('/cart', async (c) => {
     <Layout {...b} title="السلة">
       <Flash msg={c.req.query('added') ? 'أُضيف المنتج إلى السلة ✓' : c.req.query('cok') ? 'طُبّق الكوبون ✓' : undefined} />
       <div class="sec-h"><h2>سلة التسوق ({rows.length})</h2></div>
-      {rows.length === 0 ? <div class="empty"><div class="big">🛒</div>سلتك فارغة<br /><br /><a class="btn" href="/">ابدأ التسوق</a></div> : (
+      {rows.length === 0 ? <div class="empty"><div class="big"><Ic n="cart" s={44} /></div>سلتك فارغة<br /><br /><a class="btn" href="/">ابدأ التسوق</a></div> : (
         <div class="two">
           <div>
             {rows.map(r => (
@@ -1033,7 +1036,7 @@ store.get('/checkout', async (c) => {
       <div class="sec-h"><h2>إتمام الطلب</h2><a href="/cart">← العودة للسلة</a></div>
       <form method="post" action="/checkout" class="two" id="checkoutForm">
         <div>
-          <div class="card-box"><h3>📍 عنوان التوصيل</h3>
+          <div class="card-box"><h3><Ic n="pin" s={20} /> عنوان التوصيل</h3>
             {addrs.results.length > 0 && <div class="addr-pick">{addrs.results.map((a, i) => <label class="radio"><input type="radio" name="address_id" value={a.id} checked={i === 0} /> <span><b>{a.label || a.name}</b> — {a.name} · {a.phone}<br /><small>{a.city} — {a.address}</small></span></label>)}
               <label class="radio"><input type="radio" name="address_id" value="" /> <span>عنوان جديد</span></label></div>}
             <div id="newAddr" class={addrs.results.length ? 'collapsed' : ''}>
@@ -1055,7 +1058,7 @@ store.get('/checkout', async (c) => {
             </div>
             <label>ملاحظات (اختياري)</label><input type="text" name="note" />
           </div>
-          <div class="card-box"><h3>💳 طريقة الدفع</h3>
+          <div class="card-box"><h3><Ic n="card" s={20} /> طريقة الدفع</h3>
             <div class="pm-list">
               {Object.entries(PAYMENT_METHODS).filter(([, v]) => !v.hidden && (!v.online || mp.gateways.includes(v.gateway!))).map(([k, v]) => (
                 <label class={`radio pm ${v.online ? 'online' : ''}`}><input type="radio" name="payment_method" value={k} checked={k === pm} required /> <span class="pm-i">{v.icon}</span><span><b>{v.ar}</b>{v.online && <i class="pm-tag">فوري عبر MyPay</i>}<br /><small>{v.desc}</small></span></label>
@@ -1214,8 +1217,8 @@ store.get('/orders/:code', async (c) => {
               <form method="post" action={`/account/orders/${o.code}/cancel`} style="margin-top:10px" onsubmit="return confirm('إلغاء الطلب؟')"><button class="btn sm ghost" style="color:#d3262b">إلغاء الطلب</button></form>
             </div>
           )}
-          {paid && <div class="card-box" style="border-color:#1a9c5b"><h3>✅ مدفوع عبر {pm?.ar}</h3><p style="font-size:13px;color:#666">المرجع: {paid.provider_ref ?? paid.trx_ref} · {timeAgo(paid.updated_at)}</p></div>}
-          {o.courier_ref && o.status !== 'delivered' && <div class="card-box courier-box"><h3>🚚 طلبك مع {o.courier} للتوصيل</h3>
+          {paid && <div class="card-box" style="border-color:#1a9c5b"><h3><Ic n="check" s={20} /> مدفوع عبر {pm?.ar}</h3><p style="font-size:13px;color:#666">المرجع: {paid.provider_ref ?? paid.trx_ref} · {timeAgo(paid.updated_at)}</p></div>}
+          {o.courier_ref && o.status !== 'delivered' && <div class="card-box courier-box"><h3><Ic n="truck" s={20} /> طلبك مع {o.courier} للتوصيل</h3>
             <p style="margin:0">رقم الشحنة: <b dir="ltr">{o.courier_ref}</b> · سُلِّم لهم {timeAgo(o.courier_at)}{o.ship_zone ? ` · ${o.ship_zone}` : ''}
               {courierUrl && <> · <a href={courierUrl} target="_blank" rel="noopener">تتبّع الشحنة ↗</a></>}</p>
             {o.courier_status === 'failed' && <p class="pd-red" style="margin:6px 0 0">تعذّر التوصيل{o.courier_note ? `: ${o.courier_note}` : ''} — سنتواصل معك لتحديد موعد جديد.</p>}</div>}
@@ -1225,7 +1228,7 @@ store.get('/orders/:code', async (c) => {
                 <div class={`st ${isDone ? 'done' : ''} ${isNow ? 'now' : ''}`}><div class="dotl"></div><div><div class="lbl">{sd.ar}</div>{done.get(st) && <div class="when">{timeAgo(done.get(st))}</div>}</div></div>); })}
             </div>
           </div>
-          {photos.results.length > 0 && <div class="card-box"><h3>📷 صور طلبك من مراحل الشحن</h3>
+          {photos.results.length > 0 && <div class="card-box"><h3><Ic n="box" s={20} /> صور طلبك من مراحل الشحن</h3>
             <div class="order-photos">{photos.results.map(m => <figure><a href={m.url ?? `/orders/${o.code}/photo/${m.id}`} target="_blank"><img src={m.url ?? `/orders/${o.code}/photo/${m.id}`} alt="" loading="lazy" /></a>
               <figcaption>{ORDER_STATUS[m.stage]?.ar ?? m.stage}{m.caption ? ` — ${m.caption}` : ''}<br />{timeAgo(m.created_at)}</figcaption></figure>)}</div>
           </div>}
