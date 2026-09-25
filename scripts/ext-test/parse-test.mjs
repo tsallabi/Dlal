@@ -32,6 +32,19 @@ ok(d.minQty === 2, `الحد الأدنى للطلب (${d.minQty})`);
 ok(d.inStock === true, 'المنتج متوفر');
 ok(/Hangzhou/.test(d.supplier), `اسم المورد (${d.supplier})`);
 
+// الوحدة (1.7.3): «40g» كانت تُقرأ 40 كغ فبيعت ربطة عنق بـ3,380 د.ل
+for (const [rows, want, what] of [
+  ['<tr><td>Weight</td><td>40g</td></tr>', 40, '«40g» = 40 غ'],
+  ['<tr><td>重量</td><td>40克</td></tr>', 40, '«40克» = 40 غ'],
+  ['<tr><td>净重</td><td>0.5kg</td></tr>', 500, '«0.5kg» = 500 غ'],
+  ['<tr><td>重量</td><td>1斤</td></tr>', 500, '«1斤» = 500 غ'],
+  ['<tr><td>Weight (g)</td></tr><tr><td>40</td></tr>', 40, 'الوحدة في صف العنوان «Weight (g)» ثم 40 = 40 غ'],
+  ['<tr><td>Weight</td><td>0.65</td></tr>', 650, 'رقم بلا وحدة أقل من 50 يبقى كيلوغرامات (0.65 = 650 غ)'],
+]) {
+  const w = await page.evaluate((r) => { document.querySelectorAll('table').forEach(t => t.innerHTML = r); return window.__dlalExtract.detail(null).weightG; }, rows);
+  ok(w === want, `${what} (${w})`);
+}
+
 // قارئ صفحة النتائج لم يتأثر
 await page.goto('https://s.1688.com/selloffer/offer_search.htm?keywords=test', { waitUntil: 'domcontentloaded' });
 await page.addScriptTag({ content: src });

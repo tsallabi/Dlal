@@ -549,6 +549,37 @@ await page.goto(BASE + '/admin/products?q=999000111');
 const priceAfter = await page.locator('table.tbl tr:has-text("فستان تجريبي مستورد") td').nth(4).textContent();
 expect(priceBefore === priceAfter, `سعر المنتج لا يتغير عند إعادة الفحص بلا قسم (${priceBefore} → ${priceAfter})`);
 
+// ---------- الوزن المستحيل (٢٥/٠٩/٢٦): «الوزن: 40» بالغرامات قرأته الإضافة 40 كغ فبيعت ربطة عنق بـ3,380 د.ل ----------
+{
+  const { execFileSync } = await import('node:child_process');
+  const dq = (sql) => JSON.parse(execFileSync('npx', ['wrangler', 'd1', 'execute', 'dlal-db', '--local', '-c', 'wrangler.local.toml', '--json', '--command', sql], { stdio: 'pipe' }).toString())[0].results;
+  const tag = String(Date.now()).slice(-7), tie = '97' + tag, tent = '98' + tag;
+  const imp = (items, cat) => ctx.request.post(BASE + '/api/import', { headers: { 'x-import-token': 'dev-import-token' }, data: { category_id: cat, page_url: 'test', items } });
+  try {
+    const acc = dq("SELECT id FROM categories WHERE slug='accessories'")[0].id, out = dq("SELECT id FROM categories WHERE slug='outdoor'")[0].id;
+    await imp([{ offerId: tie, url: `https://detail.1688.com/offer/${tie}.html`, title: 'ربطة ' + tag, titleAr: 'ربطة عنق ' + tag, priceCny: 11, weightG: 40000, images: [], variants: [], inStock: true }], acc);
+    await imp([{ offerId: tent, url: `https://detail.1688.com/offer/${tent}.html`, title: 'خيمة ' + tag, titleAr: 'خيمة كبيرة ' + tag, priceCny: 1400, weightG: 27400, images: [], variants: [], inStock: true }], out);
+    let [t] = dq(`SELECT id,weight_g,price_lyd FROM products WHERE source_offer_id='${tie}'`), [k] = dq(`SELECT weight_g,price_lyd FROM products WHERE source_offer_id='${tent}'`);
+    expect(t.weight_g === 40 && t.price_lyd < 100, `ربطة عنق «40 كغ» بـ11 يوان تُحفظ 40 غ وتُسعَّر ${t.price_lyd} د.ل لا بالآلاف`);
+    expect(k.weight_g === 27400, 'خيمة حقيقية 27.4 كغ بـ1400 يوان يبقى وزنها كما هو');
+    // وزن مستحيل محفوظ من قبل يُصحَّح عند مرور الإثراء عليه حتى بلا وزن جديد
+    dq(`UPDATE products SET weight_g=40000 WHERE id=${t.id}`);
+    await ctx.request.post(BASE + '/api/import', { headers: { 'x-import-token': 'dev-import-token' }, data: { category_id: null, page_url: 'ext:stock', items: [{ offerId: tie, url: `https://detail.1688.com/offer/${tie}.html`, title: 'ربطة ' + tag, priceCny: 11, images: [], variants: [], inStock: true }] } });
+    [t] = dq(`SELECT id,weight_g,price_lyd FROM products WHERE source_offer_id='${tie}'`);
+    expect(t.weight_g === 40 && t.price_lyd < 100, `الإثراء يصحّح الوزن المستحيل المحفوظ (${t.weight_g} غ · ${t.price_lyd} د.ل)`);
+    // جملة ترحيل 0039 نفسها على صف مستحيل، ثم إعادة تسعير «الناقص» كما يفعل الكرون
+    dq(`UPDATE products SET weight_g=40000, price_lyd=3380 WHERE id=${t.id}`);
+    execFileSync('npx', ['wrangler', 'd1', 'execute', 'dlal-db', '--local', '-c', 'wrangler.local.toml', '--file', 'migrations/0039_impossible_weights.sql'], { stdio: 'pipe' });
+    [t] = dq(`SELECT id,weight_g,price_sea_lyd FROM products WHERE source_offer_id='${tie}'`); [k] = dq(`SELECT weight_g,price_sea_lyd FROM products WHERE source_offer_id='${tent}'`);
+    expect(t.weight_g === 40 && t.price_sea_lyd === null && k.weight_g === 27400 && k.price_sea_lyd !== null, 'ترحيل 0039 يصحّح الربطة ولا يمسّ الخيمة');
+    const rp = await (await ctx.request.post(BASE + '/api/source/reprice', { headers: { 'x-import-token': 'dev-import-token' }, data: { limit: 50 } })).json();
+    [t] = dq(`SELECT price_lyd,price_sea_lyd FROM products WHERE source_offer_id='${tie}'`);
+    expect(rp.repriced >= 1 && t.price_lyd < 100 && t.price_sea_lyd !== null, `إعادة تسعير «الناقص» تعيد الربطة إلى ${t.price_lyd} د.ل`);
+  } finally {
+    dq(`DELETE FROM product_images WHERE product_id IN (SELECT id FROM products WHERE source_offer_id IN ('${tie}','${tent}')); DELETE FROM variants WHERE product_id IN (SELECT id FROM products WHERE source_offer_id IN ('${tie}','${tent}')); DELETE FROM products WHERE source_offer_id IN ('${tie}','${tent}')`);
+  }
+}
+
 // ---------- الأدوار والصلاحيات ----------
 await login(page, '0950000000', 'staff123');   // دعم الزبائن
 await page.goto(BASE + '/admin'); expect(await has(page, 'دعم الزبائن'), 'موظفة الدعم تدخل اللوحة بدورها');

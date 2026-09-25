@@ -55,7 +55,8 @@
     // صف الوزن يأتي أحيانًا في صفّين: العنوان ثم القيمة
     const rows = $$('table tr').map(tr => [...tr.cells].map(c => txt(c)).join('|'));
     const wi = rows.findIndex(r => /^Weight|重量|净重/i.test(r));
-    if (wi >= 0 && rows[wi + 1] && /^[\d.]+$/.test(rows[wi + 1])) out['Weight'] = rows[wi + 1];
+    // والوحدة قد تكون في صف العنوان («重量(g)»): تُلصق بالقيمة حتى لا تضيع
+    if (wi >= 0 && rows[wi + 1] && /^[\d.]+\s*(g|kg|克|千克|公斤|斤)?$/i.test(rows[wi + 1])) out['Weight'] = rows[wi + 1] + (/[\d.]$/.test(rows[wi + 1]) ? (/kg|千克|公斤/i.test(rows[wi]) ? 'kg' : /\(\s*g\s*\)|（\s*g\s*）|\(克\)|（克）/i.test(rows[wi]) ? 'g' : '') : '');
     return out;
   }
   const pick = (attrs, re) => { const k = Object.keys(attrs).find(k => re.test(k)); return k ? attrs[k] : ''; };
@@ -79,10 +80,15 @@
     const attrs = attrTable();
     const colors = splitList(pick(attrs, /^(Color|颜色|色系)/i));
     const sizes = splitList(pick(attrs, /^(Size|尺码|尺寸|规格)/i));
-    // جدول المواصفات لا يذكر الوحدة دائمًا: رقم أقل من ٥٠ كيلوغرامات، وإلا غرامات.
-    // (نفس قاعدة normWeightG في الخادم — المورّد الذي يكتب 0.65 يقصد ٦٥٠ غ لا ٦٥٠ ملغ.)
-    const wRaw = parseFloat(pick(attrs, /^(Weight|重量|净重)/i)) || 0;
-    const weightG = wRaw > 0 && wRaw < 50 ? Math.round(wRaw * 1000) : Math.round(wRaw);
+    // الوحدة أولًا إن كُتبت («40g»، «40克»، «0.5kg»، «1斤»): parseFloat كان يُسقطها فصارت ربطة عنق
+    // «40g» أربعين كيلوغرامًا (1.7.3). بلا وحدة: رقم أقل من ٥٠ كيلوغرامات، وإلا غرامات — والخادم يرفض المستحيل.
+    const wStr = String(pick(attrs, /^(Weight|重量|净重|毛重)/i) || '');
+    const wKey = Object.keys(attrs).find(k => /^(Weight|重量|净重|毛重)/i.test(k)) || '';
+    const wNum = wStr.match(/\d+(?:\.\d+)?/); const wRaw = wNum ? parseFloat(wNum[0]) : 0;
+    const unitOf = (t) => /千克|公斤|kg/i.test(t) ? 'kg' : /斤/.test(t) ? 'jin' : /克|\bg\b|\dg\b|gram/i.test(t) ? 'g' : '';
+    const unit = unitOf(wStr) || unitOf(wKey);
+    const weightG = !(wRaw > 0) ? 0 : unit === 'kg' ? Math.round(wRaw * 1000) : unit === 'jin' ? Math.round(wRaw * 500) : unit === 'g' ? Math.round(wRaw)
+      : wRaw < 50 ? Math.round(wRaw * 1000) : Math.round(wRaw);
 
     const variants = [];
     try {   // إن وُجدت بيانات SKU في الصفحة (عند تسجيل الدخول) فهي الأدق

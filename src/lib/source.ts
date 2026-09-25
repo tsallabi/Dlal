@@ -73,6 +73,22 @@ export function normWeightG(raw: number | null | undefined, unit: 'kg' | 'raw' =
   return g >= 1 && g <= MAX_WEIGHT_G ? g : undefined;
 }
 
+// وزن لا يُعقل (٢٥/٠٩/٢٦): جدول مواصفات 1688 يكتب «الوزن: 40» بلا وحدة وهو يقصد غرامات، والقاعدة
+// «أقل من 50 = كيلوغرامات» جعلت ربطة عنق 40 كغ فبيعت بـ3,380 د.ل (146 منتجًا نشطًا يومها).
+// المرفوض: فوق عشرة أضعاف وزن القسم التقديري (وثلاثة كيلو على الأقل)، في قسم خفيف (≤ 900 غ تقديرًا)
+// أو بسعر أقل من يوانين للكيلو — الخيمة الحقيقية بـ1400 يوان و27 كغ تبقى كما هي.
+// إن كان الرقم كيلوغرامات مضروبة في 1000 من رقم غرامات معقول، يُعاد غرامات؛ وإلا فلا وزن (يُسعَّر بوزن القسم
+// ويدخل طابور الإثراء فتقرؤه الإضافة من جديد).
+export function plausibleWeightG(w: number | null | undefined, estG: number, cny: number): number | undefined {
+  const v = Math.round(Number(w));
+  if (!isFinite(v) || v <= 0) return undefined;
+  const est = estG > 0 ? estG : 300;
+  if (v <= Math.max(est * 10, 3000)) return v;
+  if (!(est <= 900 || cny < (v / 1000) * 2)) return v;
+  if (v <= MAX_WEIGHT_G && v % 1000 === 0 && v / 1000 >= est / 5) return v / 1000;
+  return undefined;
+}
+
 // طبقة مصدر المنتجات — تُبدَّل دون تغيير باقي النظام
 // اليوم: BrowserImportSource (الموظف يتصفح 1688 ويضغط "استورد")
 // غدًا:  Api1688Source (بعد الحصول على AppKey من open.1688.com)

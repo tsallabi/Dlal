@@ -11,7 +11,7 @@ import { classifyModesty } from '../lib/modesty';
 import { fingerprint, sameProduct } from '../lib/dedupe';
 import { loadSettings, computePrice } from '../lib/pricing';
 import { requireRole } from '../lib/auth';
-import { attrValue, notRetail, kindOf } from '../lib/source';
+import { attrValue, notRetail, kindOf, plausibleWeightG } from '../lib/source';
 import { junkAttr } from '../lib/attr-en';  // الشظيّة تُحذف قبل الترجمة وإلا صارت «غير قابل للإرجاع» لونًا عربيًا
 import { requirePerm, logActivity } from '../lib/perm';
 import { settleLinkRequests, LINK_SOURCES, LINK_STATUS } from '../lib/link-requests';
@@ -289,7 +289,11 @@ export async function importProducts(db: D1Database, arr: any[], categoryId: num
     // منتج موجود: يُسعَّر بقسمه هو ووزنه المحفوظ، لا بقسم المهمة التي فحصته
     // (إعادة الفحص من مهمة بلا قسم كانت تُنقص السعر لأنها تفترض وزنًا افتراضيًا)
     const useCat = ex ? (cats.find(x => x.id === ex.category_id) ?? cat) : (cats.find(x => x.id === targetCat) ?? cat);
-    const weight = it.weightG ?? ex?.weight_g ?? useCat?.est_weight_g ?? 300;
+    const estW = useCat?.est_weight_g ?? 300;
+    // وزن مستحيل (ربطة عنق 40 كغ) لا يُسعَّر به ولا يُحفظ: يُصحَّح غرامات أو يُترك لوزن القسم
+    const wIn = it.weightG ? plausibleWeightG(Number(it.weightG), estW, price) : undefined;
+    const exW = ex?.weight_g ? plausibleWeightG(ex.weight_g, estW, price) : undefined;
+    const weight = wIn ?? exW ?? estW;
     const volume = it.volumeCm3 ?? ex?.volume_cm3 ?? null;
     // الشحن الداخلي يُقسَّم على اللوط: الحد الأدنى جزء من التسعير لا معلومة عرض فقط
     const moq = Math.max(1, Number(it.minQty ?? 0) || ex?.min_qty || 1);
@@ -324,7 +328,8 @@ export async function importProducts(db: D1Database, arr: any[], categoryId: num
         upd.push('min_qty=?'); binds.push(Number(it.minQty));
         if (notRetail(it.title, Number(it.minQty), maxRetail)) upd.push("status=CASE WHEN status='active' THEN 'hidden' ELSE status END");
       }
-      if (it.weightG && Number(it.weightG) > 0 && !ex.weight_g) { upd.push('weight_g=?'); binds.push(Math.round(Number(it.weightG))); gain.wt++; got = true; }
+      if (wIn && (!ex.weight_g || exW !== ex.weight_g)) { upd.push('weight_g=?'); binds.push(wIn); gain.wt++; got = true; }
+      else if (ex.weight_g && exW !== ex.weight_g) { upd.push('weight_g=?'); binds.push(exW ?? null); }   // المحفوظ مستحيل ولم يأتِ بديل
       if (it.volumeCm3 && Number(it.volumeCm3) > 0 && !ex.volume_cm3) { upd.push('volume_cm3=?'); binds.push(Math.round(Number(it.volumeCm3))); }
       if (supplierAr && (!cur?.supplier_name || hasCJK(cur.supplier_name))) { upd.push('supplier_name=?'); binds.push(supplierAr); }
       if (it.title) { upd.push('title_src=COALESCE(title_src,?)'); binds.push(String(it.title)); }
@@ -349,7 +354,7 @@ export async function importProducts(db: D1Database, arr: any[], categoryId: num
       `INSERT OR IGNORE INTO products(source,source_offer_id,source_url,slug,title_ar,title_src,description_ar,category_id,source_price_cny,price_lyd,compare_price_lyd,price_sea_lyd,weight_g,volume_cm3,min_qty,in_stock,status,supplier_name,last_checked_at,sales,rating,home_ok,fingerprint,kind)
        VALUES('1688',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL,?,?,?,?,?)`,
     ).bind(offerId, it.url ?? `https://detail.1688.com/offer/${offerId}.html`, slug, titleAr, it.title ?? null, it.descriptionAr ?? null,
-      targetCat, price, pr.total_lyd, Math.random() < 0.4 ? Math.ceil(pr.total_lyd * 1.25 / 5) * 5 : null, prSea.total_lyd, it.weightG ?? null, it.volumeCm3 ?? null,
+      targetCat, price, pr.total_lyd, Math.random() < 0.4 ? Math.ceil(pr.total_lyd * 1.25 / 5) * 5 : null, prSea.total_lyd, wIn ?? null, it.volumeCm3 ?? null,
       moq, it.inStock === false ? 0 : 1, notRetail(it.title, moq, maxRetail) ? 'hidden' : hasCJK(titleAr) || !hasArabic(titleAr) ? 'draft' : 'active', supplierAr, parseInt(it.sales ?? 0) || 0, 0, homeOk, fp || null, kindOf(it.title)).run();
     const pid = ins.meta.last_row_id as number;
     if (!pid || !ins.meta.changes) { skipped++; continue; }   // تجاهل صفّ لم يُدرج (تعارض مع استيراد متزامن)
