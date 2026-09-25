@@ -106,7 +106,7 @@ for (const slug of slugs) {
   if (!(await open(slug, `صفحة المنتج ${slug}`))) continue;
   const price = (await page.locator('.pd .price').first().textContent().catch(() => '')) || '';
   expect(/\d/.test(price), `${slug} تعرض سعرًا (${price.trim().slice(0, 24)})`);
-  expect(await page.locator('.pd button:has-text("أضيفي إلى السلة")').count() > 0, `${slug} فيها زر الشراء`);
+  expect(await page.locator('.pd button:has-text("أضف إلى السلة")').count() > 0, `${slug} فيها زر الشراء`);
   const bad = await page.locator('img').evaluateAll(is => is.filter(i => i.complete && i.naturalWidth === 0).length);
   brokenImgs += bad;
 }

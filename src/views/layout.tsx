@@ -33,7 +33,7 @@ export const Layout: FC<Props> = ({ title, user, cartCount = 0, wishCount = 0, c
           <div class="wrap">
             <a href="/request" class="strip-req"><i>🔗</i>اطلب أي منتج برابط</a>
             <span class="sep"></span>
-            <a href="/track"><i>📍</i>تتبّعي طلبك</a>
+            <a href="/track"><i>📍</i>تتبّع طلبك</a>
             <span class="sep"></span>
             <a href="/how"><i>🐦</i>كيف يعمل هدهد</a>
             <span class="sep"></span>

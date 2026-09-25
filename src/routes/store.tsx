@@ -166,8 +166,8 @@ store.get('/how', async (c) => {
   return c.html(
     <Layout {...b} title="كيف يعمل هدهد">
       <section class="how-hero"><span class="hm-tag">هدهد HUDHUDE — بوابتك إلى الصين</span><h1>من مصانع الصين إلى باب بيتك في ليبيا</h1>
-        <p>نشتري لك مباشرة من المصانع، نفحص كل قطعة ونصوّرها، ونوصلها إليك بسعر نهائي بالدينار تعرفينه قبل أن تدفعي.</p>
-        <div class="hm-cta-b"><a class="btn" href="/">تسوّقي الآن</a><a class="btn ghost" href="/track">تتبّعي طلبك</a></div></section>
+        <p>نشتري لك مباشرة من المصانع، نفحص كل قطعة ونصوّرها، ونوصلها إليك بسعر نهائي بالدينار تعرفه قبل أن تدفع.</p>
+        <div class="hm-cta-b"><a class="btn" href="/">تسوّق الآن</a><a class="btn ghost" href="/track">تتبّع طلبك</a></div></section>
       {/* ===== أقسام بأسلوب صفحة أميال بألوان هدهد (٢٥/٠٩/٢٦): الأرقام، كيف يعمل، التتبّع، المدن، الأسئلة، الدعوة ===== */}
       <section class="hm-stats">
         <div><b>{Number(stats?.p ?? 0).toLocaleString('en-US')}+</b><span>منتج بسعر نهائي بالدينار</span></div>
@@ -177,18 +177,18 @@ store.get('/how', async (c) => {
       </section>
 
       <section class="hm-how">
-        <div class="hm-head"><span class="hm-tag">الخطوات</span><h2>أربع خطوات فقط</h2><p>أربع خطوات، وسعر واحد نهائي بالدينار تعرفينه قبل أن تدفعي.</p></div>
+        <div class="hm-head"><span class="hm-tag">الخطوات</span><h2>أربع خطوات فقط</h2><p>أربع خطوات، وسعر واحد نهائي بالدينار تعرفه قبل أن تدفع.</p></div>
         <div class="hm-steps">
-          <div class="hm-step hm-feat"><i>🛍️</i><b>اختاري وادفعي بالدينار</b><span>بطاقة، سداد، إدفعلي أو كاش — والسعر شامل الشحن والجمارك.</span></div>
-          <div class="hm-step"><i>🏭</i><b>نشتري لك من المصنع</b><span>مباشرة من 1688 بأسعار المصانع، بالمقاس واللون الذي اخترتِه.</span></div>
+          <div class="hm-step hm-feat"><i>🛍️</i><b>اختر وادفع بالدينار</b><span>بطاقة، سداد، إدفعلي أو كاش — والسعر شامل الشحن والجمارك.</span></div>
+          <div class="hm-step"><i>🏭</i><b>نشتري لك من المصنع</b><span>مباشرة من 1688 بأسعار المصانع، بالمقاس واللون الذي اخترته.</span></div>
           <div class="hm-step"><i>🔍</i><b>نفحص ونصوّر ونشحن</b><span>نفتح كل طرد في مخزننا بالصين ونصوّره قبل الشحن {seaOn(s) ? 'جوًّا أو بحرًا' : 'جوًّا'}.</span></div>
-          <div class="hm-step"><i>🚚</i><b>يصلك إلى الباب</b><span>في {CITIES.length} مدينة ليبية، وتتابعين طلبك برقمه لحظة بلحظة.</span></div>
+          <div class="hm-step"><i>🚚</i><b>يصلك إلى الباب</b><span>في {CITIES.length} مدينة ليبية، وتتابع طلبك برقمه لحظة بلحظة.</span></div>
         </div>
       </section>
 
       <section class="hm-track">
-        <div class="hm-head"><span class="hm-tag">تتبّع طلبك</span><h2>تعرفين أين طلبك في كل لحظة</h2><p>من لحظة الدفع حتى يطرق مندوب التوصيل بابك — كل مرحلة بوقتها.</p>
-          <form method="get" action="/track" class="trk-form"><input type="text" name="code" placeholder="DL-2026-000123" dir="ltr" required /><input type="tel" name="phone" placeholder="آخر 4 أرقام" maxlength={4} inputmode="numeric" dir="ltr" required /><button class="btn">تتبّعي طلبك</button></form></div>
+        <div class="hm-head"><span class="hm-tag">تتبّع طلبك</span><h2>تعرف أين طلبك في كل لحظة</h2><p>من لحظة الدفع حتى يطرق مندوب التوصيل بابك — كل مرحلة بوقتها.</p>
+          <form method="get" action="/track" class="trk-form"><input type="text" name="code" placeholder="DL-2026-000123" dir="ltr" required /><input type="tel" name="phone" placeholder="آخر 4 أرقام" maxlength={4} inputmode="numeric" dir="ltr" required /><button class="btn">تتبّع طلبك</button></form></div>
         <TrackCard o={{ code: 'DL-2026-000123', status: 'arrived', courier_ref: null }} done={new Map()} />
       </section>
 
@@ -198,18 +198,18 @@ store.get('/how', async (c) => {
       </section>
 
       <section class="hm-faq">
-        <div class="hm-head"><span class="hm-tag">الأسئلة الشائعة</span><h2>كل ما تحتاجين معرفته</h2></div>
+        <div class="hm-head"><span class="hm-tag">الأسئلة الشائعة</span><h2>كل ما تحتاج معرفته</h2></div>
         <details open><summary>كم يستغرق وصول طلبي؟</summary><p>الشحن الجوي {s.air_days || '12 — 18 يومًا'}{seaOn(s) ? `، والبحري ${s.sea_days || '30 — 45 يومًا'} بسعر أرخص` : ''} من يوم الدفع حتى باب بيتك.</p></details>
         <details><summary>هل السعر المعروض نهائي؟</summary><p>نعم. السعر يشمل ثمن المنتج والشحن من الصين والجمارك، وتُضاف أجرة التوصيل داخل مدينتك فقط وتظهر لك قبل الدفع.</p></details>
         <details><summary>كيف أدفع؟</summary><p>ببطاقتك المصرفية المحلية (معاملات)، أو سداد، أو إدفعلي، أو كاش في الفرع — كلها بالدينار الليبي.</p></details>
         <details><summary>ماذا لو وصل المنتج تالفًا أو مختلفًا؟</summary><p>نعوّضك بالكامل: استبدال أو استرداد. نفحص كل طرد ونصوّره قبل الشحن حتى نحمي حقك. <a href="/pages/returns">سياسة الإرجاع ›</a></p></details>
-        <details><summary>هل أستطيع طلب منتج غير موجود في المتجر؟</summary><p>نعم — الصقي رابطه من 1688 أو تاوباو أو شي إن أو أمازون في <a href="/request">«اطلبي برابط»</a> ونوفّره لك بسعر نهائي.</p></details>
+        <details><summary>هل أستطيع طلب منتج غير موجود في المتجر؟</summary><p>نعم — الصق رابطه من 1688 أو تاوباو أو شي إن أو أمازون في <a href="/request">«اطلب برابط»</a> ونوفّره لك بسعر نهائي.</p></details>
         <details><summary>كيف أتابع طلبي؟</summary><p>من «طلباتي» في حسابك، أو من <a href="/track">تتبّع الطلب</a> برقمه وآخر 4 أرقام من هاتفك.</p></details>
       </section>
 
       <section class="hm-cta">
-        <div><h2>جاهزة لطلبك القادم من الصين؟</h2><p>آلاف المنتجات بسعر نهائي بالدينار — تصلك إلى الباب في كل ليبيا.</p></div>
-        <div class="hm-cta-b"><a class="btn" href="/new">تسوّقي الجديد</a><a class="btn ghost" href="/request">اطلبي برابط</a>
+        <div><h2>جاهز لطلبك القادم من الصين؟</h2><p>آلاف المنتجات بسعر نهائي بالدينار — تصلك إلى الباب في كل ليبيا.</p></div>
+        <div class="hm-cta-b"><a class="btn" href="/new">تسوّق الجديد</a><a class="btn ghost" href="/request">اطلب برابط</a>
           {realWa(s.whatsapp_number) ? <a class="btn ghost" href={`https://wa.me/${realWa(s.whatsapp_number)}`}>واتساب</a> : null}</div>
       </section>
     </Layout>,
@@ -238,21 +238,21 @@ store.get('/track', async (c) => {
   const ph = String(c.req.query('phone') ?? '').replace(/\D/g, '').slice(-4);
   let o: any = null, done = new Map<string, string>(), err = '';
   if (code) {
-    if (!/^DL-\d{4}-\d{6}$/.test(code) || ph.length !== 4) err = 'اكتبي رقم الطلب كما وصلك (مثل DL-2026-000123) وآخر 4 أرقام من هاتف التوصيل.';
+    if (!/^DL-\d{4}-\d{6}$/.test(code) || ph.length !== 4) err = 'اكتب رقم الطلب كما وصلك (مثل DL-2026-000123) وآخر 4 أرقام من هاتف التوصيل.';
     else {
       o = await c.env.DB.prepare("SELECT code,status,ship_city,ship_zone,courier,courier_ref,courier_at,id FROM orders WHERE code=? AND substr(replace(ship_phone,' ',''),-4)=? AND status NOT IN ('cancelled')").bind(code, ph).first<any>();
-      if (!o) err = 'لم نجد طلبًا بهذا الرقم وهذا الهاتف. تأكدي منهما أو راسلينا.';
+      if (!o) err = 'لم نجد طلبًا بهذا الرقم وهذا الهاتف. تأكد منهما أو راسلنا.';
       else done = new Map((await c.env.DB.prepare('SELECT status,MIN(created_at) t FROM order_events WHERE order_id=? GROUP BY status').bind(o.id).all<any>()).results.map((e: any) => [e.status, e.t]));
     }
   }
   return c.html(
     <Layout {...b} title="تتبّع طلبك">
       <section class="trk-page">
-        <div class="trk-intro"><span class="hm-tag">تتبّع لحظة بلحظة</span><h1>أين طلبك الآن؟</h1><p>اكتبي رقم الطلب وآخر 4 أرقام من هاتف التوصيل — تظهر لك كل مرحلة من الصين حتى باب بيتك.</p>
+        <div class="trk-intro"><span class="hm-tag">تتبّع لحظة بلحظة</span><h1>أين طلبك الآن؟</h1><p>اكتب رقم الطلب وآخر 4 أرقام من هاتف التوصيل — تظهر لك كل مرحلة من الصين حتى باب بيتك.</p>
           <form method="get" action="/track" class="trk-form">
             <input type="text" name="code" value={code} placeholder="DL-2026-000123" dir="ltr" required />
             <input type="tel" name="phone" value={ph} placeholder="آخر 4 أرقام" maxlength={4} inputmode="numeric" dir="ltr" required />
-            <button class="btn">تتبّعي</button>
+            <button class="btn">تتبّع</button>
           </form>
           {err && <p class="trk-err">{err}</p>}
         </div>
@@ -699,7 +699,7 @@ store.get('/p/:slug', async (c) => {
               </div>
             )}
             {/* صورة المتغيّر تمرّ بالوسيط قبل أن تُكتب في الصفحة: الرابط الخام يكشف مورّد 1688 ورقم حسابه
-                لمن يفتح مصدر الصفحة، والقاعدة أن الزبونة لا ترى رابط المصدر أبدًا */}
+                لمن يفتح مصدر الصفحة، والقاعدة أن الزبون لا يرى رابط المصدر أبدًا */}
             <script type="application/json" id="variantsJson" dangerouslySetInnerHTML={{ __html: JSON.stringify(vars.results.filter(v => noCJK(v.color ?? '—') && noCJK(v.size ?? '—')).map(v => ({ ...v, image_url: v.image_url ? imgUrl(v.image_url) : null }))).replace(/</g, '\\u003c') }}></script>
             <div class="opts"><h4>الكمية</h4>
               <div class="qty"><button type="button" data-q="-1">−</button><input type="number" name="qty" value={p.min_qty} min={p.min_qty} /><button type="button" data-q="1">+</button></div>

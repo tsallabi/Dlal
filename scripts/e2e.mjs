@@ -200,8 +200,8 @@ await page.goto(BASE + '/logout');
 await page.goto(BASE + rackSlug);
 const kindNote = await page.locator('.kind-note').first().textContent().catch(() => '');
 expect(/حامل عرض/.test(kindNote), `صفحة المنتج تقول ما هو (${(kindNote || 'لا يوجد سطر').slice(0, 45)})`);
-expect(/يصلكِ الحامل وحده فارغًا/.test(kindNote), 'وتقول صراحةً إن البضاعة في الصورة للتوضيح فقط');
-expect(await has(page, 'يصلكِ الحامل وحده فارغًا'), 'والوصف التلقائي يكرّرها لمن يقرأ الوصف');
+expect(/يصلك الحامل وحده فارغًا/.test(kindNote), 'وتقول صراحةً إن البضاعة في الصورة للتوضيح فقط');
+expect(await has(page, 'يصلك الحامل وحده فارغًا'), 'والوصف التلقائي يكرّرها لمن يقرأ الوصف');
 await shot(page, 'kind-note-rack');
 // وعلى البطاقة في القسم: شارة تقول ما هو قبل أن تضغط
 await page.goto(BASE + '/search?q=' + encodeURIComponent(rackTag));
@@ -374,14 +374,14 @@ await page.goto(BASE + '/p/' + productSlug);
 expect(num(await page.locator('.price').first().textContent()) === airShown, 'العودة للجوي تعيد السعر الأصلي');
 expect(!(await has(page, 'لا يوجد وصف')), 'كل منتج له وصف عربي ولو لم يصل معه وصف من المصدر');
 await shot(page, 'product');
-await page.goto(BASE + '/'); expect(await has(page, 'شاهدتِ مؤخرًا'), 'الرئيسية تعرض "شاهدتِ مؤخرًا" بعد زيارة منتج');
+await page.goto(BASE + '/'); expect(await has(page, 'شاهدت مؤخرًا'), 'الرئيسية تعرض "شاهدتِ مؤخرًا" بعد زيارة منتج');
 await page.goto(BASE + '/p/' + productSlug);
 await page.click('.chips[data-opt=color] .chip:not(.off) >> nth=0'); await page.click('.chips[data-opt=size] .chip:not(.off) >> nth=0');
 await page.click('#addForm button[type=submit]'); await page.waitForLoadState('networkidle');
 expect(page.url().includes('/login'), 'إضافة للسلة بدون دخول تحوّل لصفحة الدخول');
 
 // تسجيل
-await page.click('a:has-text("أنشئي حسابًا")');
+await page.click('a:has-text("أنشئ حسابًا")');
 await page.fill('input[name=name]', 'منى التجريبية'); await page.fill('input[name=phone]', PHONE); await page.fill('input[name=password]', 'secret123');
 await page.click('button:has-text("إنشاء الحساب")'); await page.waitForLoadState('networkidle');
 expect(page.url().includes('/p/'), 'بعد التسجيل يعود لصفحة المنتج');
@@ -445,7 +445,7 @@ await page.fill('input[name=label]', 'العمل'); await page.selectOption('sel
 await page.click('button:has-text("حفظ العنوان")'); await page.waitForLoadState('networkidle');
 expect((await page.locator('.addr').count()) === 2, 'إضافة عنوان ثانٍ'); await shot(page, 'account-addresses');
 await page.goto(BASE + '/account/coupons'); expect(await has(page, 'مستخدم') && await has(page, 'FREESHIP'), 'كوبوناتي تعرض المستخدم والمتاح'); await shot(page, 'account-coupons');
-await page.goto(BASE + '/account/points'); expect(await has(page, 'كيف تكسبين'), 'صفحة النقاط'); 
+await page.goto(BASE + '/account/points'); expect(await has(page, 'كيف تكسب'), 'صفحة النقاط'); 
 await page.goto(BASE + '/account/profile'); await page.fill('input[name=email]', 'mona@example.com'); await page.click('button:has-text("حفظ")'); await page.waitForLoadState('networkidle');
 expect((await page.inputValue('input[name=email]')) === 'mona@example.com', 'تعديل البريد في الملف الشخصي');
 await page.fill('input[name=current]', 'secret123'); await page.fill('input[name=password]', 'secret456'); await page.click('button:has-text("تغيير")'); await page.waitForLoadState('networkidle');
@@ -608,7 +608,7 @@ await page.goto(BASE + '/admin/reviews'); expect(await has(page, 'الخامة �
 await page.click('button:has-text("نشر")'); await page.waitForLoadState('networkidle');
 await page.goto(BASE + '/p/' + productSlug);
 expect(await has(page, 'الخامة ممتازة'), 'التقييم المنشور يظهر على صفحة المنتج');
-expect(await has(page, 'رأي الزبونات في المقاس'), 'إحصائية المقاس تظهر على صفحة المنتج');
+expect(await has(page, 'رأي الزبائن في المقاس'), 'إحصائية المقاس تظهر على صفحة المنتج');
 await shot(page, 'product-with-review');
 await page.goto(BASE + '/admin/tickets'); expect(await has(page, ticketCode), 'التذكرة تظهر لدى الإدارة');
 await page.click(`a:has-text("${ticketCode}")`); await page.waitForLoadState('networkidle');
@@ -640,7 +640,7 @@ await page.click('button:has-text("تأكيد الطلب")'); await page.waitFor
 expect(page.url().includes('/pay/mock/'), 'الطلب الثاني يذهب لبوابة سداد');
 await page.click('button:has-text("فشل الدفع")'); await page.waitForLoadState('networkidle');
 expect(await has(page, 'فشلت عملية الدفع'), 'فشل الدفع يظهر للزبونة مع خيار إعادة المحاولة');
-expect(await has(page, 'ادفعي الآن عبر MyPay'), 'زر إعادة الدفع متاح');
+expect(await has(page, 'ادفع الآن عبر MyPay'), 'زر إعادة الدفع متاح');
 const order2 = page.url().match(/DL-\d{4}-\d{6}/)[0];
 await shot(page, 'order-payment-failed');
 page.once('dialog', d => d.accept());
@@ -653,11 +653,11 @@ await page.goto(BASE + '/account/orders?stage=cancelled'); expect(await has(page
 
 // ---------- صفحات المساعدة والسياسات بالعربية ----------
 const HELP = [
-  ['/pages/how-to-order', 'كيف أطلب من هدهد؟', 'أكّدي الطلب وادفعي'],
+  ['/pages/how-to-order', 'كيف أطلب من هدهد؟', 'أكّد الطلب وادفع'],
   ['/pages/shipping', 'معلومات الشحن', 'التوصيل داخل ليبيا'],
-  ['/pages/returns', 'سياسة الإرجاع والاسترداد', 'متى تستحقين تعويضًا كاملًا'],
+  ['/pages/returns', 'سياسة الإرجاع والاسترداد', 'متى تستحق تعويضًا كاملًا'],
   ['/pages/payment', 'طرق الدفع والرسوم', 'الدفع كاش في أحد فروعنا'],
-  ['/pages/points', 'نقاط المكافآت', 'كيف تكسبين النقاط'],
+  ['/pages/points', 'نقاط المكافآت', 'كيف تكسب النقاط'],
   ['/pages/sizes', 'دليل المقاسات', 'المقاس الصيني'],
   ['/pages/branches', 'فروعنا في ليبيا', 'الدفع كاش في الفرع'],
   ['/pages/faq', 'الأسئلة الشائعة', 'متى يصل طلبي'],
@@ -828,7 +828,7 @@ await page.click('#addForm button[type=submit]'); await page.waitForLoadState('n
 await page.goto(BASE + '/cart');
 expect(await page.locator('.shipsel').isVisible(), 'السلة تعرض اختيار طريقة الشحن');
 expect(await has(page, 'شحن جوي') && await has(page, 'شحن بحري'), 'الخياران معروضان بالاسم');
-expect(await has(page, 'وفّري'), 'يظهر للزبونة كم توفّر بالبحري');
+expect(await has(page, 'وفّر'), 'يظهر للزبونة كم توفّر بالبحري');
 const totalAir = num(await page.locator('.summary .row.tot span').last().textContent());
 await shot(page, 'cart-ship-air');
 // التبديل إلى البحري يخفض الإجمالي
@@ -1191,7 +1191,7 @@ await page.fill('textarea[name=address]', 'شارع الجمهورية، عما�
 await page.locator('.pm-list input[value^=mypay_]').first().check();
 await page.click('button:has-text("تأكيد الطلب")'); await page.waitForLoadState('networkidle');
 expect(await has(page, 'تعذر بدء الدفع'), 'بوابة لا تستجيب تُظهر صفحة خطأ للزبونة لا صمتًا');
-expect(await has(page, 'لم يُخصم منكِ شيء'), 'صفحة الخطأ تطمئن الزبونة أن لا خصم وتذكر رقم الطلب');
+expect(await has(page, 'لم يُخصم منك شيء'), 'صفحة الخطأ تطمئن الزبونة أن لا خصم وتذكر رقم الطلب');
 await shot(page, 'pay-start-failed');
 await login(page, '0910000000', 'admin123');
 await page.goto(BASE + '/admin/payments');
@@ -1828,11 +1828,11 @@ await page.goto(BASE + '/logout');
 // ودور الإضافة التي تستورده، ودور الفريق الذي يسعّر رابطًا من غير 1688 — ونرى الإشعار يصل.
 await page.goto(BASE + '/logout');
 await page.goto(BASE + '/request');
-expect(await page.locator('.lr-login a[href*="/login"]').isVisible(), 'الزائرة ترى زر «سجّلي الدخول لإرسال رابط» لا نموذجًا يضيع');
+expect(await page.locator('.lr-login a[href*="/login"]').isVisible(), 'الزائرة ترى زر «سجّل الدخول لإرسال رابط» لا نموذجًا يضيع');
 await login(page, PHONE, 'secret456');
 await page.goto(BASE + '/');
 await page.locator('.hdr-strip a[href="/request"]').click(); await page.waitForLoadState('networkidle');
-expect(page.url().endsWith('/request') && await page.locator('textarea[name=url]').isVisible(), 'رابط «اطلبي برابط» في أعلى كل صفحة يفتح النموذج');
+expect(page.url().endsWith('/request') && await page.locator('textarea[name=url]').isVisible(), 'رابط «اطلب برابط» في أعلى كل صفحة يفتح النموذج');
 const sendLink = async (text, note = '') => {
   await page.goto(BASE + '/request');
   await page.fill('textarea[name=url]', text); if (note) await page.fill('input[name=note]', note);
@@ -1847,7 +1847,7 @@ expect(await has(page, 'وصلنا طلبك'), 'طلب رابط 1688 جديد ي
 expect((await page.locator('.lr-row').first().textContent()).includes('قيد التجهيز') && (await page.locator('.lr-row').first().textContent()).includes('مقاس M أسود'),
   'ويظهر في «طلباتي بالرابط» قيد التجهيز مع ملاحظتها');
 await sendLink(`https://detail.1688.com/offer/${rqOffer}.html`);
-expect(await has(page, 'أرسلتِ هذا الرابط من قبل'), 'الرابط نفسه لا يُرسل مرتين');
+expect(await has(page, 'أرسلت هذا الرابط من قبل'), 'الرابط نفسه لا يُرسل مرتين');
 // الإضافة: الرابط يتصدّر طابور الاكتشاف
 const rqQ = await extCall('/api/import/queue?v=' + extManifest.version);
 expect((rqQ.fresh || [])[0]?.id === rqOffer, `رابط الزبونة يتصدّر طابور الإضافة (${(rqQ.fresh || []).slice(0, 3).map(f => f.id).join('،')})`);
@@ -2366,7 +2366,7 @@ await mp.screenshot({ path: `${OUT}/${String(++n).padStart(2, '0')}-mobile-order
     expect(page.url().includes('/admin/staff') && !(await page.locator('.imp-bar').count()) && await has(page, 'مصفوفة الصلاحيات'), '«عودة إلى حسابي» يعيد المالك إلى لوحته بلا تسجيل دخول');
     // زبونة
     await page.goto(BASE + '/admin/customers'); await page.click('a:has-text("منى التجريبية")'); await page.waitForLoadState('networkidle');
-    await page.click('button:has-text("ادخل باسمها")'); await page.waitForLoadState('networkidle');
+    await page.click('button:has-text("ادخل باسمه")'); await page.waitForLoadState('networkidle');
     expect(page.url().endsWith('/account') && await page.locator('.imp-bar').isVisible() && (await page.locator('.imp-bar').textContent()).includes('زبونة'), 'المالك يدخل باسم زبونة فيرى حسابها');
     await page.goto(BASE + '/logout');
     expect(page.url().includes('/admin/staff') && !(await page.locator('.imp-bar').count()), '«خروج» أثناء الدخول باسم غيره يعيد المالك إلى حسابه');
@@ -2547,9 +2547,9 @@ await mp.screenshot({ path: `${OUT}/${String(++n).padStart(2, '0')}-mobile-order
     await page.goto(BASE + '/account/notifications');
     expect(await has(page, 'في الطريق إليك'), 'ويصلها إشعار بالتسليم لأميال');
     await login(page, '0920000000', 'partner123'); await page.goto(BASE + '/partner/delivery');
-    await page.locator('#courier tr', { hasText: zCode }).locator('button:has-text("وصل للزبونة")').click(); await page.waitForLoadState('networkidle');
+    await page.locator('#courier tr', { hasText: zCode }).locator('button:has-text("وصل للزبون")').click(); await page.waitForLoadState('networkidle');
     await login(page, PHONE, 'secret456'); await page.goto(BASE + '/orders/' + zCode);
-    expect(await has(page, 'تم التسليم') && !(await page.locator('.courier-box').count()), '«وصل للزبونة» يجعل الطلب «تم التسليم»');
+    expect(await has(page, 'تم التسليم') && !(await page.locator('.courier-box').count()), '«وصل للزبون» يجعل الطلب «تم التسليم»');
   } finally {
     d1q(`UPDATE settings SET value='${oldPP}' WHERE key='pricing_partner_id'`);
     d1q("DELETE FROM partner_zones WHERE partner_id=1 AND city='طرابلس'");
@@ -2567,7 +2567,7 @@ await mp.screenshot({ path: `${OUT}/${String(++n).padStart(2, '0')}-mobile-order
   expect(!(await page.locator('.hm-stats, .hm-track, .hm-faq').count()) && await page.locator('.card').count() >= 20, 'الرئيسية تبقى للبضاعة وحدها (لا أقسام تتبّع ولا أسئلة)');
   await page.click('.hdr-strip a[href="/how"] >> nth=0'); await page.waitForLoadState('networkidle');
   expect(page.url().endsWith('/how'), 'رابط «كيف يعمل هدهد» في الترويسة يفتح صفحته');
-  for (const t of ['أربع خطوات فقط', 'تعرفين أين طلبك في كل لحظة', 'نصل إلى كل مدينة ليبية', 'كل ما تحتاجين معرفته', 'جاهزة لطلبك القادم من الصين؟'])
+  for (const t of ['أربع خطوات فقط', 'تعرف أين طلبك في كل لحظة', 'نصل إلى كل مدينة ليبية', 'كل ما تحتاج معرفته', 'جاهز لطلبك القادم من الصين؟'])
     expect(await has(page, t), `صفحة «كيف يعمل هدهد» فيها قسم «${t}»`);
   expect(await page.locator('.hm-stats > div').count() === 4 && !(await page.locator('.hm-stats').textContent()).includes('undefined'), 'شريط الأرقام الأربعة بأرقام حقيقية');
   await page.locator('.hm-faq summary', { hasText: 'كيف أدفع' }).click();
@@ -2577,10 +2577,25 @@ await mp.screenshot({ path: `${OUT}/${String(++n).padStart(2, '0')}-mobile-order
   expect(page.url().includes('/track?') && (await page.locator('.trk-card .trk-h').textContent()).includes(tr.code) && await page.locator('.trk-steps li.done').count() === 7, `تتبّع الطلب ${tr.code} برقمه وآخر 4 أرقام يعرض مراحله السبع مكتملة`);
   await page.goto(BASE + `/track?code=${tr.code}&phone=0000`);
   expect(await has(page, 'لم نجد طلبًا بهذا الرقم وهذا الهاتف'), 'رقم هاتف خاطئ لا يكشف الطلب');
-  expect(await page.locator('.hdr-strip a[href="/track"]').count() === 1, 'رابط «تتبّعي طلبك» في شريط الترويسة');
+  expect(await page.locator('.hdr-strip a[href="/track"]').count() === 1, 'رابط «تتبّع طلبك» في شريط الترويسة');
   const tm = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, locale: 'ar' }); const tmp = await tm.newPage();
   for (const u of ['/how', `/track?code=${tr.code}&phone=${tr.p}`]) { await tmp.goto(BASE + u); const sw = await tmp.evaluate(() => document.documentElement.scrollWidth); expect(sw <= 391, `${u.split('?')[0]} في الجوال بلا تمرير أفقي (${sw})`); }
   await tm.close();
+}
+
+// ---------- مخاطبة عامة للجميع (قرار صاحب المشروع ٢٥/٠٩/٢٦): الموقع لكل الناس رجالًا ونساءً وأطفالًا ----------
+// «لا تقل قدّمي، اضغطي، تطلعي — قل قدّم، اضغط، ادفع». يمرّ على صفحات الزائر والزبون ويرفض أي صيغة مؤنثة في النص الظاهر
+{
+  const FEM = /(^|[\s«(—،.])(و|ف)?(ادفعي|اختاري|اطلبي|تسوّقي|تسوقي|تتبّعي|تواصلي|راسلينا|تراسلينا|سجّلي|افتحي|أضيفي|أضيفيه|اكتبي|اضغطي|الصقي|راجعي|أكملي|أكّدي|قيّمي|تأكدي|أرسلي|ابحثي|اسألي|جرّبي|اكسبي|أنشئي|تحققي|ابدئي|احفظي|احذفيه|اجعليه|كوني|وفّري|تابعينا|تكسبين|تحتاجين|تختارين|تدفعين|تجدين|تعرفين|تستحقين|الزبونة|الزبونات|زبونة|أنتِ|جديدة هنا)(?=$|[\s».،؟!:)])|[\u0621-\u064A][كت]\u0650(?=$|[\s».،؟!])/;
+  const g = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, locale: 'ar' }); const gp = await g.newPage();
+  const bad = [];
+  const scan = async (u) => { await gp.goto(BASE + u); const t = await gp.evaluate(() => document.body.innerText); const m = t.match(FEM); if (m) bad.push(`${u}: «${m[0].trim()}»`); };
+  const prod = await (async () => { await gp.goto(BASE + '/c/bags'); await gp.locator('.card .t').first().click(); await gp.waitForLoadState('networkidle'); return new URL(gp.url()).pathname; })();
+  for (const u of ['/', '/how', '/track', '/login', '/register', '/request', prod, '/pages/how-to-order', '/pages/faq', '/pages/returns', '/pages/points', '/pages/sizes', '/pages/contact']) await scan(u);
+  await gp.goto(BASE + '/login'); await gp.fill('input[name=phone]', PHONE); await gp.fill('input[name=password]', 'secret456'); await gp.click('button:has-text("دخول")'); await gp.waitForLoadState('networkidle');
+  for (const u of ['/account', '/account/orders', '/account/points', '/account/tickets/new', '/account/addresses', '/account/reviews', '/cart', '/request']) await scan(u);
+  await g.close();
+  expect(bad.length === 0, `لا مخاطبة مؤنثة على 22 صفحة للزائر والزبون (${bad.join(' · ') || 'نظيفة'})`);
 }
 
 // ---------- D1 يرفض نمط LIKE فوق 50 بايتًا (المحلي لا يرفضه فلا يراه أي فحص آخر) — ٢٤/٠٩/٢٦ ----------
