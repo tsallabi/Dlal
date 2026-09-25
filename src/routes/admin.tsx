@@ -69,7 +69,7 @@ admin.get('/', async (c) => {
         <div class="kpi"><b>{fmt(v[2])}</b><span>مبيعات 30 يومًا</span></div>
         <div class="kpi"><b style="color:#d68b00">{v[3]}</b><span>بانتظار تأكيد الدفع</span></div>
         <div class="kpi"><b style="color:#1c47b3">{v[4]}</b><span>عند شركاء الشراء</span></div>
-        <div class="kpi"><b>{v[5]}</b><span>زبونة مسجلة</span></div>
+        <div class="kpi"><b>{v[5]}</b><span>زبون مسجّل</span></div>
         <div class="kpi"><b style="color:#d3262b">{v[6]}</b><span>منتج لم يُفحص منذ أسبوع</span></div>
         <div class="kpi"><b>{s.fx_cny_lyd}</b><span>سعر اليوان اليوم (د.ل)</span></div>
         <div class="kpi"><b style="color:#d68b00">{v[7]}</b><span>تذاكر مفتوحة</span></div>
@@ -77,7 +77,7 @@ admin.get('/', async (c) => {
         <div class="kpi"><b style="color:#1a9c5b">{fmt(v[9])}</b><span>مدفوعات ماي باي اليوم</span></div>
       </div>
       <div class="quick"><a href="/admin/orders?status=pending_payment">💳 تأكيد مدفوعات يدوية</a><a href="/admin/tickets">↩️ الرد على التذاكر</a><a href="/admin/reviews">⭐ مراجعة التقييمات</a><a href="/admin/import">⬇️ استيراد منتجات</a><a href="/admin/pricing">💰 تحديث سعر الصرف</a><a href="/admin/reports">📈 التقارير</a></div>
-      <div class="card-box"><h3>آخر الطلبات</h3><div class="tbl-wrap"><table class="tbl"><tr><th>الطلب</th><th>الزبونة</th><th>الحالة</th><th>الإجمالي</th><th>التاريخ</th></tr>
+      <div class="card-box"><h3>آخر الطلبات</h3><div class="tbl-wrap"><table class="tbl"><tr><th>الطلب</th><th>الزبون</th><th>الحالة</th><th>الإجمالي</th><th>التاريخ</th></tr>
         {recent.results.map(o => <tr><td><a href={`/admin/orders/${o.code}`} style="color:var(--brand);font-weight:700">{o.code}</a></td><td>{o.name}</td><td><span class={`status ${ORDER_STATUS[o.status]?.color}`}>{ORDER_STATUS[o.status]?.ar}</span></td><td>{fmt(o.total_lyd)}</td><td>{timeAgo(o.created_at)}</td></tr>)}
       </table></div></div>
     </>
@@ -99,7 +99,7 @@ admin.get('/orders', async (c) => {
     <>
       <div class="tabs"><a href="/admin/orders" class={!st ? 'on' : ''}>الكل</a>{Object.entries(ORDER_STATUS).map(([k, v]) => <a href={`/admin/orders?status=${k}`} class={st === k ? 'on' : ''}>{v.ar}{cm[k] ? <i>{cm[k]}</i> : null}</a>)}</div>
       <form class="inline" style="margin:8px 0"><input type="text" name="q" placeholder="رقم الطلب / اسم / هاتف" value={q} /><input type="hidden" name="status" value={st} /><button class="btn sm">بحث</button></form>
-      <div class="tbl-wrap"><table class="tbl"><tr><th>الطلب</th><th>الزبونة</th><th>الحالة</th><th>الدفع</th><th>الشريك</th><th>الإجمالي</th><th>التاريخ</th></tr>
+      <div class="tbl-wrap"><table class="tbl"><tr><th>الطلب</th><th>الزبون</th><th>الحالة</th><th>الدفع</th><th>الشريك</th><th>الإجمالي</th><th>التاريخ</th></tr>
         {rows.results.map(o => <tr><td><a href={`/admin/orders/${o.code}`} style="color:var(--brand);font-weight:700">{o.code}</a></td><td>{o.name}<br /><small>{o.phone} · {o.ship_city}</small></td><td><span class={`status ${ORDER_STATUS[o.status]?.color}`}>{ORDER_STATUS[o.status]?.ar}</span></td><td>{PAYMENT_METHODS[o.payment_method]?.ar ?? o.payment_method}{o.payment_ref && <><br /><small>{o.payment_ref}</small></>}</td><td>{o.partner ?? '—'}</td><td>{fmt(o.total_lyd)}</td><td>{timeAgo(o.created_at)}</td></tr>)}
       </table></div><Pager c={c} total={total} />
     </>
@@ -145,7 +145,7 @@ admin.get('/orders/:code', async (c) => {
             {items.results.map(i => <tr><td>{i.title_ar}<br /><a class="src-link" href={i.source_url} target="_blank">{i.source_offer_id}</a></td><td>{[i.color, i.size].filter(Boolean).join(' · ')}</td><td>{i.qty}</td><td>{fmt(i.unit_price_lyd * i.qty)}</td><td><span class="status">{{ pending: 'بانتظار', purchased: 'تم', unavailable: 'نفد', substituted: 'بديل' }[i.purchase_status as string]}</span>{i.supplier_order_no && <><br /><small>{i.supplier_order_no}</small></>}</td><td>{i.actual_cost_cny ? `${i.actual_cost_cny} ¥ ≈ ${fmt(i.actual_cost_cny * fx)}` : '—'}{i.actual_weight_g ? <><br /><small>{i.actual_weight_g} غ</small></> : null}</td></tr>)}
           </table></div>
             <div class="breakdown" style="margin-top:10px;max-width:360px">
-              <div><span>المبيع للزبونة</span><b>{fmt(o.subtotal_lyd)}</b></div>
+              <div><span>المبيع للزبون</span><b>{fmt(o.subtotal_lyd)}</b></div>
               <div><span>تكلفة الشراء الفعلية</span><b>{actual ? fmt(actual) : '—'}</b></div>
               {actual > 0 && <div class="t"><span>الهامش الأولي (قبل الشحن)</span><b style={`color:${o.subtotal_lyd - actual > 0 ? '#1a9c5b' : '#d3262b'}`}>{fmt(o.subtotal_lyd - actual)} ({Math.round((o.subtotal_lyd - actual) / o.subtotal_lyd * 100)}%)</b></div>}
             </div>
@@ -153,7 +153,7 @@ admin.get('/orders/:code', async (c) => {
           <div class="card-box"><h3>سجل الأحداث</h3>{events.results.map(e => <div style="font-size:13px;border-bottom:1px solid #eee;padding:6px 0"><span class={`status ${ORDER_STATUS[e.status]?.color}`}>{ORDER_STATUS[e.status]?.ar ?? e.status}</span> {e.note} <small style="color:#888">— {e.name ?? 'النظام'} · {timeAgo(e.created_at)}</small></div>)}</div>
         </div>
         <div>
-          <div class="card-box"><h3>الزبونة</h3><a href={`/admin/customers/${o.user_id}`} style="color:var(--brand);font-weight:700">{o.name}</a><br />{o.phone}<br />{o.ship_city} — {o.ship_address}{o.note && <><br /><i>{o.note}</i></>}</div>
+          <div class="card-box"><h3>الزبون</h3><a href={`/admin/customers/${o.user_id}`} style="color:var(--brand);font-weight:700">{o.name}</a><br />{o.phone}<br />{o.ship_city} — {o.ship_address}{o.note && <><br /><i>{o.note}</i></>}</div>
           <div class="card-box"><h3>الدفع</h3>{PAYMENT_METHODS[o.payment_method]?.ar ?? o.payment_method}<br />المرجع: {o.payment_ref ?? '—'}<br />الإجمالي: <b>{fmt(o.total_lyd)}</b>{o.discount_lyd > 0 && <><br /><small>خصم {o.coupon_code}: −{fmt(o.discount_lyd)}</small></>}{o.points_used > 0 && <><br /><small>نقاط: {o.points_used} (−{fmt(o.points_lyd)})</small></>}<br /><small>سعر الصرف وقت الطلب: {o.fx_rate_used}</small>
             {pays.results.length > 0 && <div style="margin-top:8px;font-size:12px">{pays.results.map(p => <div>{p.trx_ref} · {p.gateway} · <span class={`status ${p.status === 'paid' ? 'green' : 'gray'}`}>{p.status}</span></div>)}</div>}</div>
           <div class="card-box"><h3>شريك الشحن</h3>{o.partner ?? 'لم يُعيَّن'}</div>
@@ -420,19 +420,19 @@ admin.get('/products', async (c) => {
      FROM products p`).bind(maxRetail, maxRetail).first<any>();
   return shell(c, 'products', 'المنتجات', (
     <>
-      <Flash msg={c.req.query('lots') ? `${c.req.query('act') === 'hide' ? 'أُخفيت' : 'أُعيدت للمتجر'} ${c.req.query('lots')} قطعة جملة` : c.req.query('stuck') ? `منتجات تعذّر إثراؤها بعد ثلاث محاولات من الإضافة: صفحتها على 1688 لا تعطي الصور أو المقاسات أو الوزن. أثريها بالكريدت حين يتوفر — وحتى ذلك تُسعَّر بوزن القسم التقديري.` : c.req.query('imported') ? `تم استيراد ${c.req.query('imported')} منتج وتحديث ${c.req.query('updated')}` : c.req.query('translated') ? `تُرجم ${c.req.query('translated')} عنوانًا` : c.req.query('ok') ? 'تم الحفظ ✓' : undefined} /><Flash type="err" msg={c.req.query('noai') ? 'الترجمة تعمل على Cloudflare فقط (ربط Workers AI غير متاح هنا)' : undefined} />
+      <Flash msg={c.req.query('lots') ? `${c.req.query('act') === 'hide' ? 'أُخفيت' : 'أُعيدت للمتجر'} ${c.req.query('lots')} قطعة جملة` : c.req.query('stuck') ? `منتجات تعذّر إثراؤها بعد ثلاث محاولات من الإضافة: صفحتها على 1688 لا تعطي الصور أو المقاسات أو الوزن. أثرها بالكريدت حين يتوفر — وحتى ذلك تُسعَّر بوزن القسم التقديري.` : c.req.query('imported') ? `تم استيراد ${c.req.query('imported')} منتج وتحديث ${c.req.query('updated')}` : c.req.query('translated') ? `تُرجم ${c.req.query('translated')} عنوانًا` : c.req.query('ok') ? 'تم الحفظ ✓' : undefined} /><Flash type="err" msg={c.req.query('noai') ? 'الترجمة تعمل على Cloudflare فقط (ربط Workers AI غير متاح هنا)' : undefined} />
       <form class="inline" style="margin-bottom:10px"><input type="text" name="q" placeholder="بحث بالاسم أو offerId" value={q} /><select name="status"><option value="">كل الحالات</option>{['active', 'draft', 'hidden', 'unavailable'].map(x => <option value={x} selected={st === x}>{x}</option>)}</select><button class="btn sm">بحث</button><a class="btn sm ghost" href="/admin/products/new">+ منتج يدوي</a><button class="btn sm ghost" formaction="/admin/products/translate" formmethod="post">🈶 ترجمة العناوين الصينية ({untranslated})</button></form>
       {/* ترجمة سليمة نحويًا لكنها ليست ترجمة العنوان — تدخل طابور الترجمة وحدها، وهذا للمراجعة بالعين */}
       {brokenN > 0 && <p style="font-size:13px;margin:0 0 10px;padding:8px 10px;border-radius:8px;background:#fdecec;border:1px solid #f0b4b4;color:#8c2121">
         <b>{brokenN}</b> عنوانًا ترجمتُه مكسورة (تكرار ملتصق، أو اسم المنتج ضائع، أو كلمة لا أصل لها في العنوان الصيني).
-        تُعاد ترجمتها تلقائيًا كل ساعة — <a href="/admin/products?broken=1">راجعيها بعينك</a>.
+        تُعاد ترجمتها تلقائيًا كل ساعة — <a href="/admin/products?broken=1">راجعها بعينك</a>.
       </p>}
       {/* بضاعة ليست للتجزئة: لوط جملة، أو إعلان مصنع تغليف يبيع العلبة الفارغة لا ما في الصورة */}
       <form method="post" action="/admin/products/wholesale" class="card-box" style="margin-bottom:10px;padding:10px">
         <b style="font-size:14px">بضاعة ليست للتجزئة</b>
         <p style="font-size:12px;color:#666;margin:4px 0">
-          <b>لوط جملة</b> (أقل طلب {maxRetail} فأكثر): {lots?.lotsOn ?? 0} على الرف · {lots?.lotsOff ?? 0} مخفية — <a href={`/admin/products?moq=${maxRetail}`}>اعرضيها</a>
-          <br /><b>إعلانات تغليف وطباعة وOEM</b>: {lots?.packOn ?? 0} على الرف · {lots?.packOff ?? 0} مخفية — <a href="/admin/products?pack=1">اعرضيها</a>.
+          <b>لوط جملة</b> (أقل طلب {maxRetail} فأكثر): {lots?.lotsOn ?? 0} على الرف · {lots?.lotsOff ?? 0} مخفية — <a href={`/admin/products?moq=${maxRetail}`}>اعرضها</a>
+          <br /><b>إعلانات تغليف وطباعة وOEM</b>: {lots?.packOn ?? 0} على الرف · {lots?.packOff ?? 0} مخفية — <a href="/admin/products?pack=1">اعرضها</a>.
           هذه تبيع العلبة الفارغة لا ما يظهر في الصورة، ولهذا أقلّ طلبها بالمئات.
         </p>
         <div class="inline"><label style="margin:0">أقل طلب ≥</label><input type="number" name="min" value={maxRetail} min="2" style="width:80px" />
@@ -565,7 +565,7 @@ admin.get('/categories', async (c) => {
     <>
       <Flash msg={c.req.query('ok') ? 'تم الحفظ ✓' : undefined} />
       <p style="font-size:13px;color:#666">الوزن التقديري يُستخدم لحساب الشحن حين لا يعرف المصدر وزن المنتج. يصححه شريك الشحن بالوزن الفعلي عند الوصول.</p>
-      <p style="font-size:13px;color:#666">«في الرئيسية» يتحكم بظهور منتجات القسم على الصفحة الأولى. أزِل العلامة عن الأقسام الخاصة (ملابس النوم والداخلية) فتبقى في قائمة الأقسام تدخلها الزبونة بنفسها ولا تظهر صورها لكل زائر.</p>
+      <p style="font-size:13px;color:#666">«في الرئيسية» يتحكم بظهور منتجات القسم على الصفحة الأولى. أزِل العلامة عن الأقسام الخاصة (ملابس النوم والداخلية) فتبقى في قائمة الأقسام يدخلها الزبون بنفسه ولا تظهر صورها لكل زائر.</p>
       <div class="tbl-wrap"><table class="tbl"><tr><th>الأيقونة</th><th>الاسم</th><th>slug</th><th>الوزن التقديري (غ)</th><th>ربح خاص %</th><th>في الرئيسية</th><th>منتجات</th><th></th></tr>
         {cats.map(ct => <tr><form method="post" action={`/admin/categories/${ct.id}`}><td><input type="text" name="icon" value={ct.icon ?? ''} style="width:50px" /></td><td><input type="text" name="name_ar" value={ct.name_ar} /></td><td class="mono">{ct.slug}</td><td><input type="number" name="est_weight_g" value={ct.est_weight_g} style="width:90px" /></td><td><input type="number" name="markup_percent" value={ct.markup_percent ?? ''} placeholder="افتراضي" style="width:90px" /></td><td style="text-align:center"><input type="checkbox" name="show_home" value="1" checked={ct.show_home !== 0} /></td><td>{cm[ct.id] ?? 0}</td><td><button class="btn sm ghost">حفظ</button></td></form></tr>)}
       </table></div>
@@ -626,7 +626,7 @@ admin.get('/pricing', async (c) => {
         {F('volumetric_divisor', 'مُقسِّم الوزن الحجمي (6000 جوي، 5000 أسرع)', '100')}
         {F('default_volume_cm3', 'حجم افتراضي للقطعة إذا لم يذكره المورد (سم³)', '100')}
         <h3 style="margin-top:16px">الشحن البحري — أرخص وأبطأ</h3>
-        <p style="font-size:13px;color:#666">الزبونة تختار بين الجوي والبحري في السلة، وسعر كل منتج يتغيّر تلقائيًا. اضبط «مخفي» لإخفاء الخيار.</p>
+        <p style="font-size:13px;color:#666">الزبون يختار بين الجوي والبحري في السلة، وسعر كل منتج يتغيّر تلقائيًا. اضبط «مخفي» لإخفاء الخيار.</p>
         {S('sea_enabled', 'إظهار خيار الشحن البحري', [['1', 'مفعّل'], ['0', 'مخفي']])}
         {F('ship_usd_per_kg_sea', 'سعر الكيلو بحرًا ($)')}
         {F('ship_usd_per_cbm_sea', 'سعر المتر المكعب بحرًا ($)')}
@@ -636,10 +636,10 @@ admin.get('/pricing', async (c) => {
         {F('delivery_lyd', 'رسوم التوصيل (د.ل)')}{F('free_ship_over_lyd', 'توصيل مجاني فوق (د.ل)')}
         <label>أجرة التوصيل لكل مدينة (اختياري)</label>
         <textarea name="delivery_city_rates" rows={5} dir="rtl" style="width:100%;font-family:inherit">{s.delivery_city_rates ?? ''}</textarea>
-        <p style="font-size:12px;color:#666;margin:4px 0 0">سطر لكل مدينة بالصيغة <span class="mono">المدينة = المبلغ</span>. المدينة غير المذكورة تأخذ الرسوم العامة أعلاه. التوصيل إلى سبها أو الكفرة يكلّف أضعاف طرابلس، فاضبطي الفرق هنا.<br />مثال:<br /><span class="mono" dir="rtl">طرابلس = 15</span><br /><span class="mono" dir="rtl">سبها = 45</span></p>
-        <h3 style="margin-top:16px" id="contact">بيانات التواصل الظاهرة للزبونة</h3>
-        <p style="font-size:13px;color:#666">تظهر في الرئيسية وصفحة خدمة الزبائن وصفحة الطلب وأيقونات التذييل. ما يبقى فارغًا لا يظهر للزبونة (الأيقونة تفتح صفحة خدمة الزبائن بدله).</p>
-        {(() => { const wa = realWa(s.whatsapp_number); return !wa && <p class="wa-missing" style="font-size:12.5px;margin:0 0 6px;padding:6px 10px;border-radius:8px;background:#fdecec;border:1px solid #f0b4b4;color:#8c2121">لا رقم واتساب حقيقي مضبوط{s.whatsapp_number ? ` (المحفوظ «${s.whatsapp_number}» رقم تجريبي)` : ''} — زبونة الدفع بالتحويل تُوجَّه للدردشة بدله.</p>; })()}
+        <p style="font-size:12px;color:#666;margin:4px 0 0">سطر لكل مدينة بالصيغة <span class="mono">المدينة = المبلغ</span>. المدينة غير المذكورة تأخذ الرسوم العامة أعلاه. التوصيل إلى سبها أو الكفرة يكلّف أضعاف طرابلس، فاضبط الفرق هنا.<br />مثال:<br /><span class="mono" dir="rtl">طرابلس = 15</span><br /><span class="mono" dir="rtl">سبها = 45</span></p>
+        <h3 style="margin-top:16px" id="contact">بيانات التواصل الظاهرة للزبون</h3>
+        <p style="font-size:13px;color:#666">تظهر في الرئيسية وصفحة خدمة الزبائن وصفحة الطلب وأيقونات التذييل. ما يبقى فارغًا لا يظهر للزبون (الأيقونة تفتح صفحة خدمة الزبائن بدله).</p>
+        {(() => { const wa = realWa(s.whatsapp_number); return !wa && <p class="wa-missing" style="font-size:12.5px;margin:0 0 6px;padding:6px 10px;border-radius:8px;background:#fdecec;border:1px solid #f0b4b4;color:#8c2121">لا رقم واتساب حقيقي مضبوط{s.whatsapp_number ? ` (المحفوظ «${s.whatsapp_number}» رقم تجريبي)` : ''} — زبون الدفع بالتحويل يُوجَّه للدردشة بدله.</p>; })()}
         <label>رقم واتساب (بالمفتاح الدولي، مثل 218912345678)</label><input type="text" name="whatsapp_number" dir="ltr" inputmode="tel" value={realWa(s.whatsapp_number)} placeholder="2189XXXXXXXX" />
         <label>صفحة فيسبوك</label><input type="url" name="facebook_url" dir="ltr" value={s.facebook_url ?? ''} placeholder="https://facebook.com/..." />
         <label>إنستغرام</label><input type="url" name="instagram_url" dir="ltr" value={s.instagram_url ?? ''} placeholder="https://instagram.com/..." />
@@ -647,7 +647,7 @@ admin.get('/pricing', async (c) => {
         <h3 style="margin-top:16px" id="meta">إعلانات فيسبوك وإنستغرام (ميتا)</h3>
         <p style="font-size:13px;color:#666">البكسل يعدّ من شاهد المنتج وأضافه للسلة وبدأ الدفع واشترى، فتعرف ميتا لمن تعرض الإعلان وتقيس ما يربحه كل دينار. يُحقن في صفحات المتجر وحدها ولا يظهر في اللوحة.</p>
         <label>معرّف بكسل ميتا (Pixel ID — أرقام من مدير الأحداث)</label><input type="text" name="meta_pixel_id" dir="ltr" inputmode="numeric" value={validPixel(s.meta_pixel_id)} placeholder="123456789012345" />
-        <label>رمز إثبات ملكية النطاق (من إعدادات الأعمال ← النطاقات — الصقي الوسم كاملًا أو الرمز وحده)</label><input type="text" name="meta_domain_verify" dir="ltr" value={validVerify(s.meta_domain_verify)} placeholder="abc123xyz…" />
+        <label>رمز إثبات ملكية النطاق (من إعدادات الأعمال ← النطاقات — الصق الوسم كاملًا أو الرمز وحده)</label><input type="text" name="meta_domain_verify" dir="ltr" value={validVerify(s.meta_domain_verify)} placeholder="abc123xyz…" />
         <p class="feed-url" style="font-size:12.5px;margin:6px 0 0">كتالوج المنتجات لمدير التجارة (مصدر بيانات مجدول يوميًا): <span class="mono" dir="ltr">{new URL(c.req.url).origin}/feeds/meta.csv</span></p>
         <button class="btn" style="margin-top:12px">حفظ</button>
       </form>
@@ -659,12 +659,12 @@ admin.get('/pricing', async (c) => {
           <div><span>الوزن المحاسبي</span><span>{ex.chargeable_kg} كغ (بالـ{ex.ship_basis})</span></div>
         </div></div>
         <div class="card-box"><h3>نفس المنتج بالشحن البحري</h3>
-          <p style="font-size:13px;color:#666">الفرق الذي تراه الزبونة بين الطريقتين على القطعة الواحدة.</p>
+          <p style="font-size:13px;color:#666">الفرق الذي يراه الزبون بين الطريقتين على القطعة الواحدة.</p>
           <div class="breakdown">
             <div><span>شحن دولي (بحري)</span><span>{fmt(exSea.intl_ship_lyd)}</span></div>
             <div><span>مقابل الجوي</span><span>{fmt(ex.intl_ship_lyd)}</span></div>
             <div class="t"><span>سعر البيع بحرًا</span><span>{fmt(exSea.total_lyd)}</span></div>
-            <div><span>توفير الزبونة</span><span><b style="color:#0b8a4b">{fmt(ex.total_lyd - exSea.total_lyd)}</b></span></div>
+            <div><span>توفير الزبون</span><span><b style="color:#0b8a4b">{fmt(ex.total_lyd - exSea.total_lyd)}</b></span></div>
             <div><span>ربحنا من القطعة بحرًا</span><span><b style="color:#0b6b66">{fmt(exSea.profit_lyd)}</b></span></div>
           </div>
         </div>
@@ -905,24 +905,24 @@ admin.get('/requests', requirePerm('catalog.manage', 'orders.manage'), async (c)
   const s = await loadSettings(db);
   return shell(c, 'requests', 'طلبات بالرابط', (
     <>
-      <Flash msg={c.req.query('ok') ? 'تم ✓ — وصل الزبونة إشعار' : undefined} /><Flash type="err" msg={c.req.query('err') || undefined} />
-      <p style="font-size:13px;color:#555;margin:0 0 10px">روابط <b>1688</b> تجهز وحدها: تتصدّر طابور الاكتشاف فتستوردها الإضافة في دفعتها التالية، ولحظة وصول المنتج يصير الطلب «جاهزًا» ويصل الزبونة إشعار بصفحته.
-        {(parseInt(s.discover_per_batch ?? '') || 0) === 0 && <b style="color:#8c2121"> الاستيراد من طابور الاكتشاف موقوف (٠ في كل دفعة) — فعّله من <a href="/admin/crawler#discover">بطاقة الاكتشاف</a> وإلا بقيت روابط 1688 تنتظر.</b>}
-        {' '}غيرها (تاوباو، شي إن، أمازون…): أضيفي المنتج بسعره ثم اربطيه هنا برقمه أو رابطه في المتجر.</p>
+      <Flash msg={c.req.query('ok') ? 'تم ✓ — وصل الزبون إشعار' : undefined} /><Flash type="err" msg={c.req.query('err') || undefined} />
+      <p style="font-size:13px;color:#555;margin:0 0 10px">روابط <b>1688</b> تجهز وحدها: تتصدّر طابور الاكتشاف فتستوردها الإضافة في دفعتها التالية، ولحظة وصول المنتج يصير الطلب «جاهزًا» ويصل الزبون إشعار بصفحته.
+        {(parseInt(s.discover_per_batch ?? '') || 0) === 0 && <b style="color:#8c2121"> الاستيراد من طابور الاكتشاف موقوف (0 في كل دفعة) — فعّله من <a href="/admin/crawler#discover">بطاقة الاكتشاف</a> وإلا بقيت روابط 1688 تنتظر.</b>}
+        {' '}غيرها (تاوباو، شي إن، أمازون…): أضف المنتج بسعره ثم اربطه هنا برقمه أو رابطه في المتجر.</p>
       <div class="tabs" style="display:flex;gap:6px;margin-bottom:10px">{(['new', 'ready', 'rejected'] as const).map(k =>
         <a class={`btn sm ${st === k ? 'brand' : 'ghost'}`} href={`/admin/requests?status=${k}`}>{LINK_STATUS[k][0]} ({cnt[k] ?? 0})</a>)}</div>
       {rows.results.length === 0 ? <p style="color:#888">لا طلبات هنا.</p> : (
-        <div class="tbl-wrap"><table class="tbl lr-admin"><tr><th>#</th><th>الزبونة</th><th>الرابط</th><th>ملاحظتها</th><th>الحالة</th><th></th></tr>
+        <div class="tbl-wrap"><table class="tbl lr-admin"><tr><th>#</th><th>الزبون</th><th>الرابط</th><th>ملاحظته</th><th>الحالة</th><th></th></tr>
           {rows.results.map((r: any) => <tr>
             <td>{r.id}<br /><small>{timeAgo(r.created_at)}</small></td>
             <td>{r.name}<br /><small dir="ltr">{r.phone}</small></td>
             <td><span class="status gray" style="font-size:10px">{LINK_SOURCES[r.source] ?? r.source}</span><br /><a class="src-link" href={r.url} target="_blank" rel="noopener noreferrer" dir="ltr">{String(r.url).slice(0, 60)}</a>
-              {r.offer_id && r.status === 'new' && <><br /><small class="lr-q">{r.dstatus === 'failed' ? '⚠️ تعذّرت قراءة صفحته مرتين — استورديه بزر الاستيراد' : `في طابور الإضافة (محاولات ${r.dtries ?? 0})`}</small></>}</td>
+              {r.offer_id && r.status === 'new' && <><br /><small class="lr-q">{r.dstatus === 'failed' ? '⚠️ تعذّرت قراءة صفحته مرتين — استورده بزر الاستيراد' : `في طابور الإضافة (محاولات ${r.dtries ?? 0})`}</small></>}</td>
             <td><small>{r.note ?? '—'}</small></td>
             <td>{r.slug ? <a href={`/p/${r.slug}`} target="_blank">{String(r.title_ar ?? '').slice(0, 40)}</a> : '—'}{r.admin_note && <><br /><small>{r.admin_note}</small></>}</td>
             <td>{r.status === 'new' && <>
               <form method="post" action={`/admin/requests/${r.id}/link`} class="inline" style="gap:4px"><input type="text" name="ref" placeholder="رقم المنتج أو رابطه في المتجر" style="width:190px" dir="ltr" required /><button class="btn sm ok">ربط وإشعار</button></form>
-              <form method="post" action={`/admin/requests/${r.id}/reject`} class="inline" style="gap:4px;margin-top:4px"><input type="text" name="why" placeholder="سبب الاعتذار للزبونة" style="width:190px" required /><button class="btn sm ghost" style="color:#d3262b">اعتذار</button></form>
+              <form method="post" action={`/admin/requests/${r.id}/reject`} class="inline" style="gap:4px;margin-top:4px"><input type="text" name="why" placeholder="سبب الاعتذار للزبون" style="width:190px" required /><button class="btn sm ghost" style="color:#d3262b">اعتذار</button></form>
             </>}</td>
           </tr>)}
         </table></div>
@@ -940,7 +940,7 @@ admin.post('/requests/:id/link', requirePerm('catalog.manage', 'orders.manage'),
     : /^\d{9,15}$/.test(ref) ? await db.prepare("SELECT id,slug,status,title_ar FROM products WHERE source_offer_id=?").bind(ref).first<any>()
     : /^\d+$/.test(ref) ? await db.prepare('SELECT id,slug,status,title_ar FROM products WHERE id=?').bind(Number(ref)).first<any>() : null;
   if (!p) return c.redirect('/admin/requests?err=' + encodeURIComponent(`لم أجد منتجًا بـ«${ref.slice(0, 60)}»`));
-  if (p.status !== 'active') return c.redirect('/admin/requests?err=' + encodeURIComponent(`المنتج ${p.id} ليس على الرف (${p.status}) — أظهريه أولًا ثم اربطيه`));
+  if (p.status !== 'active') return c.redirect('/admin/requests?err=' + encodeURIComponent(`المنتج ${p.id} ليس على الرف (${p.status}) — أظهره أولًا ثم اربطه`));
   const r = await db.prepare("SELECT user_id FROM link_requests WHERE id=? AND status='new'").bind(id).first<{ user_id: number }>();
   if (!r) return c.redirect('/admin/requests');
   await db.prepare("UPDATE link_requests SET status='ready',product_id=?,updated_at=datetime('now') WHERE id=?").bind(p.id, id).run();
@@ -954,7 +954,7 @@ admin.post('/requests/:id/reject', requirePerm('catalog.manage', 'orders.manage'
   const r = await db.prepare("SELECT user_id FROM link_requests WHERE id=? AND status='new'").bind(id).first<{ user_id: number }>();
   if (!r || !why) return c.redirect('/admin/requests');
   await db.prepare("UPDATE link_requests SET status='rejected',admin_note=?,updated_at=datetime('now') WHERE id=?").bind(why, id).run();
-  await notify(db, r.user_id, 'تعذّر توفير المنتج الذي طلبتِه', why, '/request');
+  await notify(db, r.user_id, 'تعذّر توفير المنتج الذي طلبته', why, '/request');
   await logActivity(db, c.get('user')!.id, 'request.reject', String(id), why);
   return c.redirect('/admin/requests?status=rejected&ok=1');
 });

@@ -75,10 +75,10 @@ an.get('/analytics', async (c) => {
       <div class="inline" style="gap:6px">{tabs}<small style="color:#888;margin-inline-start:8px">الروبوتات وحسابات الموظفين والشركاء لا تُحسب.</small></div>
       <div class="pd-tiles">
         <a class="pd-tile"><i class="pd-ic">👣</i><b>{t.v ?? 0}</b><span>زائر</span><small>{t.pv ?? 0} صفحة · {pct(t.m ?? 0, t.v ?? 0)} من الجوال</small></a>
-        <a class="pd-tile"><i class="pd-ic">👤</i><b>{t.u ?? 0}</b><span>زبونة مسجّلة زارت</span></a>
+        <a class="pd-tile"><i class="pd-ic">👤</i><b>{t.u ?? 0}</b><span>زبون مسجّل زار</span></a>
         <a class="pd-tile" href="#abandoned"><i class="pd-ic">🛒</i><b>{ab.length}</b><span>سلة متروكة</span><small>بضاعة في السلة بلا طلب</small></a>
-        <a class="pd-tile warn" href="#unpaid"><i class="pd-ic">💳</i><b>{upN}</b><span>بدأت الدفع ولم تُكمله</span><small>طلب بانتظار الدفع</small></a>
-        <a class="pd-tile ok"><i class="pd-ic">✅</i><b>{o.paid ?? 0}</b><span>اشترت ودفعت</span><small>{fmt(o.v ?? 0)} في {perAr}</small></a>
+        <a class="pd-tile warn" href="#unpaid"><i class="pd-ic">💳</i><b>{upN}</b><span>بدأ الدفع ولم يُكمله</span><small>طلب بانتظار الدفع</small></a>
+        <a class="pd-tile ok"><i class="pd-ic">✅</i><b>{o.paid ?? 0}</b><span>اشترى ودفع</span><small>{fmt(o.v ?? 0)} في {perAr}</small></a>
         <a class={`pd-tile ${(errs.results.length) ? 'bad' : ''}`} href="#errors"><i class="pd-ic">⚠️</i><b>{(errs.results as any[]).reduce((a, e) => a + e.n, 0)}</b><span>مشكلة واجهت الزوار</span><small>صفحات مفقودة وأخطاء</small></a>
       </div>
 
@@ -113,22 +113,22 @@ an.get('/analytics', async (c) => {
       </div>
 
       <div class="card-box" id="abandoned"><h3>🛒 سلال متروكة ({ab.length}) — ذكّرهم</h3>
-        <p class="pd-note" style="margin-top:0">زبونات في سلتهن بضاعة ولم يطلبن بعد آخر إضافة. «إشعار» يظهر لها في الموقع، و«واتساب» يفتح محادثة برسالة جاهزة. ولإعلانات ميتا: البكسل يسجّل AddToCart وPurchase — أنشئ جمهورًا مخصّصًا «أضافوا للسلة ولم يشتروا خلال 7 أيام».</p>
+        <p class="pd-note" style="margin-top:0">زبائن في سلتهم بضاعة ولم يطلبوا بعد آخر إضافة. «إشعار» يظهر له في الموقع، و«واتساب» يفتح محادثة برسالة جاهزة. ولإعلانات ميتا: البكسل يسجّل AddToCart وPurchase — أنشئ جمهورًا مخصّصًا «أضافوا للسلة ولم يشتروا خلال 7 أيام».</p>
         {ab.length === 0 ? <p class="pd-empty">لا سلال متروكة.</p> :
-          <div class="tbl-wrap"><table class="tbl"><tr><th>الزبونة</th><th>المدينة</th><th>في السلة</th><th>القيمة</th><th>آخر إضافة</th><th>تذكير</th></tr>
+          <div class="tbl-wrap"><table class="tbl"><tr><th>الزبون</th><th>المدينة</th><th>في السلة</th><th>القيمة</th><th>آخر إضافة</th><th>تذكير</th></tr>
             {ab.map(r => <tr><td><a href={`/admin/customers/${r.id}`}>{r.name}</a><br /><small dir="ltr">{r.phone}</small></td><td>{r.city ?? '—'}</td><td>{r.items} منتج</td><td>{fmt(r.val)}</td><td>{r.last_add ? timeAgo(r.last_add) : '—'}</td>
               <td class="inline" style="gap:4px"><form method="post" action={`/admin/analytics/remind/${r.id}`}><button class="btn sm ghost">إشعار</button></form>
-                <a class="btn sm ok" target="_blank" rel="noopener" href={wa(r.phone, `مرحبًا ${r.name} 👋 في سلتك على هدهد ${r.items} منتج بانتظارك بقيمة ${fmt(r.val)}. أكملي طلبك الآن ليصلك بسرعة: https://hudhude.com/cart`)}>واتساب</a>
-                {r.reminded && <small>ذُكّرت {timeAgo(r.reminded)}</small>}</td></tr>)}</table></div>}
+                <a class="btn sm ok" target="_blank" rel="noopener" href={wa(r.phone, `مرحبًا ${r.name} 👋 في سلتك على هدهد ${r.items} منتج بانتظارك بقيمة ${fmt(r.val)}. أكمل طلبك الآن ليصلك بسرعة: https://hudhude.com/cart`)}>واتساب</a>
+                {r.reminded && <small>ذُكّر {timeAgo(r.reminded)}</small>}</td></tr>)}</table></div>}
       </div>
 
-      <div class="card-box" id="unpaid"><h3>💳 بدأت الدفع ولم تُكمله ({upN}){upN > up.length ? ` — الأحدث ${up.length}` : ''}</h3>
+      <div class="card-box" id="unpaid"><h3>💳 بدأ الدفع ولم يُكمله ({upN}){upN > up.length ? ` — الأحدث ${up.length}` : ''}</h3>
         {up.length === 0 ? <p class="pd-empty">لا طلبات معلّقة.</p> :
-          <div class="tbl-wrap"><table class="tbl"><tr><th>الطلب</th><th>الزبونة</th><th>المبلغ</th><th>الطريقة</th><th>منذ</th><th>تذكير</th></tr>
+          <div class="tbl-wrap"><table class="tbl"><tr><th>الطلب</th><th>الزبون</th><th>المبلغ</th><th>الطريقة</th><th>منذ</th><th>تذكير</th></tr>
             {up.map(r => <tr><td><a href={`/admin/orders/${r.code}`}>{r.code}</a></td><td>{r.name}<br /><small dir="ltr">{r.phone}</small></td><td>{fmt(r.total_lyd)}</td><td>{r.payment_method}</td><td>{timeAgo(r.created_at)}</td>
               <td class="inline" style="gap:4px"><form method="post" action={`/admin/analytics/remind/${r.uid}?order=${r.code}`}><button class="btn sm ghost">إشعار</button></form>
-                <a class="btn sm ok" target="_blank" rel="noopener" href={wa(r.phone, `مرحبًا ${r.name} 👋 طلبك ${r.code} على هدهد بقيمة ${fmt(r.total_lyd)} ينتظر الدفع. ادفعي الآن ليبدأ شراؤه من الصين فورًا: https://hudhude.com/orders/${r.code}`)}>واتساب</a>
-                {r.reminded && <small>ذُكّرت {timeAgo(r.reminded)}</small>}</td></tr>)}</table></div>}
+                <a class="btn sm ok" target="_blank" rel="noopener" href={wa(r.phone, `مرحبًا ${r.name} 👋 طلبك ${r.code} على هدهد بقيمة ${fmt(r.total_lyd)} ينتظر الدفع. ادفع الآن ليبدأ شراؤه من الصين فورًا: https://hudhude.com/orders/${r.code}`)}>واتساب</a>
+                {r.reminded && <small>ذُكّر {timeAgo(r.reminded)}</small>}</td></tr>)}</table></div>}
       </div>
 
       <div class="card-box"><h3>👣 آخر الزوار</h3>
@@ -148,7 +148,7 @@ an.get('/analytics/v/:vid', async (c) => {
   const who = results.find(r => r.name);
   return shell(c, 'analytics', `مسار زائر${who ? ': ' + who.name : ''}`, (
     <div class="card-box">
-      <p><a href="/admin/analytics">← حركة الزوار</a>{who && <> · <a href={`/admin/customers/${who.user_id}`}>ملف الزبونة</a> · <span dir="ltr">{who.phone}</span></>} · {results[0] ? `${cityAr(results[0].city)} · ${countryAr(results[0].country)} · ${results[0].device === 'm' ? 'جوال' : 'حاسوب'}` : ''}</p>
+      <p><a href="/admin/analytics">← حركة الزوار</a>{who && <> · <a href={`/admin/customers/${who.user_id}`}>ملف الزبون</a> · <span dir="ltr">{who.phone}</span></>} · {results[0] ? `${cityAr(results[0].city)} · ${countryAr(results[0].country)} · ${results[0].device === 'm' ? 'جوال' : 'حاسوب'}` : ''}</p>
       <div class="tbl-wrap"><table class="tbl"><tr><th>الوقت</th><th>الحدث</th><th>الصفحة</th><th>تفاصيل</th></tr>
         {results.map(r => <tr class={r.kind === 'error' ? 'pd-near' : ''}><td>{timeAgo(r.created_at)}</td><td>{KIND_AR[r.kind] ?? r.kind}</td><td dir="ltr"><a href={r.path}>{r.path}</a></td><td>{r.ref ?? ''}{r.kind === 'search' && r.n !== null ? ` · ${r.n} نتيجة` : ''}</td></tr>)}
       </table></div>
@@ -159,8 +159,8 @@ an.get('/analytics/v/:vid', async (c) => {
 // تذكير داخل الموقع (جرس الإشعارات): للسلة المتروكة أو لطلب ينتظر الدفع
 an.post('/analytics/remind/:uid', async (c) => {
   const db = c.env.DB; const uid = Number(c.req.param('uid')); const order = c.req.query('order');
-  if (order && /^DL-[\d-]+$/.test(order)) await notify(db, uid, 'طلبك ينتظر الدفع ⏳', `طلبك ${order} جاهز — ادفعي الآن ليبدأ شراؤه من الصين فورًا ويصلك بسرعة.`, `/orders/${order}`);
-  else await notify(db, uid, 'سلتك تنتظرك 🛒', 'في سلتك بضاعة بانتظارك. أكملي طلبك الآن ليصلك بسرعة — الكميات عند المورد تنفد.', '/cart');
+  if (order && /^DL-[\d-]+$/.test(order)) await notify(db, uid, 'طلبك ينتظر الدفع ⏳', `طلبك ${order} جاهز — ادفع الآن ليبدأ شراؤه من الصين فورًا ويصلك بسرعة.`, `/orders/${order}`);
+  else await notify(db, uid, 'سلتك تنتظرك 🛒', 'في سلتك بضاعة بانتظارك. أكمل طلبك الآن ليصلك بسرعة — الكميات عند المورد تنفد.', '/cart');
   await logActivity(db, c.get('user')!.id, 'analytics.remind', String(uid), order ?? 'cart');
   return c.redirect('/admin/analytics?ok=1' + (order ? '#unpaid' : '#abandoned'));
 });

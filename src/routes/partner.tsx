@@ -280,9 +280,9 @@ partner.get('/delivery', async (c) => {
         <a class="pd-tile ok"><i class="pd-ic">✅</i><b>{today?.n ?? 0}</b><span>وصلت الزبائن اليوم عبر {cn}</span></a>
       </div>
 
-      <div class="card-box" id="ready"><h3>📦 جاهزة للتسليم — سلّمها لـ{cn} أو للزبونة مباشرة ({waiting.length})</h3>
+      <div class="card-box" id="ready"><h3>📦 جاهزة للتسليم — سلّمها لـ{cn} أو للزبون مباشرة ({waiting.length})</h3>
         {waiting.length === 0 ? <p class="pd-empty">لا طلبات تنتظر التسليم.</p> :
-          <div class="tbl-wrap"><table class="tbl courier-tbl"><tr><th>الطلب</th><th>الزبونة والعنوان</th><th>الدفع</th><th>التسليم</th></tr>
+          <div class="tbl-wrap"><table class="tbl courier-tbl"><tr><th>الطلب</th><th>الزبون والعنوان</th><th>الدفع</th><th>التسليم</th></tr>
             {waiting.map(o => <tr><td><a class="po-link" href={`/partner/order/${o.code}`}>{o.code}</a>{o.courier_status === 'failed' && <><br /><small class="pd-red">تعذّر: {o.courier_note ?? '—'}</small></>}</td><td>{Addr(o)}</td><td>{cod(o)}</td>
               <td><form method="post" action={`/partner/order/${o.code}/courier`} class="inline" style="gap:4px">
                   <input type="text" name="ref" placeholder={cn === 'أميال' ? 'AMY-284510' : `رقم شحنة ${cn}`} style="width:140px" dir="ltr" />
@@ -295,16 +295,16 @@ partner.get('/delivery', async (c) => {
 
       <div class="card-box" id="courier"><h3>🚚 مع {cn} ({withC.length})</h3>
         {withC.length === 0 ? <p class="pd-empty">لا طرود مع {cn} الآن.</p> :
-          <div class="tbl-wrap"><table class="tbl courier-tbl"><tr><th>الطلب</th><th>رقم الشحنة</th><th>منذ</th><th>الزبونة والعنوان</th><th>الدفع</th><th></th></tr>
+          <div class="tbl-wrap"><table class="tbl courier-tbl"><tr><th>الطلب</th><th>رقم الشحنة</th><th>منذ</th><th>الزبون والعنوان</th><th>الدفع</th><th></th></tr>
             {withC.map(o => { const tr = courierTrack(p, o.courier_ref); return <tr><td><a class="po-link" href={`/partner/order/${o.code}`}>{o.code}</a></td>
               <td dir="ltr">{tr ? <a href={tr} target="_blank" rel="noopener">{o.courier_ref} ↗</a> : o.courier_ref}</td><td>{timeAgo(o.courier_at)}</td><td>{Addr(o)}</td><td>{cod(o)}</td>
-              <td><form method="post" action={`/partner/order/${o.code}/courier/delivered`}><button class="btn sm ok">وصل للزبونة ✓</button></form>
-                <form method="post" action={`/partner/order/${o.code}/courier/failed`} class="inline" style="gap:4px;margin-top:4px"><input type="text" name="note" placeholder="سبب التعذّر (لم ترد، عنوان خطأ…)" style="width:170px" /><button class="btn sm ghost" style="color:#d3262b">تعذّر</button></form></td></tr>; })}
+              <td><form method="post" action={`/partner/order/${o.code}/courier/delivered`}><button class="btn sm ok">وصل للزبون ✓</button></form>
+                <form method="post" action={`/partner/order/${o.code}/courier/failed`} class="inline" style="gap:4px;margin-top:4px"><input type="text" name="note" placeholder="سبب التعذّر (لم يرد، عنوان خطأ…)" style="width:170px" /><button class="btn sm ghost" style="color:#d3262b">تعذّر</button></form></td></tr>; })}
           </table></div>}
       </div>
 
       <form method="post" action={`/partner/courier${pq(x)}`} class="card-box po-rates" id="courier-settings"><h3>⚙ الربط مع شركة التوصيل</h3>
-        <p style="font-size:13px;color:#555;margin-top:0">الطريق اليوم مع أميال (ثبت من موقعها في ٢٥/٠٩/٢٦): افتح حساب تاجر في <a href="https://portal.amyal.ly/register" target="_blank" rel="noopener" dir="ltr">portal.amyal.ly</a>، سجّل الشحنة هناك باسم الزبونة وهاتفها وعنوانها والمبلغ المطلوب تحصيله، ثم اكتب رقم الشحنة الذي تعطيك إياه (مثل <b dir="ltr">AMY-284510</b>) في خانة الطلب أعلاه — فيصل للزبونة في إشعار وصفحة طلبها. أميال لا تنشر واجهة برمجية (API) علنية؛ إن أعطتكم رابطها ومفتاحها ضعهما هنا فيُنشئ زر «عبر API» الشحنة عندهم مباشرة.</p>
+        <p style="font-size:13px;color:#555;margin-top:0">الطريق اليوم مع أميال (ثبت من موقعها في 25/09/26): افتح حساب تاجر في <a href="https://portal.amyal.ly/register" target="_blank" rel="noopener" dir="ltr">portal.amyal.ly</a>، سجّل الشحنة هناك باسم الزبون وهاتفه وعنوانه والمبلغ المطلوب تحصيله، ثم اكتب رقم الشحنة الذي تعطيك إياه (مثل <b dir="ltr">AMY-284510</b>) في خانة الطلب أعلاه — فيصل للزبون في إشعار وصفحة طلبه. أميال لا تنشر واجهة برمجية (API) علنية؛ إن أعطتكم رابطها ومفتاحها ضعهما هنا فيُنشئ زر «عبر API» الشحنة عندهم مباشرة.</p>
         <div class="inline"><label style="min-width:170px">اسم شركة التوصيل</label><input type="text" name="courier_name" value={cn} /></div>
         <div class="inline"><label style="min-width:170px">رابط التتبع</label><input type="url" name="courier_track_url" value={p.courier_track_url ?? ''} placeholder="https://…/track?code={code}" dir="ltr" style="min-width:320px" /><small>{'{code}'} = رقم الشحنة</small></div>
         <div class="inline"><label style="min-width:170px">رابط API لإنشاء شحنة</label><input type="url" name="courier_api_url" value={p.courier_api_url ?? ''} placeholder="https://…/api/shipments" dir="ltr" style="min-width:320px" /></div>
@@ -352,7 +352,7 @@ partner.get('/all', async (c) => {
   const st = c.req.query('status'); const one = st && ORDER_STATUS[st] ? st : null;
   const rows = await x.db.prepare(`SELECT o.code,o.status,o.ship_city,o.updated_at,u.name FROM orders o JOIN users u ON u.id=o.user_id WHERE o.partner_id=? ${one ? 'AND o.status=?' : ''} ORDER BY o.id DESC LIMIT 300`).bind(...(one ? [x.pid, one] : [x.pid])).all<any>();
   return shell(c, x, 'all', one ? `الطلبات: ${STAGE_AR(one)} (${rows.results.length})` : 'كل الطلبات', (
-    <div class="tbl-wrap"><table class="tbl"><tr><th>الطلب</th><th>الزبونة</th><th>المدينة</th><th>الحالة</th><th>آخر تحديث</th></tr>{rows.results.map(o => <tr><td><a href={`/partner/order/${o.code}`} class="po-link">{o.code}</a></td><td>{o.name}</td><td>{o.ship_city}</td><td><span class={`status ${ORDER_STATUS[o.status]?.color}`}>{ORDER_STATUS[o.status]?.ar}</span></td><td>{timeAgo(o.updated_at)}</td></tr>)}</table></div>
+    <div class="tbl-wrap"><table class="tbl"><tr><th>الطلب</th><th>الزبون</th><th>المدينة</th><th>الحالة</th><th>آخر تحديث</th></tr>{rows.results.map(o => <tr><td><a href={`/partner/order/${o.code}`} class="po-link">{o.code}</a></td><td>{o.name}</td><td>{o.ship_city}</td><td><span class={`status ${ORDER_STATUS[o.status]?.color}`}>{ORDER_STATUS[o.status]?.ar}</span></td><td>{timeAgo(o.updated_at)}</td></tr>)}</table></div>
   ));
 });
 
@@ -477,14 +477,14 @@ partner.get('/order/:code', async (c) => {
         <div class="po-gallery">{media.results.map(m => (
           <figure class="po-ph">
             <a href={m.url ?? `/partner/media/${m.id}`} target="_blank"><img src={m.url ?? `/partner/media/${m.id}`} alt="" loading="lazy" /></a>
-            <figcaption><b>{STAGE_AR(m.stage)}</b>{m.caption ? ` — ${m.caption}` : ''}<br /><small>{timeAgo(m.created_at)}{m.bytes ? ` · ${Math.round(m.bytes / 1024)} ك.ب` : ''}{m.public ? ' · تراها الزبونة' : ''}</small>
+            <figcaption><b>{STAGE_AR(m.stage)}</b>{m.caption ? ` — ${m.caption}` : ''}<br /><small>{timeAgo(m.created_at)}{m.bytes ? ` · ${Math.round(m.bytes / 1024)} ك.ب` : ''}{m.public ? ' · يراها الزبون' : ''}</small>
               <form method="post" action={`/partner/order/${o.code}/media/${m.id}/delete`} class="inline"><button class="btn sm ghost" onclick="return confirm('حذف الصورة؟')">حذف</button></form></figcaption>
           </figure>))}</div>
         <form method="post" action={`/partner/order/${o.code}/photo`} enctype="multipart/form-data" class="po-upload" data-compress="1">
           <label>المرحلة</label><select name="stage">{PARTNER_FLOW.map(st => <option value={st} selected={st === o.status}>{STAGE_AR(st)}</option>)}</select>
           <label>الصورة</label><input type="file" name="photo" accept="image/*" capture="environment" required />
           <input type="text" name="caption" placeholder="وصف قصير (اختياري)" />
-          <label class="inline" style="font-weight:400"><input type="checkbox" name="public" value="1" /> تظهر للزبونة في صفحة طلبها (لا تختر هذا لفاتورة المورد أو سعره)</label>
+          <label class="inline" style="font-weight:400"><input type="checkbox" name="public" value="1" /> تظهر للزبون في صفحة طلبه (لا تختر هذا لفاتورة المورد أو سعره)</label>
           <button class="btn sm ok">رفع الصورة</button>
           <small class="po-hint">تُصغَّر الصورة في جهازك قبل الرفع (≈200 ك.ب) فترفع بسرعة حتى على إنترنت ضعيف.</small>
         </form>
@@ -587,7 +587,7 @@ partner.get('/rates', async (c) => {
         {p.rates_updated_at && <small style="color:#888"> آخر تعديل {timeAgo(p.rates_updated_at)}</small>}
       </form>
       <div class="card-box" id="zones"><h3>🚚 التوصيل داخل ليبيا حسب المدينة والمنطقة</h3>
-        <p style="font-size:13px;color:#555;margin-top:0">لكل مدينة مناطق بحسب بُعدها عن مركز المدينة بالكيلومتر. تختار الزبونة منطقتها عند الدفع فيُحسب سعرها (+ رسم المنصة {m} د.ل). المدينة بلا مناطق تُحسب بسعر «التوصيل داخل ليبيا» الموحّد أعلاه.</p>
+        <p style="font-size:13px;color:#555;margin-top:0">لكل مدينة مناطق بحسب بُعدها عن مركز المدينة بالكيلومتر. يختار الزبون منطقته عند الدفع فيُحسب سعرها (+ رسم المنصة {m} د.ل). المدينة بلا مناطق تُحسب بسعر «التوصيل داخل ليبيا» الموحّد أعلاه.</p>
         {zones.length > 0 && <div class="tbl-wrap"><table class="tbl zones-tbl"><tr><th>المدينة</th><th>المنطقة</th><th>من (كم)</th><th>إلى (كم)</th><th>سعرك</th><th>يدفعه الزبون</th><th></th></tr>
           {zones.map(z => <tr><td>{z.city}</td><td>{z.zone}</td><td>{z.km_from}</td><td>{z.km_to}</td><td>{fmt(z.price_lyd)}</td><td>{fmt(Math.round((z.price_lyd + m) * 100) / 100)}</td>
             <td><form method="post" action={`/partner/zones/${z.id}/delete${pq(x)}`}><button class="btn sm ghost" style="color:#d3262b">حذف</button></form></td></tr>)}
