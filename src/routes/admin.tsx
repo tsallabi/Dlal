@@ -11,7 +11,7 @@ import { classifyModesty } from '../lib/modesty';
 import { fingerprint, sameProduct } from '../lib/dedupe';
 import { loadSettings, computePrice } from '../lib/pricing';
 import { requireRole } from '../lib/auth';
-import { attrValue, notRetail, kindOf, plausibleWeightG } from '../lib/source';
+import { attrValue, notRetail, kindOf, plausibleWeightG, MAX_WEIGHT_G } from '../lib/source';
 import { junkAttr } from '../lib/attr-en';  // الشظيّة تُحذف قبل الترجمة وإلا صارت «غير قابل للإرجاع» لونًا عربيًا
 import { requirePerm, logActivity } from '../lib/perm';
 import { settleLinkRequests, LINK_SOURCES, LINK_STATUS } from '../lib/link-requests';
@@ -347,6 +347,8 @@ export async function importProducts(db: D1Database, arr: any[], categoryId: num
       await db.prepare("UPDATE products SET status='hidden' WHERE id=?").bind(twin.id).run();   // الجديد أرخص: نُخفي القديم
       twin.source_price_cny = price; dupes++;
     }
+    // فوق 50 كغ (مظلة مستودع 250 كغ بـ22,120 د.ل من الجلب المجاني) ليس بضاعة تجزئة تُشحن جوًّا: يدخل مخفيًا
+    // كالجملة — قرار صاحب المشروع ٢٥/٠٩/٢٦ «أخفِ المظلات»
     const slug = `${offerId}-${Math.random().toString(36).slice(2, 6)}`;
     const ins = await db.prepare(
       // last_checked_at يبقى NULL: المنتج وصل من نتيجة بحث ولم يُفحص تفصيليًا قط، وادّعاء أنه فُحص
@@ -355,7 +357,7 @@ export async function importProducts(db: D1Database, arr: any[], categoryId: num
        VALUES('1688',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL,?,?,?,?,?)`,
     ).bind(offerId, it.url ?? `https://detail.1688.com/offer/${offerId}.html`, slug, titleAr, it.title ?? null, it.descriptionAr ?? null,
       targetCat, price, pr.total_lyd, Math.random() < 0.4 ? Math.ceil(pr.total_lyd * 1.25 / 5) * 5 : null, prSea.total_lyd, wIn ?? null, it.volumeCm3 ?? null,
-      moq, it.inStock === false ? 0 : 1, notRetail(it.title, moq, maxRetail) ? 'hidden' : hasCJK(titleAr) || !hasArabic(titleAr) ? 'draft' : 'active', supplierAr, parseInt(it.sales ?? 0) || 0, 0, homeOk, fp || null, kindOf(it.title)).run();
+      moq, it.inStock === false ? 0 : 1, notRetail(it.title, moq, maxRetail) || (wIn ?? 0) > MAX_WEIGHT_G ? 'hidden' : hasCJK(titleAr) || !hasArabic(titleAr) ? 'draft' : 'active', supplierAr, parseInt(it.sales ?? 0) || 0, 0, homeOk, fp || null, kindOf(it.title)).run();
     const pid = ins.meta.last_row_id as number;
     if (!pid || !ins.meta.changes) { skipped++; continue; }   // تجاهل صفّ لم يُدرج (تعارض مع استيراد متزامن)
     const stmts: D1PreparedStatement[] = [];
