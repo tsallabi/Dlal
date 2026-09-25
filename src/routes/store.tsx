@@ -483,7 +483,14 @@ async function listPage(c: Context<Env>, opts: { title: string; where: string; b
               {(min || max) && <a href={link('min', null).replace(/([?&])max=[^&]*/, '$1')} class="chip on">السعر: {min ?? 0}—{max ?? '∞'} ✕</a>}
             </div>
           )}
-          <Grid ship={bb.ship} items={rows.results} favs={f} />
+          {rows.results.length === 0 && opts.q
+            ? <div class="no-res">
+                <span class="no-ic"><Ic n="help" s={30} /></span>
+                <h3>لم نجد «{opts.q}» على رفّنا بعد</h3>
+                <p>جرّب كلمة أقصر أو اسمًا آخر للمنتج — أو أرسل لنا رابطه من 1688 أو تاوباو أو شي إن ونوفّره لك بسعر نهائي بالدينار.</p>
+                <div class="hm-cta-b"><a class="btn" href="/request"><Ic n="link" s={18} /> اطلب برابط</a><a class="btn ghost" href="/new">تسوّق الجديد</a></div>
+              </div>
+            : <Grid ship={bb.ship} items={rows.results} favs={f} />}
           {pages > 1 && page < pages && <a class="more-btn" href={pageLink(page + 1)}>عرض المزيد</a>}
           {pages > 1 && (
             <div class="sortbar" style="justify-content:center;padding-top:18px">

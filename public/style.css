@@ -1318,6 +1318,62 @@ body:not(.admin-body) .pc-grp a.on{background:var(--brand-grad);color:#fff;box-s
 body:not(.admin-body) .pc-grp a.on i{color:#fff}
 body:not(.admin-body) .acct-pts{border-radius:14px;padding:10px 12px;background:linear-gradient(90deg,#fdf1e6,#fff6ec)}
 body:not(.admin-body) .acct-stages .i{color:var(--brand);display:grid;place-items:center}
+/* ===== صفحات الأقسام والبحث (listPage: /c/:slug و/search و/new و/sale و/trending) — ٢٥/٠٩/٢٦ =====
+   صاحب المشروع: «طبّق نفس التصميم على صفحات الأقسام والبحث». الحاسوب: التصفية بطاقة بيضاء بأقراص، والعنوان شريط دافئ.
+   الجوال: الشرائح أقراص، ولوحة التصفية بحواف مستديرة وأزرار متدرّجة، والقسم النشط بحلقة قرفية. */
+body:not(.admin-body) .shop>.filters{background:#fff;border-radius:var(--r);box-shadow:var(--sh);padding:18px 14px}
+body:not(.admin-body) .filters h3{display:flex;align-items:center;gap:8px;padding:0 6px 10px;font-size:18px}
+body:not(.admin-body) .filters h3::before{content:"";width:6px;height:20px;border-radius:999px;background:var(--brand-grad)}
+body:not(.admin-body) .fgroup{border-top:1px solid #f3ece6;padding:12px 6px}
+body:not(.admin-body) .fgroup>summary::after{color:var(--brand)}
+body:not(.admin-body) .fgroup .fbody{gap:3px}
+body:not(.admin-body) .fgroup a,body:not(.admin-body) .fgroup label{border-radius:10px;padding:6px 8px}
+body:not(.admin-body) .fgroup a:hover,body:not(.admin-body) .fgroup label:hover{background:var(--tint)}
+body:not(.admin-body) .fgroup a.on{background:var(--brand-grad);color:#fff;box-shadow:0 4px 12px rgba(176,90,32,.25)}
+body:not(.admin-body) .fgroup a.on .n{color:#fbe3cf}
+body:not(.admin-body) .fcolors .sw{width:18px;height:18px;box-shadow:inset 0 0 0 2px #fff}
+@media(min-width:901px){body:not(.admin-body) .desk-title{display:flex}}
+body:not(.admin-body) .desk-title{align-items:center;gap:10px;background:linear-gradient(90deg,#fdf1e6,#fff8f2);border-radius:var(--r);padding:14px 18px}
+body:not(.admin-body) .desk-title small{background:#fff;border-radius:999px;padding:2px 10px;box-shadow:0 2px 8px rgba(110,60,20,.06)}
+body:not(.admin-body) .sortbar .lbl{font-weight:700;color:#8a6a52}
+body:not(.admin-body) .sortbar .count{background:#fff;border-radius:999px;padding:4px 12px;box-shadow:0 2px 8px rgba(110,60,20,.06)}
+body:not(.admin-body) .more-btn{border:1.5px solid #e4cdb9;border-radius:999px;color:var(--brand);background:#fff;box-shadow:var(--sh);transition:background .15s,box-shadow .15s}
+body:not(.admin-body) .more-btn:hover{background:var(--brand-grad);border-color:transparent;color:#fff;box-shadow:0 8px 20px rgba(176,90,32,.3)}
+body:not(.admin-body) .sortbar .chip{min-width:40px;text-align:center}
+body:not(.admin-body) .crumbs a{color:#8a6a52}
+/* بحث بلا نتائج: بطاقة تقول ما لم نجده وتفتح بابين (اطلب برابط، الجديد) بدل سطر رمادي */
+.no-res{background:#fff;border-radius:24px;box-shadow:0 6px 24px rgba(110,60,20,.07);padding:34px 20px;text-align:center;max-width:620px;margin:10px auto 20px}
+.no-res .no-ic{width:64px;height:64px;border-radius:20px;display:grid;place-items:center;margin:0 auto 12px;background:var(--tint,#fbf3ec);color:var(--brand)}
+.no-res h3{margin:0 0 8px;font-size:20px;font-weight:800}.no-res p{margin:0 0 18px;color:#6d625a}
+.no-res .hm-cta-b{justify-content:center}.no-res .btn{display:inline-flex;align-items:center;gap:6px}
+@media(max-width:900px){
+  body:not(.admin-body) .m-cats .tp{border:2px solid #fff;box-shadow:0 4px 12px rgba(110,60,20,.10)}
+  body:not(.admin-body) .m-cats a.on .tp{border-color:var(--brand);box-shadow:0 0 0 3px rgba(176,90,32,.15)}
+  body:not(.admin-body) .m-cats a.on .tl{color:var(--brand)}
+  body:not(.admin-body) .m-bar{background:#fff;border-bottom:0;box-shadow:0 6px 16px rgba(110,60,20,.07);border-radius:0 0 20px 20px}
+  body:not(.admin-body) .m-sort .on,body:not(.admin-body) .ms-rec.on>summary{color:var(--brand)}
+  body:not(.admin-body) .ms-filter b{background:var(--brand-grad)}
+  body:not(.admin-body) .ms-menu{border-radius:0 0 18px 18px;overflow:hidden}
+  body:not(.admin-body) .ms-menu a.on{color:var(--brand);background:var(--tint)}
+  body:not(.admin-body) .m-chips>a,body:not(.admin-body) .m-chips>button{background:#fff;border:1.5px solid #eee3d9;border-radius:999px;box-shadow:0 2px 6px rgba(110,60,20,.05)}
+  body:not(.admin-body) .m-chips .on{background:var(--brand-grad);border-color:transparent;color:#fff}
+  body:not(.admin-body) .m-count{font-weight:700;color:#8a6a52}
+  /* لوحة التصفية */
+  body:not(.admin-body) .fs{border-radius:26px 26px 0 0;box-shadow:0 -10px 40px rgba(60,30,10,.2)}
+  body:not(.admin-body) .fs>header{font-weight:800;border-bottom:1px solid #f3ece6}
+  body:not(.admin-body) .fs>header::before{content:"";position:absolute;top:7px;left:50%;width:42px;height:4px;border-radius:999px;background:#e8d9cc;transform:translateX(-50%)}
+  body:not(.admin-body) .fs-tabs{background:#faf5f0}
+  body:not(.admin-body) .fs-tabs button.on{color:var(--brand);box-shadow:inset -3px 0 0 var(--brand)}
+  body:not(.admin-body) [dir=rtl] .fs-tabs button.on{box-shadow:inset 3px 0 0 var(--brand)}
+  body:not(.admin-body) .fs-pills span,body:not(.admin-body) .fs-pills button{background:#fff;border:1.5px solid #eee3d9;border-radius:999px}
+  body:not(.admin-body) .fs-pills input:checked+span,body:not(.admin-body) .fs-pills button.on{background:var(--brand-grad);border-color:transparent;color:#fff}
+  body:not(.admin-body) .fs-colors input:checked+span{color:var(--brand)}
+  body:not(.admin-body) .fs-colors input:checked+span .sw{border:2px solid var(--brand);box-shadow:inset 0 0 0 3px #fff,0 0 0 3px rgba(176,90,32,.15)}
+  body:not(.admin-body) .fs-range input{border:1.5px solid #eadfd5;border-radius:12px}
+  body:not(.admin-body) .fs>footer{border-top:1px solid #f3ece6;box-shadow:0 -6px 16px rgba(110,60,20,.05)}
+  body:not(.admin-body) .fs-clear{border:1.5px solid #e4cdb9;color:var(--brand);border-radius:999px}
+  body:not(.admin-body) .fs-done{background:var(--brand-grad);border-radius:999px;box-shadow:0 6px 16px rgba(176,90,32,.3)}
+}
 /* الحساب */
 body:not(.admin-body) .acct-side a{border-radius:12px}
 body:not(.admin-body) .acct-side a.on{background:var(--brand-grad);color:#fff;box-shadow:0 6px 14px rgba(176,90,32,.28)}

@@ -2613,6 +2613,16 @@ await mp.screenshot({ path: `${OUT}/${String(++n).padStart(2, '0')}-mobile-order
   expect(rs.status() === 200 && await page.locator('nav.crumbs').count() > 0, `بحث بنص طويل ملصوق يفتح صفحة نتائج لا خطأ (${rs.status()})`);
 }
 
+// بحث بلا نتائج: بطاقة تسمّي الكلمة وتفتح «اطلب برابط» بدل سطر رمادي (٢٥/٠٩/٢٦)
+{
+  const nq = 'قزقزلا' + String(Date.now()).slice(-4);
+  await page.goto(BASE + '/search?q=' + encodeURIComponent(nq));
+  const nr = page.locator('.no-res');
+  expect(await nr.isVisible() && (await nr.textContent()).includes(nq) && await nr.locator('a[href="/request"]').count() === 1, 'بحث بلا نتائج يسمّي الكلمة ويعرض «اطلب برابط»');
+  await nr.locator('a[href="/request"]').click(); await page.waitForLoadState('networkidle');
+  expect(new URL(page.url()).pathname === '/request', 'زر «اطلب برابط» من البحث الفارغ يفتح صفحة الطلب بالرابط');
+}
+
 // 404
 const r404 = await page.goto(BASE + '/p/not-exist'); expect(r404.status() === 404, 'صفحة غير موجودة تعيد 404');
 
