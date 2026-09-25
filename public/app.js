@@ -17,6 +17,13 @@ const proxyImg = (u) => (!u ? u : /(^|\.)(alicdn\.com|1688\.com|taobao\.com|tbcd
     tick(); setInterval(tick, 1000);
   });
 
+  // إظهار كلمة المرور في الدخول والتسجيل
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-pw-eye]'); if (!b) return;
+    const i = b.parentElement.querySelector('input'); const show = i.type === 'password';
+    i.type = show ? 'text' : 'password'; b.classList.toggle('on', show); b.setAttribute('aria-label', show ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور');
+  });
+
   // wishlist toggle
   document.addEventListener('click', async (e) => {
     const b = e.target.closest('[data-fav]'); if (!b) return;

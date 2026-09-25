@@ -1562,3 +1562,98 @@ body:not(.admin-body) .order-photos img{border-radius:14px;box-shadow:0 3px 10px
 @media(max-width:900px){body:not(.admin-body) .pc.sub>.pc-main{order:-1}body:not(.admin-body) .pc.sub>.pc-side{margin-top:6px}}
 body:not(.admin-body) .btn .si{vertical-align:-3px}
 @media(max-width:600px){body:not(.admin-body) .pc-main>h2{font-size:19px;line-height:1.5;margin-bottom:14px}body:not(.admin-body) .pc-main>h2::before,body:not(.admin-body) .pc-main>h2::after{width:16px;flex:none}}
+/* ===== الدخول والتسجيل بالتصميم الجديد (٢٥/٠٩/٢٦): لوحة دافئة بمزايا هدهد + بطاقة النموذج ===== */
+body:not(.admin-body) .auth{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,460px);gap:26px;align-items:stretch;max-width:1000px;margin:34px auto 50px}
+body:not(.admin-body) .auth-brand{background:linear-gradient(160deg,#fff7ef 0%,#fbe9d9 100%);border-radius:var(--r-l);padding:34px 32px;box-shadow:var(--sh);position:relative;overflow:hidden}
+body:not(.admin-body) .auth-brand::after{content:"";position:absolute;inset:auto -60px -80px auto;width:220px;height:220px;border-radius:50%;background:radial-gradient(circle,rgba(176,90,32,.14),transparent 70%)}
+body:not(.admin-body) .auth-brand>img{display:block;margin-bottom:6px}
+body:not(.admin-body) .auth-name{display:block;font-size:26px;color:#3b2414}
+body:not(.admin-body) .auth-name i{font-style:normal;font-size:13px;letter-spacing:2px;color:var(--brand);margin-inline-start:6px}
+body:not(.admin-body) .auth-tag{color:#6b5444;margin:6px 0 22px;line-height:1.8}
+body:not(.admin-body) .auth-brand ul{list-style:none;margin:0;padding:0;display:grid;gap:14px}
+body:not(.admin-body) .auth-brand li{display:flex;gap:12px;align-items:flex-start}
+body:not(.admin-body) .auth-brand li>i{flex:none;width:38px;height:38px;border-radius:12px;background:#fff;color:var(--brand);display:grid;place-items:center;box-shadow:0 2px 8px rgba(120,60,20,.08)}
+body:not(.admin-body) .auth-brand li span{font-size:13px;color:#7a6252;line-height:1.6}
+body:not(.admin-body) .auth-brand li b{display:block;font-size:14.5px;color:#3b2414}
+body:not(.admin-body) .auth-gift{margin-top:22px;display:flex;gap:10px;align-items:center;background:#fff;border:1.5px dashed #e3b48c;border-radius:14px;padding:12px 14px;font-size:13.5px;color:#5a3a22;position:relative;z-index:1}
+body:not(.admin-body) .auth-gift .si{color:var(--brand);flex:none}
+body:not(.admin-body) .auth-gift b{color:var(--brand)}
+body:not(.admin-body) .auth .auth-card{max-width:none;margin:0;padding:34px 32px}
+body:not(.admin-body) .auth-ic{width:50px;height:50px;border-radius:16px;background:var(--brand-grad);color:#fff;display:grid;place-items:center;box-shadow:0 6px 16px rgba(176,90,32,.28);margin-bottom:12px}
+body:not(.admin-body) .auth-card h1{margin:0;font-size:24px}
+body:not(.admin-body) .auth-sub{color:#8a7666;margin:4px 0 16px;font-size:14px}
+body:not(.admin-body) .auth-card label{display:block;margin:14px 0 6px;font-weight:700;font-size:13.5px}
+body:not(.admin-body) .auth-card label small{font-weight:400;color:#9a8878}
+body:not(.admin-body) .fld{position:relative}
+body:not(.admin-body) .fld>.si{position:absolute;inset-inline-start:13px;top:50%;transform:translateY(-50%);color:#b39c8a;pointer-events:none}
+body:not(.admin-body) .fld>input{width:100%;padding-inline-start:42px;height:48px;margin:0}
+body:not(.admin-body) .fld:focus-within>.si{color:var(--brand)}
+body:not(.admin-body) .pw-eye{position:absolute;inset-inline-end:6px;top:50%;transform:translateY(-50%);background:none;border:0;padding:8px;color:#b39c8a;cursor:pointer;border-radius:10px}
+body:not(.admin-body) .pw-eye.on,body:not(.admin-body) .pw-eye:hover{color:var(--brand);background:var(--tint)}
+body:not(.admin-body) .fld>input[type=password],body:not(.admin-body) .fld>input[name=password]{padding-inline-end:44px}
+body:not(.admin-body) .auth-go{width:100%;margin-top:22px;height:50px;font-size:16px}
+body:not(.admin-body) .auth-alt{text-align:center;margin:16px 0 0;font-size:14px;color:#7a6252}
+body:not(.admin-body) .auth-alt a{color:var(--brand);font-weight:700}
+@media(max-width:800px){
+  body:not(.admin-body) .auth{grid-template-columns:1fr;margin:14px auto 30px;gap:16px}
+  body:not(.admin-body) .auth .auth-card{order:-1;padding:24px 18px}
+  body:not(.admin-body) .auth-brand{padding:22px 18px}
+  body:not(.admin-body) .auth-brand>img{width:64px;height:auto}
+  body:not(.admin-body) .auth-brand ul{grid-template-columns:1fr 1fr;gap:12px}
+  body:not(.admin-body) .auth-brand li{flex-direction:column;gap:6px}
+}
+/* أيقونات خطّية في قائمة اللوحتين وبطاقات أرقامهما بدل الإيموجي (٢٥/٠٩/٢٦) */
+.admin-body .side a{display:flex;align-items:center;gap:10px}
+.admin-body .side a>.si{flex:none;color:#b08a6c}
+.admin-body .side a:hover>.si{color:var(--brand)}
+.admin-body .side a.on>.si{color:#fff}
+.admin-body .side a>span{flex:1;min-width:0}
+.admin-body .hdr-links a{display:inline-flex;align-items:center;gap:6px}
+.admin-body .pd-tile .pd-ic{color:var(--brand)}
+.admin-body .pd-tile.warn .pd-ic{color:#b47a00}.admin-body .pd-tile.bad .pd-ic{color:#c0392b}.admin-body .pd-tile.ok .pd-ic{color:#15894f}
+.admin-body .pd-wallet i .si{color:#fff}
+/* صفحة التتبّع (٢٥/٠٩/٢٦): حقول بعناوين وأيقونات، بطاقة المثال موسومة، وبطاقات مساعدة تحتها */
+body:not(.admin-body) .trk-form2{display:grid;grid-template-columns:1.3fr 1fr auto;gap:10px;align-items:end;background:#fff;border-radius:20px;padding:14px;box-shadow:var(--sh);margin-top:14px}
+body:not(.admin-body) .trk-form2 label{display:block;margin:0}
+body:not(.admin-body) .trk-form2 label>span:first-child{display:block;font-size:12.5px;font-weight:700;color:#6d5a4a;margin:0 4px 6px}
+body:not(.admin-body) .trk-form2 .fld>input{height:48px;border-radius:14px;flex:none}
+body:not(.admin-body) .trk-form2 .btn{height:48px;display:inline-flex;align-items:center;gap:6px;padding:0 22px;border-radius:999px}
+body:not(.admin-body) .trk-err{display:flex;gap:8px;align-items:flex-start;background:#fdecec;border-radius:14px;padding:10px 14px;margin-top:12px;font-size:14px}
+body:not(.admin-body) .trk-err .si{flex:none;margin-top:2px}
+body:not(.admin-body) .trk-card.demo{position:relative}
+body:not(.admin-body) .trk-demo{position:absolute;top:-11px;inset-inline-end:18px;background:#3b2414;color:#fff;font-size:11.5px;font-weight:700;border-radius:999px;padding:3px 12px;letter-spacing:.2px}
+body:not(.admin-body) .trk-card.demo .trk-steps{filter:saturate(.85)}
+body:not(.admin-body) .trk-to{display:flex!important;align-items:center;gap:4px;margin-top:4px;color:var(--brand)!important;font-weight:600}
+body:not(.admin-body) .trk-help{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:0 0 40px}
+body:not(.admin-body) .trk-help a{background:#fff;border-radius:var(--r);box-shadow:var(--sh);padding:18px;display:grid;grid-template-columns:44px 1fr;column-gap:12px;align-items:center;color:inherit;text-decoration:none;transition:transform .12s,box-shadow .15s}
+body:not(.admin-body) .trk-help a:hover{transform:translateY(-2px);box-shadow:var(--sh-h)}
+body:not(.admin-body) .trk-help i{grid-row:1/3;width:44px;height:44px;border-radius:14px;background:var(--tint);color:var(--brand);display:grid;place-items:center}
+body:not(.admin-body) .trk-help b{font-size:15px}
+body:not(.admin-body) .trk-help span{font-size:13px;color:#7a6252;line-height:1.6}
+@media(max-width:800px){
+  body:not(.admin-body) .trk-form2{grid-template-columns:1fr}
+  body:not(.admin-body) .trk-form2 .btn{justify-content:center}
+  body:not(.admin-body) .trk-help{grid-template-columns:1fr;gap:10px}
+}
+/* بطاقات أرقام الإدارة بمربّع أيقونة (نظرة عامة) + أيقونات العناوين والأزرار */
+.admin-body a.kpi{color:inherit;text-decoration:none;transition:transform .12s,box-shadow .15s}
+.admin-body a.kpi:hover{transform:translateY(-2px);box-shadow:0 12px 32px rgba(110,60,20,.12)}
+.admin-body .kpi.ic{display:flex;flex-direction:column;align-items:flex-start;gap:2px}
+.admin-body .kpi.ic b{max-width:100%;white-space:normal;font-size:clamp(18px,1.55vw,26px);line-height:1.25}
+.admin-body .kpi.ic::before{display:none}
+.admin-body .kpi-ic{margin-bottom:8px;width:44px;height:44px;border-radius:15px;background:var(--tint);color:var(--brand);display:grid;place-items:center;font-style:normal}
+.admin-body .kpi.warn .kpi-ic{background:#fff4dc;color:#b47a00}.admin-body .kpi.warn b{color:#b47a00}
+.admin-body .kpi.bad .kpi-ic{background:#fde8e8;color:#c0392b}.admin-body .kpi.bad b{color:#c0392b}
+.admin-body .kpi.ok .kpi-ic{background:#e3f6ec;color:#15894f}.admin-body .kpi.ok b{color:#15894f}
+.admin-body .kpi.blue .kpi-ic{background:#e8eefc;color:#1c47b3}.admin-body .kpi.blue b{color:#1c47b3}
+.admin-body .card-box h3>.si{color:var(--brand);flex:none}
+.admin-body :is(a,button)>.si{vertical-align:-4px}
+.admin-body .quick a,.admin-body .pd-actions a{display:inline-flex;align-items:center;gap:6px}
+.admin-body .quick a .si{color:var(--brand)}
+@media(min-width:801px){.admin-body .dash{grid-template-columns:236px minmax(0,1fr)}}
+.admin-body .side a{font-size:14px;line-height:1.35}
+@media(max-width:600px){
+  .admin-body .pd-tile{grid-template-columns:1fr;row-gap:2px;padding:14px}
+  .admin-body .pd-tile .pd-ic{grid-row:auto;width:40px;height:40px;border-radius:13px;margin-bottom:6px}
+  .admin-body .pd-tile b{font-size:24px}
+}

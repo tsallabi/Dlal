@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import type { Env } from '../types';
 import { ORDER_STATUS, CITIES } from '../types';
+import { Ic } from '../views/icons';
 import { PartnerShell } from '../views/dash';
 import { Flash } from '../views/layout';
 import { fmt, imgUrl, timeAgo, notify } from '../lib/db';
@@ -42,7 +43,7 @@ async function ordersWithItems(db: D1Database, pid: number, statuses: string[]) 
 const ItemRow = (i: any, o: any) => (
   <tr>
     <td><img src={imgUrl(i.image)} /></td>
-    <td>{i.title_ar}<br /><a class="src-link" href={i.source_url ?? `https://detail.1688.com/offer/${i.source_offer_id}.html`} target="_blank">🔗 فتح في 1688 — {i.source_offer_id}</a></td>
+    <td>{i.title_ar}<br /><a class="src-link" href={i.source_url ?? `https://detail.1688.com/offer/${i.source_offer_id}.html`} target="_blank"><Ic n="link" s={18} /> فتح في 1688 — {i.source_offer_id}</a></td>
     <td><b>{[i.color, i.size].filter(Boolean).join(' · ') || '—'}</b></td>
     <td><b style="font-size:16px">× {i.qty}</b></td>
     <td>
@@ -104,26 +105,26 @@ partner.get('/', async (c) => {
   const pipeline = PARTNER_FLOW.filter(st => st !== 'delivered').map(st => ({ st, n: n(st) }));
   const maxP = Math.max(1, ...pipeline.map(p => p.n));
   const Tile = (p: { v: any; l: string; sub?: any; href?: string; tone?: string; ic?: string }) => (
-    <a class={`pd-tile ${p.tone ?? ''}`} href={p.href ?? '#'}>{p.ic && <i class="pd-ic">{p.ic}</i>}<b>{p.v}</b><span>{p.l}</span>{p.sub && <small>{p.sub}</small>}</a>);
+    <a class={`pd-tile ${p.tone ?? ''}`} href={p.href ?? '#'}>{p.ic && <i class="pd-ic"><Ic n={p.ic} s={24} /></i>}<b>{p.v}</b><span>{p.l}</span>{p.sub && <small>{p.sub}</small>}</a>);
   return shell(c, x, 'home', 'لوحتي', (
     <div class="pd">
-      <div class="pd-actions"><a class="primary" href="/partner/queue">🛒 ابدأ الشراء</a><a class="soft" href="/partner/delivery">🚚 التوصيل داخل ليبيا</a><a class="soft" href="/partner/shipments">📦 الشحنات</a><a class="soft" href="/partner/rates">💰 أسعاري</a></div>
+      <div class="pd-actions"><a class="primary" href="/partner/queue"><Ic n="cart" s={18} /> ابدأ الشراء</a><a class="soft" href="/partner/delivery"><Ic n="truck" s={18} /> التوصيل داخل ليبيا</a><a class="soft" href="/partner/shipments"><Ic n="box" s={18} /> الشحنات</a><a class="soft" href="/partner/rates"><Ic n="coin" s={18} /> أسعاري</a></div>
       <div class="pd-tiles">
-        <Tile v={n('paid')} l="بانتظار الشراء" ic="🛒" sub={nLate ? `⚠ ${nLate} متأخرة أكثر من يومين` : 'لا متأخر'} href="/partner/queue" tone={nLate ? 'warn' : ''} />
-        <Tile v={nStuck} l="عالقة في مرحلتها" ic="⚠️" sub="تجاوزت المدة المعتادة" href="#stuck" tone={nStuck ? 'bad' : 'ok'} />
-        <Tile v={n('purchasing') + n('purchased')} l="قيد الشراء" ic="⏳" href="/partner/purchasing" />
-        <Tile v={n('at_warehouse') + n('consolidated')} l="في مخزن الصين" ic="🏭" sub={`${n('consolidated')} مضمومة لشحنة`} href="/partner/warehouse" />
-        <Tile v={n('shipped')} l="في الطريق إلى ليبيا" ic="✈️" sub={`${transit.results.length} شحنة`} href="#transit" />
-        <Tile v={n('arrived') + n('customs') + n('ready')} l="وصلت ليبيا" ic="🇱🇾" sub={`${n('customs')} في الجمارك · ${n('ready') - (withCourier?.n ?? 0)} جاهزة · ${withCourier?.n ?? 0} مع ${(x.p as any).courier_name || 'أميال'}`} href="/partner/delivery" />
-        <Tile v={n('delivered')} l="وصلت للزبون" ic="✅" sub={`${month?.n ?? 0} هذا الشهر`} href="/partner/all" tone="ok" />
-        <Tile v={(shipN.open ?? 0) + (shipN.shipped ?? 0) + (shipN.arrived ?? 0) + (shipN.customs ?? 0) + (shipN.released ?? 0)} l="الشحنات" ic="📦" sub={`${shipN.open ?? 0} مفتوحة · ${shipN.shipped ?? 0} في الطريق · ${shipN.released ?? 0} مكتملة`} href="/partner/shipments" />
+        <Tile v={n('paid')} l="بانتظار الشراء" ic="cart" sub={nLate ? `⚠ ${nLate} متأخرة أكثر من يومين` : 'لا متأخر'} href="/partner/queue" tone={nLate ? 'warn' : ''} />
+        <Tile v={nStuck} l="عالقة في مرحلتها" ic="alert" sub="تجاوزت المدة المعتادة" href="#stuck" tone={nStuck ? 'bad' : 'ok'} />
+        <Tile v={n('purchasing') + n('purchased')} l="قيد الشراء" ic="hourglass" href="/partner/purchasing" />
+        <Tile v={n('at_warehouse') + n('consolidated')} l="في مخزن الصين" ic="factory" sub={`${n('consolidated')} مضمومة لشحنة`} href="/partner/warehouse" />
+        <Tile v={n('shipped')} l="في الطريق إلى ليبيا" ic="plane" sub={`${transit.results.length} شحنة`} href="#transit" />
+        <Tile v={n('arrived') + n('customs') + n('ready')} l="وصلت ليبيا" ic="pin" sub={`${n('customs')} في الجمارك · ${n('ready') - (withCourier?.n ?? 0)} جاهزة · ${withCourier?.n ?? 0} مع ${(x.p as any).courier_name || 'أميال'}`} href="/partner/delivery" />
+        <Tile v={n('delivered')} l="وصلت للزبون" ic="check" sub={`${month?.n ?? 0} هذا الشهر`} href="/partner/all" tone="ok" />
+        <Tile v={(shipN.open ?? 0) + (shipN.shipped ?? 0) + (shipN.arrived ?? 0) + (shipN.customs ?? 0) + (shipN.released ?? 0)} l="الشحنات" ic="box" sub={`${shipN.open ?? 0} مفتوحة · ${shipN.shipped ?? 0} في الطريق · ${shipN.released ?? 0} مكتملة`} href="/partner/shipments" />
       </div>
 
       <div class="pd-grid">
-        <div class="card-box pd-money"><h3>💰 الحساب بيننا</h3>
+        <div class="card-box pd-money"><h3><Ic n="coin" s={18} /> الحساب بيننا</h3>
           <div class="pd-wallets">
-            <div class="pd-wallet"><i>💼</i><div><span>المتبقي لكم علينا</span><b>{money(owedToYou)}</b><small>من مستحقات {money(dues?.total)}</small></div></div>
-            <div class="pd-wallet"><i>🧾</i><div><span>المتبقي لنا عليكم</span><b>{money(owedToUs)}</b><small>تحصيل عند الاستلام</small></div></div>
+            <div class="pd-wallet"><i><Ic n="wallet" s={22} /></i><div><span>المتبقي لكم علينا</span><b>{money(owedToYou)}</b><small>من مستحقات {money(dues?.total)}</small></div></div>
+            <div class="pd-wallet"><i><Ic n="doc" s={22} /></i><div><span>المتبقي لنا عليكم</span><b>{money(owedToUs)}</b><small>تحصيل عند الاستلام</small></div></div>
           </div>
           <table class="tbl">
             <tr><td>مستحقاتكم عن كل الطلبات الجارية والمسلَّمة</td><td>{money(dues?.total)}</td></tr>
@@ -138,7 +139,7 @@ partner.get('/', async (c) => {
           <small class="pd-note">المستحقات بأسعاركم يوم دفع كل طلب ({RATE_AR.fee_commission_pct.ar} والنقل والشحن والتوصيل + ثمن البضاعة الذي تدفعونه للمورد). فواتيركم المرفوعة: {inv?.n ?? 0} بقيمة {money(inv?.v)}.{(dues?.nosnap ?? 0) > 0 && ` ${dues.nosnap} طلبًا قديمًا بلا لقطة أسعار.`}</small>
         </div>
 
-        <div class="card-box"><h3>📦 الطلبات حسب المرحلة</h3>
+        <div class="card-box"><h3><Ic n="box" s={18} /> الطلبات حسب المرحلة</h3>
           {(() => { const all = pipeline.reduce((a, p) => a + p.n, 0) + n('delivered'); const pct = all ? Math.round(n('delivered') / all * 100) : 0;
             return <div class="pd-donut" style={`--p:${pct}`} title={`وصل للزبون ${n('delivered')} من ${all} (${pct}%)`}><div><span><b>{all}</b><small>إجمالي الطلبات<br />{pct}% وصلت للزبون</small></span></div></div>; })()}
           <div class="pd-bars">{pipeline.map(p => (
@@ -150,7 +151,7 @@ partner.get('/', async (c) => {
         </div>
       </div>
 
-      <div class="card-box" id="transit"><h3>✈️ في الطريق إلى ليبيا — ما قارب الوصول</h3>
+      <div class="card-box" id="transit"><h3><Ic n="plane" s={18} /> في الطريق إلى ليبيا — ما قارب الوصول</h3>
         {transit.results.length === 0 ? <p class="pd-empty">لا شحنات في الطريق الآن.</p> :
           <div class="tbl-wrap"><table class="tbl"><tr><th>الشحنة</th><th>الطريقة</th><th>الطلبات</th><th>شُحنت منذ</th><th>الوصول المتوقع</th><th>التتبع</th></tr>
             {transit.results.map((t: any) => { const d = daysSince(t.shipped_at); const left = eta(t.method) - d; return (
@@ -159,7 +160,7 @@ partner.get('/', async (c) => {
           </table></div>}
       </div>
 
-      <div class="card-box" id="stuck"><h3>⚠ طلبات متأخرة أو عالقة ({nLate + nStuck})</h3>
+      <div class="card-box" id="stuck"><h3><Ic n="alert" s={18} /> طلبات متأخرة أو عالقة ({nLate + nStuck})</h3>
         {nLate + nStuck > late.results.length + stuck.results.length && <p class="pd-note" style="margin:0 0 6px">الأقدم أولًا — {late.results.length + stuck.results.length} من {nLate + nStuck}. {nLate > late.results.length && <a href="/partner/queue">كل المدفوعة بانتظار الشراء ←</a>}</p>}
         {nLate + nStuck === 0 ? <p class="pd-empty">لا شيء متأخر — ممتاز ✓</p> :
           <div class="tbl-wrap"><table class="tbl"><tr><th>الطلب</th><th>المرحلة</th><th>منذ</th><th>المعتاد</th><th>المدينة</th></tr>
@@ -168,7 +169,7 @@ partner.get('/', async (c) => {
           </table></div>}
       </div>
 
-      <div class="card-box"><h3>🕒 آخر الحركات</h3>
+      <div class="card-box"><h3><Ic n="clock" s={18} /> آخر الحركات</h3>
         <ul class="po-ev">{ev.results.map((e: any) => <li><a class="po-link" href={`/partner/order/${e.code}`}>{e.code}</a> — <b>{STAGE_AR(e.status)}</b> · {timeAgo(e.created_at)}{e.note ? <small> · {e.note}</small> : null}</li>)}</ul>
       </div>
     </div>
@@ -275,12 +276,12 @@ partner.get('/delivery', async (c) => {
       <Flash msg={c.req.query('ok') ? 'تم الحفظ ✓' : undefined} />
       {err && <div class="flash err">{err}</div>}
       <div class="pd-tiles">
-        <a class="pd-tile warn" href="#ready"><i class="pd-ic">📦</i><b>{waiting.length}</b><span>جاهزة — لم تُسلَّم لـ{cn}</span><small>{waiting.filter(o => o.courier_status === 'failed').length} تعذّر توصيلها سابقًا</small></a>
-        <a class="pd-tile" href="#courier"><i class="pd-ic">🚚</i><b>{withC.length}</b><span>مع {cn} في الطريق للزبائن</span></a>
-        <a class="pd-tile ok"><i class="pd-ic">✅</i><b>{today?.n ?? 0}</b><span>وصلت الزبائن اليوم عبر {cn}</span></a>
+        <a class="pd-tile warn" href="#ready"><i class="pd-ic"><Ic n="box" s={24} /></i><b>{waiting.length}</b><span>جاهزة — لم تُسلَّم لـ{cn}</span><small>{waiting.filter(o => o.courier_status === 'failed').length} تعذّر توصيلها سابقًا</small></a>
+        <a class="pd-tile" href="#courier"><i class="pd-ic"><Ic n="truck" s={24} /></i><b>{withC.length}</b><span>مع {cn} في الطريق للزبائن</span></a>
+        <a class="pd-tile ok"><i class="pd-ic"><Ic n="check" s={24} /></i><b>{today?.n ?? 0}</b><span>وصلت الزبائن اليوم عبر {cn}</span></a>
       </div>
 
-      <div class="card-box" id="ready"><h3>📦 جاهزة للتسليم — سلّمها لـ{cn} أو للزبون مباشرة ({waiting.length})</h3>
+      <div class="card-box" id="ready"><h3><Ic n="box" s={18} /> جاهزة للتسليم — سلّمها لـ{cn} أو للزبون مباشرة ({waiting.length})</h3>
         {waiting.length === 0 ? <p class="pd-empty">لا طلبات تنتظر التسليم.</p> :
           <div class="tbl-wrap"><table class="tbl courier-tbl"><tr><th>الطلب</th><th>الزبون والعنوان</th><th>الدفع</th><th>التسليم</th></tr>
             {waiting.map(o => <tr><td><a class="po-link" href={`/partner/order/${o.code}`}>{o.code}</a>{o.courier_status === 'failed' && <><br /><small class="pd-red">تعذّر: {o.courier_note ?? '—'}</small></>}</td><td>{Addr(o)}</td><td>{cod(o)}</td>
@@ -293,7 +294,7 @@ partner.get('/delivery', async (c) => {
           </table></div>}
       </div>
 
-      <div class="card-box" id="courier"><h3>🚚 مع {cn} ({withC.length})</h3>
+      <div class="card-box" id="courier"><h3><Ic n="truck" s={18} /> مع {cn} ({withC.length})</h3>
         {withC.length === 0 ? <p class="pd-empty">لا طرود مع {cn} الآن.</p> :
           <div class="tbl-wrap"><table class="tbl courier-tbl"><tr><th>الطلب</th><th>رقم الشحنة</th><th>منذ</th><th>الزبون والعنوان</th><th>الدفع</th><th></th></tr>
             {withC.map(o => { const tr = courierTrack(p, o.courier_ref); return <tr><td><a class="po-link" href={`/partner/order/${o.code}`}>{o.code}</a></td>
@@ -303,7 +304,7 @@ partner.get('/delivery', async (c) => {
           </table></div>}
       </div>
 
-      <form method="post" action={`/partner/courier${pq(x)}`} class="card-box po-rates" id="courier-settings"><h3>⚙ الربط مع شركة التوصيل</h3>
+      <form method="post" action={`/partner/courier${pq(x)}`} class="card-box po-rates" id="courier-settings"><h3><Ic n="gear" s={18} /> الربط مع شركة التوصيل</h3>
         <p style="font-size:13px;color:#555;margin-top:0">الطريق اليوم مع أميال (ثبت من موقعها في 25/09/26): افتح حساب تاجر في <a href="https://portal.amyal.ly/register" target="_blank" rel="noopener" dir="ltr">portal.amyal.ly</a>، سجّل الشحنة هناك باسم الزبون وهاتفه وعنوانه والمبلغ المطلوب تحصيله، ثم اكتب رقم الشحنة الذي تعطيك إياه (مثل <b dir="ltr">AMY-284510</b>) في خانة الطلب أعلاه — فيصل للزبون في إشعار وصفحة طلبه. أميال لا تنشر واجهة برمجية (API) علنية؛ إن أعطتكم رابطها ومفتاحها ضعهما هنا فيُنشئ زر «عبر API» الشحنة عندهم مباشرة.</p>
         <div class="inline"><label style="min-width:170px">اسم شركة التوصيل</label><input type="text" name="courier_name" value={cn} /></div>
         <div class="inline"><label style="min-width:170px">رابط التتبع</label><input type="url" name="courier_track_url" value={p.courier_track_url ?? ''} placeholder="https://…/track?code={code}" dir="ltr" style="min-width:320px" /><small>{'{code}'} = رقم الشحنة</small></div>
@@ -460,8 +461,8 @@ partner.get('/order/:code', async (c) => {
           <button class="btn sm dark">حفظ الحالة</button>
         </form>
       ))}
-      {(o.ship_zone || o.courier_ref) && <div class="card-box"><h3>🚚 التوصيل داخل ليبيا</h3><p style="margin:0">{o.ship_city}{o.ship_zone ? ` — ${o.ship_zone}` : ''}{o.courier_ref ? <> · مع {o.courier} — رقم الشحنة <b dir="ltr">{o.courier_ref}</b> ({o.courier_status === 'failed' ? `تعذّر: ${o.courier_note ?? ''}` : o.courier_status === 'delivered' ? 'سُلِّم' : `منذ ${timeAgo(o.courier_at)}`})</> : ''} · <a href="/partner/delivery">صفحة التوصيل ←</a></p></div>}
-      <div class="card-box"><h3>🧾 مستحقاتكم عن هذا الطلب</h3>
+      {(o.ship_zone || o.courier_ref) && <div class="card-box"><h3><Ic n="truck" s={18} /> التوصيل داخل ليبيا</h3><p style="margin:0">{o.ship_city}{o.ship_zone ? ` — ${o.ship_zone}` : ''}{o.courier_ref ? <> · مع {o.courier} — رقم الشحنة <b dir="ltr">{o.courier_ref}</b> ({o.courier_status === 'failed' ? `تعذّر: ${o.courier_note ?? ''}` : o.courier_status === 'delivered' ? 'سُلِّم' : `منذ ${timeAgo(o.courier_at)}`})</> : ''} · <a href="/partner/delivery">صفحة التوصيل ←</a></p></div>}
+      <div class="card-box"><h3><Ic n="doc" s={18} /> مستحقاتكم عن هذا الطلب</h3>
         {dues ? (
           <table class="tbl po-dues">
             <tr><td>ثمن البضاعة (تدفعونه للمورد)</td><td>{fmt(dues.goods)}</td></tr>
@@ -473,7 +474,7 @@ partner.get('/order/:code', async (c) => {
           </table>
         ) : <p style="font-size:13px;color:#666">تُحسب عند تأكيد الدفع بأسعاركم في صفحة «أسعاري».</p>}
       </div>
-      <div class="card-box"><h3>📷 صور المراحل ({media.results.length})</h3>
+      <div class="card-box"><h3><Ic n="camera" s={18} /> صور المراحل ({media.results.length})</h3>
         <div class="po-gallery">{media.results.map(m => (
           <figure class="po-ph">
             <a href={m.url ?? `/partner/media/${m.id}`} target="_blank"><img src={m.url ?? `/partner/media/${m.id}`} alt="" loading="lazy" /></a>
@@ -489,7 +490,7 @@ partner.get('/order/:code', async (c) => {
           <small class="po-hint">تُصغَّر الصورة في جهازك قبل الرفع (≈200 ك.ب) فترفع بسرعة حتى على إنترنت ضعيف.</small>
         </form>
       </div>
-      <div class="card-box"><h3>🧾 فواتير المراحل ({inv.results.length})</h3>
+      <div class="card-box"><h3><Ic n="doc" s={18} /> فواتير المراحل ({inv.results.length})</h3>
         {inv.results.length > 0 && <div class="tbl-wrap"><table class="tbl"><tr><th>الرقم</th><th>المرحلة</th><th>الإجمالي</th><th>التاريخ</th><th></th></tr>
           {inv.results.map(i => <tr><td>{i.number}</td><td>{STAGE_AR(i.stage)}</td><td>{fmt(i.total_lyd)}</td><td>{timeAgo(i.created_at)}</td><td><a class="btn sm ghost" href={`/partner/invoice/${i.id}`} target="_blank">عرض وطباعة</a></td></tr>)}</table></div>}
         <form method="post" action={`/partner/order/${o.code}/invoice`} class="po-inv">
@@ -499,7 +500,7 @@ partner.get('/order/:code', async (c) => {
           <button class="btn sm dark">إنشاء الفاتورة</button>
         </form>
       </div>
-      <div class="card-box"><h3>🕒 سجل الطلب</h3><ul class="po-ev">{ev.results.map(e => <li><b>{STAGE_AR(e.status)}</b> — {timeAgo(e.created_at)}{e.note ? <small> · {e.note}</small> : null}</li>)}</ul></div>
+      <div class="card-box"><h3><Ic n="clock" s={18} /> سجل الطلب</h3><ul class="po-ev">{ev.results.map(e => <li><b>{STAGE_AR(e.status)}</b> — {timeAgo(e.created_at)}{e.note ? <small> · {e.note}</small> : null}</li>)}</ul></div>
     </>
   ));
 });
@@ -560,7 +561,7 @@ partner.get('/invoice/:id', async (c) => {
         <p><b>من:</b> {i.partner}{i.contact ? ` · ${i.contact}` : ''}<br /><b>إلى:</b> هدهد HUDHUDE · <b>الطلب:</b> {i.code} · <b>المرحلة:</b> {STAGE_AR(i.stage)}</p>
         <table class="tbl"><tr><th>البند</th><th>المبلغ</th></tr>{lines.map(l => <tr><td>{l.desc}</td><td>{fmt(l.amount)}</td></tr>)}<tr><th>الإجمالي</th><th>{fmt(i.total_lyd)}</th></tr></table>
         {i.note && <p>{i.note}</p>}
-        <button class="btn no-print" onclick="print()">🖨 طباعة / حفظ PDF</button>
+        <button class="btn no-print" onclick="print()"><Ic n="print" s={18} /> طباعة / حفظ PDF</button>
       </div></body></html>);
 });
 
@@ -586,7 +587,7 @@ partner.get('/rates', async (c) => {
         <button class="btn dark">حفظ أسعاري</button>
         {p.rates_updated_at && <small style="color:#888"> آخر تعديل {timeAgo(p.rates_updated_at)}</small>}
       </form>
-      <div class="card-box" id="zones"><h3>🚚 التوصيل داخل ليبيا حسب المدينة والمنطقة</h3>
+      <div class="card-box" id="zones"><h3><Ic n="truck" s={18} /> التوصيل داخل ليبيا حسب المدينة والمنطقة</h3>
         <p style="font-size:13px;color:#555;margin-top:0">لكل مدينة مناطق بحسب بُعدها عن مركز المدينة بالكيلومتر. يختار الزبون منطقته عند الدفع فيُحسب سعرها (+ رسم المنصة {m} د.ل). المدينة بلا مناطق تُحسب بسعر «التوصيل داخل ليبيا» الموحّد أعلاه.</p>
         {zones.length > 0 && <div class="tbl-wrap"><table class="tbl zones-tbl"><tr><th>المدينة</th><th>المنطقة</th><th>من (كم)</th><th>إلى (كم)</th><th>سعرك</th><th>يدفعه الزبون</th><th></th></tr>
           {zones.map(z => <tr><td>{z.city}</td><td>{z.zone}</td><td>{z.km_from}</td><td>{z.km_to}</td><td>{fmt(z.price_lyd)}</td><td>{fmt(Math.round((z.price_lyd + m) * 100) / 100)}</td>

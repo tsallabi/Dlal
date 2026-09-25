@@ -1,5 +1,6 @@
 // لوحة الإدارة — العمليات: الكوبونات، التقييمات، التذاكر/الإرجاع، المدفوعات وماي باي، التقارير، سجل النشاط، الزبائن، الموظفون والصلاحيات
 import { Hono } from 'hono';
+import { Ic } from '../views/icons';
 import type { Context } from 'hono';
 import type { Env, StaffRole } from '../types';
 import { ORDER_STATUS, PAYMENT_METHODS, TICKET_TYPES, TICKET_STATUS } from '../types';
@@ -78,7 +79,7 @@ ops.get('/reviews', async (c) => {
       {rows.results.length === 0 && <div class="empty">لا شيء هنا</div>}
       {rows.results.map(r => (
         <div class="card-box review"><div class="rv-h"><a href={`/p/${r.slug}`} target="_blank"><b>{r.title_ar}</b></a><Stars n={r.rating} /><small>{r.name} · {r.phone} · {timeAgo(r.created_at)}</small>{r.size_fit && <span class="status">{{ small: 'أصغر', true: 'مطابق', large: 'أكبر' }[r.size_fit as string]}</span>}</div>
-          <p>{r.body}</p>{r.image_url && <a href={r.image_url} target="_blank">📷 صورة</a>}
+          <p>{r.body}</p>{r.image_url && <a href={r.image_url} target="_blank"><Ic n="camera" s={18} /> صورة</a>}
           {st !== 'approved' && <form method="post" action={`/admin/reviews/${r.id}`} class="inline"><button class="btn sm ok" name="status" value="approved">نشر ✓</button><button class="btn sm ghost" name="status" value="rejected">رفض</button></form>}
           {st === 'approved' && <form method="post" action={`/admin/reviews/${r.id}`} class="inline"><button class="btn sm ghost" name="status" value="rejected">إخفاء</button></form>}
         </div>
@@ -126,7 +127,7 @@ ops.get('/tickets/:code', async (c) => {
     <div class="two">
       <div>
         <div class="inline" style="margin-bottom:10px"><span class={`status ${TICKET_STATUS[t.status].color}`}>{TICKET_STATUS[t.status].ar}</span><span class="status">{TICKET_TYPES[t.type]}</span>{t.order_code && <a href={`/admin/orders/${t.order_code}`} class="status blue">الطلب {t.order_code} — {ORDER_STATUS[t.order_status]?.ar} — {fmt(t.total_lyd)}</a>}</div>
-        <div class="chat">{msgs.results.map(m => <div class={`msg ${m.is_staff ? 'staff' : 'me'}`}><div class="who">{m.is_staff ? `${m.name} (فريق)` : `${t.name} (الزبون)`} · {timeAgo(m.created_at)}</div><div>{m.body}</div>{m.image_url && <a href={m.image_url} target="_blank">📷 صورة</a>}</div>)}</div>
+        <div class="chat">{msgs.results.map(m => <div class={`msg ${m.is_staff ? 'staff' : 'me'}`}><div class="who">{m.is_staff ? `${m.name} (فريق)` : `${t.name} (الزبون)`} · {timeAgo(m.created_at)}</div><div>{m.body}</div>{m.image_url && <a href={m.image_url} target="_blank"><Ic n="camera" s={18} /> صورة</a>}</div>)}</div>
         <form method="post" action={`/admin/tickets/${t.code}/reply`} class="card-box"><label>رد للزبون</label><textarea name="body" rows={3} required></textarea><div class="inline" style="margin-top:8px"><button class="btn sm">إرسال الرد</button><label class="radio" style="border:0;padding:0"><input type="checkbox" name="in_progress" value="1" checked /> وضع "قيد المعالجة"</label></div></form>
       </div>
       <div>
@@ -355,7 +356,7 @@ ops.get('/customers/:id', async (c) => {
       <div>
         <div class="card-box"><h3>البيانات</h3>{u.phone}<br />{u.email ?? '—'}<br />{u.city ?? '—'}<br /><small>مسجّل {timeAgo(u.created_at)}</small><hr />{addrs.results.map(a => <div style="font-size:13px">📍 {a.name} · {a.phone} · {a.city} — {a.address}</div>)}</div>
         {canM && <form method="post" action={`/admin/customers/${id}/points`} class="card-box"><h3>تعديل النقاط</h3><div class="inline"><input type="number" name="delta" placeholder="+50 أو -20" required /><input type="text" name="reason" placeholder="السبب" required /><button class="btn sm">تطبيق</button></div></form>}
-        {c.get('user')!.staff_role === 'owner' && !c.get('user')!.imp_by && u.active ? <form method="post" action={`/admin/as/${id}`} class="card-box"><h3>جرّب الموقع بحسابه</h3><p style="font-size:12px;color:#666;margin:0 0 8px">يفتح المتجر كما يراه هو: سلته وطلباته وإشعاراته. ما تفعله يُحفظ باسمه — لا تدفع ولا تلغِ طلبًا. «عودة إلى حسابي» من الشريط الأحمر.</p><button class="btn sm ok">👁 ادخل باسمه</button></form> : null}
+        {c.get('user')!.staff_role === 'owner' && !c.get('user')!.imp_by && u.active ? <form method="post" action={`/admin/as/${id}`} class="card-box"><h3>جرّب الموقع بحسابه</h3><p style="font-size:12px;color:#666;margin:0 0 8px">يفتح المتجر كما يراه هو: سلته وطلباته وإشعاراته. ما تفعله يُحفظ باسمه — لا تدفع ولا تلغِ طلبًا. «عودة إلى حسابي» من الشريط الأحمر.</p><button class="btn sm ok"><Ic n="eye" s={18} /> ادخل باسمه</button></form> : null}
         {canM && <form method="post" action={`/admin/customers/${id}/toggle`} class="card-box"><h3>الحساب</h3><button class="btn sm ghost" style={u.active ? 'color:#d3262b' : ''}>{u.active ? 'تعطيل الحساب' : 'تفعيل الحساب'}</button></form>}
         <div class="card-box"><h3>سجل النقاط</h3>{pts.results.map(l => <div style="font-size:13px;display:flex;justify-content:space-between;border-bottom:1px solid #eee;padding:4px 0"><span>{l.reason}</span><b style={`color:${l.delta > 0 ? '#1a9c5b' : '#d3262b'}`}>{l.delta > 0 ? '+' : ''}{l.delta}</b></div>)}</div>
       </div>
@@ -380,7 +381,7 @@ ops.get('/staff', async (c) => {
       <div class="two staff-grid">
         <div>
           <p style="font-size:13px;color:#555;margin:0 0 10px">اضغط <b>«تعديل»</b> لتغيير الاسم أو الهاتف (اسم الدخول) أو كلمة المرور أو الدور أو الشركة — تستطيع تحويل الحساب نفسه إلى موظف آخر. {owner && <>و<b>«ادخل باسمه»</b> يفتح الموقع كما يراه ذلك الموظف لتجرّبه بنفسك، ثم «عودة إلى حسابي» من الشريط الأحمر أعلى الصفحة.</>}</p>
-          {pending.results.length > 0 && <div class="card-box pending-staff" id="pending"><h3>⏳ موظفون أضافتهم شركات الشحن — بانتظار موافقتك ({pending.results.length})</h3>
+          {pending.results.length > 0 && <div class="card-box pending-staff" id="pending"><h3><Ic n="hourglass" s={18} /> موظفون أضافتهم شركات الشحن — بانتظار موافقتك ({pending.results.length})</h3>
             {pending.results.map((p: any) => <div class="inline" style="justify-content:space-between;border-bottom:1px solid var(--line);padding:6px 0" data-phone={p.phone}>
               <span><b>{p.name}</b> <span dir="ltr">{p.phone}</span> · {p.partner} <small>· أضافه {p.added ?? '—'} {timeAgo(p.created_at)}</small></span>
               <span class="inline" style="gap:6px"><form method="post" action={`/admin/staff/${p.id}/approve`}><button class="btn sm ok">قبول</button></form>
@@ -411,7 +412,7 @@ ops.get('/staff', async (c) => {
                 </form>
                 {u.id !== me.id && <div class="inline staff-acts">
                   <form method="post" action={`/admin/staff/${u.id}`}><button class="btn sm ghost" name="action" value="toggle">{u.active ? 'تعطيل الدخول' : 'تفعيل الدخول'}</button></form>
-                  {owner && u.active && u.staff_role !== 'owner' && <form method="post" action={`/admin/as/${u.id}`}><button class="btn sm ok">👁 ادخل باسمه</button></form>}
+                  {owner && u.active && u.staff_role !== 'owner' && <form method="post" action={`/admin/as/${u.id}`}><button class="btn sm ok"><Ic n="eye" s={18} /> ادخل باسمه</button></form>}
                   <form method="post" action={`/admin/staff/${u.id}/delete`}><button class="btn sm ghost" style="color:#d3262b" onclick={`return confirm('حذف ${String(u.name).replace(/'/g, '')} نهائيًا؟ لن يستطيع الدخول، ويصير رقمه متاحًا لحساب جديد.')`}>حذف</button></form>
                 </div>}
               </details>
@@ -630,7 +631,7 @@ ops.get('/crawler', async (c) => {
         <Meter label="⚖️ وزن حقيقي من المورّد" n={have?.wt ?? 0} total={have?.total ?? 0} note="صفحة 1688 بلا تسجيل دخول لا تذكر الوزن في أغلب المنتجات، فهذا الشريط يتقدّم ببطء مهما عملت الإضافة. حتى يصل الوزن الحقيقي يُسعَّر المنتج بالوزن التقديري لقسمه." />
       </div>
       {/* سؤال صاحب المشروع: «ألا يمكننا أن نجلب بالإضافة مجانًا؟» — الجواب يُقاس هنا لا يُفترض */}
-      <div id="discover" class="card-box disc-box"><h3>🔗 اكتشاف منتجات جديدة مجانًا</h3>
+      <div id="discover" class="card-box disc-box"><h3><Ic n="link" s={18} /> اكتشاف منتجات جديدة مجانًا</h3>
         <p style="font-size:12.5px;color:#555;margin:0 0 8px">صفحة البحث في 1688 تطلب حسابًا، لكن <b>صفحة المنتج</b> تفتح بلا حساب وقد تحمل روابط منتجات أخرى (توصيات، منتجات المتجر نفسه).
           الإضافة تقرأ هذه الروابط في كل صفحة تزورها للإثراء، ثم تفتح بعضها في الدفعة التالية وتستورده في قسم الصفحة التي وُجد فيها — <b>بلا حساب ولا كريدت</b>.
           المنتج الجديد يمرّ بنفس القواعد: الجملة (أقل طلب قطعتان فأكثر) وإعلانات التغليف تدخل مخفية، والمكرّر الأغلى يُتجاهل، والعنوان الصيني يبقى مسودة حتى يُترجم.</p>
@@ -685,7 +686,7 @@ ops.get('/crawler', async (c) => {
           <div class="card-box"><h3>تثبيت الإضافة (مرة واحدة)</h3>
             <div id="dlal-ext-config" data-api={origin} data-token={c.env.IMPORT_TOKEN ?? ''} style="display:none"></div>
             <ol style="font-size:13px;line-height:1.9;padding-inline-start:18px">
-              <li><a class="btn sm brand" href="/hudhud-extension.zip">⬇️ تنزيل hudhud-extension.zip</a> وفكّ الضغط في مجلد على حاسوب Chrome.</li>
+              <li><a class="btn sm brand" href="/hudhud-extension.zip"><Ic n="download" s={18} /> تنزيل hudhud-extension.zip</a> وفكّ الضغط في مجلد على حاسوب Chrome.</li>
               <li>افتح <span class="mono" style="display:inline">chrome://extensions</span> → فعّل "وضع المطوّر" → "تحميل غير مضغوط" → اختر المجلد.</li>
               <li>أعد تحميل هذه الصفحة بعد التثبيت: تأخذ الإضافة العنوان والرمز تلقائيًا ويظهر شريط أخضر بالأعلى. (يدويًا عند الحاجة: العنوان <span class="mono" style="display:inline">{origin}</span> والرمز <span class="mono" style="display:inline">{c.env.IMPORT_TOKEN ?? '(IMPORT_TOKEN غير مضبوط)'}</span>.)</li>
               <li>اضغط أيقونة الإضافة ثم "اختبار الاتصال"؛ يجب أن يظهر عدد المهام. بعدها "شغّل الآن".</li>

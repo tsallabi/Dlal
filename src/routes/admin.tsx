@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
+import { Ic } from '../views/icons';
 import type { Env } from '../types';
 import { ORDER_STATUS, PAYMENT_METHODS } from '../types';
 import { AdminShell } from '../views/dash';
@@ -63,20 +64,21 @@ admin.get('/', async (c) => {
   const s = await loadSettings(db);
   return shell(c, 'home', 'نظرة عامة', (
     <>
+      {/* بطاقات بأيقونة وتنقل إلى صفحتها (٢٥/٠٩/٢٦) */}
       <div class="kpis">
-        <div class="kpi"><b>{v[0]}</b><span>منتج نشط</span></div>
-        <div class="kpi"><b>{v[1]}</b><span>طلب آخر 24 ساعة</span></div>
-        <div class="kpi"><b>{fmt(v[2])}</b><span>مبيعات 30 يومًا</span></div>
-        <div class="kpi"><b style="color:#d68b00">{v[3]}</b><span>بانتظار تأكيد الدفع</span></div>
-        <div class="kpi"><b style="color:#1c47b3">{v[4]}</b><span>عند شركاء الشراء</span></div>
-        <div class="kpi"><b>{v[5]}</b><span>زبون مسجّل</span></div>
-        <div class="kpi"><b style="color:#d3262b">{v[6]}</b><span>منتج لم يُفحص منذ أسبوع</span></div>
-        <div class="kpi"><b>{s.fx_cny_lyd}</b><span>سعر اليوان اليوم (د.ل)</span></div>
-        <div class="kpi"><b style="color:#d68b00">{v[7]}</b><span>تذاكر مفتوحة</span></div>
-        <div class="kpi"><b>{v[8]}</b><span>تقييمات بانتظار المراجعة</span></div>
-        <div class="kpi"><b style="color:#1a9c5b">{fmt(v[9])}</b><span>مدفوعات ماي باي اليوم</span></div>
+        <a class="kpi ic " href="/admin/products"><i class="kpi-ic"><Ic n="bag" s={22} /></i><b>{v[0]}</b><span>منتج نشط</span></a>
+        <a class="kpi ic " href="/admin/orders"><i class="kpi-ic"><Ic n="box" s={22} /></i><b>{v[1]}</b><span>طلب آخر 24 ساعة</span></a>
+        <a class="kpi ic " href="/admin/reports"><i class="kpi-ic"><Ic n="trend" s={22} /></i><b>{fmt(v[2])}</b><span>مبيعات 30 يومًا</span></a>
+        <a class="kpi ic warn" href="/admin/orders?status=pending_payment"><i class="kpi-ic"><Ic n="card" s={22} /></i><b>{v[3]}</b><span>بانتظار تأكيد الدفع</span></a>
+        <a class="kpi ic blue" href="/admin/partners"><i class="kpi-ic"><Ic n="ship" s={22} /></i><b>{v[4]}</b><span>عند شركاء الشراء</span></a>
+        <a class="kpi ic " href="/admin/customers"><i class="kpi-ic"><Ic n="users" s={22} /></i><b>{v[5]}</b><span>زبون مسجّل</span></a>
+        <a class="kpi ic bad" href="/admin/stock"><i class="kpi-ic"><Ic n="refresh" s={22} /></i><b>{v[6]}</b><span>منتج لم يُفحص منذ أسبوع</span></a>
+        <a class="kpi ic " href="/admin/pricing"><i class="kpi-ic"><Ic n="coin" s={22} /></i><b>{s.fx_cny_lyd}</b><span>سعر اليوان اليوم (د.ل)</span></a>
+        <a class="kpi ic warn" href="/admin/tickets"><i class="kpi-ic"><Ic n="ret" s={22} /></i><b>{v[7]}</b><span>تذاكر مفتوحة</span></a>
+        <a class="kpi ic " href="/admin/reviews"><i class="kpi-ic"><Ic n="star" s={22} /></i><b>{v[8]}</b><span>تقييمات بانتظار المراجعة</span></a>
+        <a class="kpi ic ok" href="/admin/payments"><i class="kpi-ic"><Ic n="wallet" s={22} /></i><b>{fmt(v[9])}</b><span>مدفوعات ماي باي اليوم</span></a>
       </div>
-      <div class="quick"><a href="/admin/orders?status=pending_payment">💳 تأكيد مدفوعات يدوية</a><a href="/admin/tickets">↩️ الرد على التذاكر</a><a href="/admin/reviews">⭐ مراجعة التقييمات</a><a href="/admin/import">⬇️ استيراد منتجات</a><a href="/admin/pricing">💰 تحديث سعر الصرف</a><a href="/admin/reports">📈 التقارير</a></div>
+      <div class="quick"><a href="/admin/orders?status=pending_payment"><Ic n="card" s={18} /> تأكيد مدفوعات يدوية</a><a href="/admin/tickets"><Ic n="ret" s={18} /> الرد على التذاكر</a><a href="/admin/reviews"><Ic n="star" s={18} /> مراجعة التقييمات</a><a href="/admin/import"><Ic n="download" s={18} /> استيراد منتجات</a><a href="/admin/pricing"><Ic n="coin" s={18} /> تحديث سعر الصرف</a><a href="/admin/reports"><Ic n="trend" s={18} /> التقارير</a></div>
       <div class="card-box"><h3>آخر الطلبات</h3><div class="tbl-wrap"><table class="tbl"><tr><th>الطلب</th><th>الزبون</th><th>الحالة</th><th>الإجمالي</th><th>التاريخ</th></tr>
         {recent.results.map(o => <tr><td><a href={`/admin/orders/${o.code}`} style="color:var(--brand);font-weight:700">{o.code}</a></td><td>{o.name}</td><td><span class={`status ${ORDER_STATUS[o.status]?.color}`}>{ORDER_STATUS[o.status]?.ar}</span></td><td>{fmt(o.total_lyd)}</td><td>{timeAgo(o.created_at)}</td></tr>)}
       </table></div></div>
@@ -125,7 +127,7 @@ admin.get('/orders/:code', async (c) => {
       <div class="two">
         <div>
           <div class="card-box"><h3>الحالة: <span class={`status ${ORDER_STATUS[o.status]?.color}`}>{ORDER_STATUS[o.status]?.ar}</span></h3>
-            {o.partner_id && <p style="font-size:13px;margin:0 0 8px"><a href={`/partner/order/${o.code}`} target="_blank">📷 صور المراحل وفواتير الشريك ومستحقاته ←</a></p>}
+            {o.partner_id && <p style="font-size:13px;margin:0 0 8px"><a href={`/partner/order/${o.code}`} target="_blank"><Ic n="camera" s={18} /> صور المراحل وفواتير الشريك ومستحقاته ←</a></p>}
             {(o.ship_zone || o.courier_ref) && <p class="courier-admin" style="font-size:13px;margin:0 0 8px">🚚 {o.ship_zone ? `المنطقة: ${o.ship_zone}` : ''}{o.courier_ref ? ` · مع ${o.courier} — رقم الشحنة ${o.courier_ref} (${o.courier_status === 'failed' ? `تعذّر: ${o.courier_note ?? ''}` : o.courier_status === 'delivered' ? 'سُلِّم' : `منذ ${timeAgo(o.courier_at)}`})` : ''}</p>}
             {o.status === 'pending_payment' && (
               <form method="post" action={`/admin/orders/${o.code}/confirm-payment`} class="inline">
@@ -208,7 +210,7 @@ admin.get('/import', async (c) => {
         <div>
           <div class="card-box"><h3>الطريقة 1 — زر الاستيراد في متصفحك (موصى بها)</h3>
             <ol style="font-size:14px;line-height:1.9">
-              <li>اسحب هذا الزر إلى شريط المفضلة في Chrome: <a href={bookmarklet} class="btn sm brand" onclick="return false" draggable="true">⬇️ استورد إلى هدهد</a></li>
+              <li>اسحب هذا الزر إلى شريط المفضلة في Chrome: <a href={bookmarklet} class="btn sm brand" onclick="return false" draggable="true"><Ic n="download" s={18} /> استورد إلى هدهد</a></li>
               <li>افتح <a href="https://www.1688.com" target="_blank" class="src-link">1688.com</a> وسجّل الدخول بحسابك، وابحث عن أي منتج أو افتح صفحة قسم.</li>
               <li>اضغط الزر من شريط المفضلة: تظهر نافذة تعرض منتجات الصفحة، تختار القسم في هدهد وتضغط "استيراد".</li>
               <li>في صفحة منتج واحد يستورد الزر المنتج بكل صوره ومقاساته وألوانه.</li>
@@ -441,7 +443,7 @@ admin.get('/products', async (c) => {
           <button class="btn sm ghost" name="act" value="show">أعِدها للمتجر</button></div>
       </form>
       <div class="tbl-wrap"><table class="tbl"><tr><th></th><th>المنتج</th><th>القسم</th><th>سعر المصدر</th><th>سعر البيع</th><th>الحالة</th><th>مبيعات</th><th>آخر فحص</th><th></th></tr>
-        {rows.results.map(p => <tr><td><img src={imgUrl(p.image)} /></td><td><a href={`/admin/products/${p.id}`}>{p.title_ar}</a><br /><a class="src-link" href={p.source_url ?? '#'} target="_blank">{p.source_offer_id}</a></td><td>{p.cat_name ?? '—'}</td><td>{p.source_price_cny} ¥</td><td><b>{fmt(p.price_lyd)}</b><br /><small style="color:#888">هامش ≈ {Math.round((1 - (p.source_price_cny * parseFloat(s.fx_cny_lyd)) / p.price_lyd) * 100)}%</small></td><td><span class={`status ${p.status === 'active' ? 'green' : p.status === 'unavailable' ? 'red' : 'gray'}`}>{p.status}</span>{!p.in_stock && <><br /><small style="color:#d3262b">نفد</small></>}</td><td>{p.sales}</td><td><small>{p.last_checked_at ? timeAgo(p.last_checked_at) : '—'}</small></td><td><a href={`/p/${p.slug}`} target="_blank">👁</a></td></tr>)}
+        {rows.results.map(p => <tr><td><img src={imgUrl(p.image)} /></td><td><a href={`/admin/products/${p.id}`}>{p.title_ar}</a><br /><a class="src-link" href={p.source_url ?? '#'} target="_blank">{p.source_offer_id}</a></td><td>{p.cat_name ?? '—'}</td><td>{p.source_price_cny} ¥</td><td><b>{fmt(p.price_lyd)}</b><br /><small style="color:#888">هامش ≈ {Math.round((1 - (p.source_price_cny * parseFloat(s.fx_cny_lyd)) / p.price_lyd) * 100)}%</small></td><td><span class={`status ${p.status === 'active' ? 'green' : p.status === 'unavailable' ? 'red' : 'gray'}`}>{p.status}</span>{!p.in_stock && <><br /><small style="color:#d3262b">نفد</small></>}</td><td>{p.sales}</td><td><small>{p.last_checked_at ? timeAgo(p.last_checked_at) : '—'}</small></td><td><a href={`/p/${p.slug}`} target="_blank"><Ic n="eye" s={18} /> </a></td></tr>)}
       </table></div><Pager c={c} total={total} />
     </>
   ));
@@ -592,7 +594,7 @@ admin.get('/stock', async (c) => {
   return shell(c, 'stock', 'فحص المخزون والأسعار', (
     <>
       <div class="card-box"><h3>كيف يعمل الفحص</h3>
-        <p style="font-size:14px">الخادم يرتب المنتجات حسب الأهمية (مبيعات ومشاهدات) وقِدم آخر فحص. افتح 1688 في المتصفح واضغط <a href={bm} class="btn sm brand" onclick="return false">🔄 فحص المخزون</a> من شريط المفضلة، فيمر السكربت على المنتجات واحدًا واحدًا كل 12 ثانية ويحدّث السعر والتوفر. إذا ظهر كابتشا، حلّه وسيُستأنف الفحص.</p>
+        <p style="font-size:14px">الخادم يرتب المنتجات حسب الأهمية (مبيعات ومشاهدات) وقِدم آخر فحص. افتح 1688 في المتصفح واضغط <a href={bm} class="btn sm brand" onclick="return false"><Ic n="refresh" s={18} /> فحص المخزون</a> من شريط المفضلة، فيمر السكربت على المنتجات واحدًا واحدًا كل 12 ثانية ويحدّث السعر والتوفر. إذا ظهر كابتشا، حلّه وسيُستأنف الفحص.</p>
         <p style="font-size:13px;color:#666">عند الشراء الفعلي يتم أهم فحص: موظف الشريك يضغط "نفد" أو "تم الشراء"، فيُحدَّث المنتج فورًا.</p>
       </div>
       <div class="tbl-wrap"><table class="tbl"><tr><th>الأولوية</th><th>المنتج</th><th>offerId</th><th>آخر فحص</th><th>متوفر</th></tr>
@@ -806,7 +808,7 @@ admin.get('/partners', async (c) => {
           <button class="btn dark" onclick="return confirm('تسعير الرف كله بأسعار هذا الشريك الآن؟')">اعتمد أسعار «{pvp.name}» للرف وأعد التسعير</button></form>}
       </div>}
 
-      <div class="card-box" id="domestic"><h3>🚚 التوصيل داخل ليبيا</h3>
+      <div class="card-box" id="domestic"><h3><Ic n="truck" s={18} /> التوصيل داخل ليبيا</h3>
         <div class="tbl-wrap"><table class="tbl"><tr><th>الشريك</th><th>شركة التوصيل</th><th>جاهزة لم تُسلَّم</th><th>معها الآن</th><th>تعذّر توصيلها</th><th>سُلِّمت عبرها (7 أيام)</th><th>مناطق التسعير</th></tr>
           {dom.map((d: any) => <tr><td>{d.name}</td><td>{d.courier_name}{d.courier_track_url ? ' · تتبّع ✓' : ''}{d.courier_api_url ? ' · API ✓' : ''}</td><td>{d.waiting}</td><td>{d.withc}</td><td class={d.failed ? 'pd-red' : ''}>{d.failed}</td><td>{d.done7}</td><td>{d.zones ? `${d.zones} منطقة في ${d.cities} مدينة` : '—'}</td></tr>)}
         </table></div>
@@ -820,7 +822,7 @@ admin.get('/partners', async (c) => {
           </table></div></details>}
       </div>
 
-      <div class="card-box" id="ledger"><h3>💰 الحساب مع كل شريك</h3>
+      <div class="card-box" id="ledger"><h3><Ic n="coin" s={18} /> الحساب مع كل شريك</h3>
         <p style="font-size:13px;color:#666;margin-top:0">المستحقات من لقطة أسعار الشريك يوم دفع كل طلب. سجّل هنا ما تدفعه للشريك وما يسلّمه لك من تحصيل «الدفع عند الاستلام» — يظهر الرصيد نفسه في «لوحتي» عنده.</p>
         {bal.map(({ p, b, log }) => <div class="ledger-row">
           <b>{p.name}</b>

@@ -195,7 +195,7 @@ store.get('/how', async (c) => {
       <section class="hm-track">
         <div class="hm-head"><span class="hm-tag">تتبّع طلبك</span><h2>تعرف أين طلبك في كل لحظة</h2><p>من لحظة الدفع حتى يطرق مندوب التوصيل بابك — كل مرحلة بوقتها.</p>
           <form method="get" action="/track" class="trk-form"><input type="text" name="code" placeholder="DL-2026-000123" dir="ltr" required /><input type="tel" name="phone" placeholder="آخر 4 أرقام" maxlength={4} inputmode="numeric" dir="ltr" required /><button class="btn">تتبّع طلبك</button></form></div>
-        <TrackCard o={{ code: 'DL-2026-000123', status: 'arrived', courier_ref: null }} done={new Map()} />
+        <TrackCard o={{ code: 'DL-2026-000123', status: 'arrived', courier_ref: null }} done={new Map()} demo />
       </section>
 
       <section class="hm-cities">
@@ -230,11 +230,13 @@ const TRACK_STEPS: [string, string, string][] = [
   ['paid', 'card', 'استلمنا طلبك ودفعته'], ['purchased', 'cart', 'اشتريناه من المصنع في الصين'], ['at_warehouse', 'box', 'وصل مخزننا في الصين وفحصناه'],
   ['shipped', 'plane', 'في الطريق إلى ليبيا'], ['arrived', 'pin', 'وصل ليبيا وخرج من الجمارك'], ['ready', 'truck', 'مع شركة التوصيل في طريقه إليك'], ['delivered', 'check', 'تم التسليم'],
 ];
-export const TrackCard = ({ o, done }: { o: any; done: Map<string, string> }) => {
+// demo: بطاقة توضيحية لا طلب حقيقي — تُوسم «مثال» حتى لا يظنها الزائر طلبه
+export const TrackCard = ({ o, done, demo }: { o: any; done: Map<string, string>; demo?: boolean }) => {
   const cur = ORDER_STATUS[o.status]?.step ?? 0;
   return (
-    <div class="trk-card">
-      <div class="trk-h"><div><small>رقم الطلب</small><b dir="ltr">{o.code}</b></div><span class={`status ${ORDER_STATUS[o.status]?.color}`}>{ORDER_STATUS[o.status]?.ar}</span></div>
+    <div class={`trk-card${demo ? ' demo' : ''}`}>
+      {demo && <span class="trk-demo">مثال توضيحي</span>}
+      <div class="trk-h"><div><small>رقم الطلب</small><b dir="ltr">{o.code}</b>{o.ship_city && <small class="trk-to"><Ic n="pin" s={13} /> إلى {o.ship_city}{o.ship_zone ? ` — ${o.ship_zone}` : ''}</small>}</div><span class={`status ${ORDER_STATUS[o.status]?.color}`}>{ORDER_STATUS[o.status]?.ar}</span></div>
       {o.courier_ref && <p class="trk-courier"><Ic n="truck" s={16} /> مع {o.courier} — رقم الشحنة <b dir="ltr">{o.courier_ref}</b></p>}
       <ol class="trk-steps">{TRACK_STEPS.map(([st, ic, ar]) => { const step = ORDER_STATUS[st].step; const isDone = cur >= step; const isNow = !isDone ? false : !TRACK_STEPS.some(([s2]) => ORDER_STATUS[s2].step > step && cur >= ORDER_STATUS[s2].step);
         return <li class={`${isDone ? 'done' : ''} ${isNow ? 'now' : ''}`}><i><Ic n={ic} s={17} /></i><div><b>{ar}</b>{done.get(st) ? <small>{timeAgo(done.get(st)!)}</small> : st === 'ready' && o.courier_at ? <small>{timeAgo(o.courier_at)}</small> : null}</div></li>; })}</ol>
@@ -242,6 +244,7 @@ export const TrackCard = ({ o, done }: { o: any; done: Map<string, string> }) =>
 };
 store.get('/track', async (c) => {
   const b = await base(c);
+  const ship = { air: b.ship.air, sea: b.ship.seaOn ? b.ship.sea : '' };
   const code = String(c.req.query('code') ?? '').trim().toUpperCase().replace(/\s+/g, '');
   const ph = String(c.req.query('phone') ?? '').replace(/\D/g, '').slice(-4);
   let o: any = null, done = new Map<string, string>(), err = '';
@@ -257,14 +260,19 @@ store.get('/track', async (c) => {
     <Layout {...b} title="تتبّع طلبك">
       <section class="trk-page">
         <div class="trk-intro"><span class="hm-tag">تتبّع لحظة بلحظة</span><h1>أين طلبك الآن؟</h1><p>اكتب رقم الطلب وآخر 4 أرقام من هاتف التوصيل — تظهر لك كل مرحلة من الصين حتى باب بيتك.</p>
-          <form method="get" action="/track" class="trk-form">
-            <input type="text" name="code" value={code} placeholder="DL-2026-000123" dir="ltr" required />
-            <input type="tel" name="phone" value={ph} placeholder="آخر 4 أرقام" maxlength={4} inputmode="numeric" dir="ltr" required />
-            <button class="btn">تتبّع</button>
+          <form method="get" action="/track" class="trk-form trk-form2">
+            <label><span>رقم الطلب</span><span class="fld"><Ic n="box" s={18} /><input type="text" name="code" value={code} placeholder="DL-2026-000123" dir="ltr" required /></span></label>
+            <label><span>آخر 4 أرقام من الهاتف</span><span class="fld"><Ic n="phone" s={18} /><input type="tel" name="phone" value={ph} placeholder="1234" maxlength={4} inputmode="numeric" dir="ltr" required /></span></label>
+            <button class="btn"><Ic n="compass" s={18} /> تتبّع</button>
           </form>
-          {err && <p class="trk-err">{err}</p>}
+          {err && <p class="trk-err"><Ic n="alert" s={18} /> {err}</p>}
         </div>
-        {o ? <TrackCard o={o} done={done} /> : <TrackCard o={{ code: 'DL-2026-000123', status: 'shipped', courier_ref: null }} done={new Map()} />}
+        {o ? <TrackCard o={o} done={done} /> : <TrackCard o={{ code: 'DL-2026-000123', status: 'shipped', courier_ref: null }} done={new Map()} demo />}
+      </section>
+      <section class="trk-help">
+        <a href={b.user ? '/account/orders' : '/login?next=/account/orders'}><i><Ic n="doc" s={20} /></i><b>أين أجد رقم طلبي؟</b><span>في رسالة تأكيد الطلب، وفي «طلباتي» بحسابك.</span></a>
+        <a href="/pages/shipping"><i><Ic n="clock" s={20} /></i><b>متى يصل طلبي؟</b><span>جوًّا {ship.air}{ship.sea ? `، وبحرًا ${ship.sea}` : ''} من يوم الدفع.</span></a>
+        <a href="/pages/contact"><i><Ic n="chat" s={20} /></i><b>طلبك تأخّر أو عندك سؤال؟</b><span>راسلنا برقم الطلب ونرد عليك.</span></a>
       </section>
     </Layout>,
   );

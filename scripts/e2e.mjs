@@ -460,6 +460,15 @@ await login(page, '0910000000', 'admin123');
 await page.goto(BASE + '/admin');
 expect((await page.locator('.kpi').count()) >= 10, 'لوحة الأدمن تعرض المؤشرات الموسعة');
 expect(await has(page, 'المالك'), 'الأدمن يرى دوره (المالك) في الترويسة');
+// أيقونات خطّية لا إيموجي في قائمة اللوحة، وبطاقات الأرقام تنقل إلى صفحتها (٢٥/٠٩/٢٦)
+{
+  const EMO = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
+  const sideTxt = await page.locator('.side').innerText();
+  expect(!EMO.test(sideTxt) && await page.locator('.side a svg.si').count() >= 15, 'قائمة الإدارة بأيقونات خطّية بلا إيموجي');
+  await page.locator('a.kpi', { hasText: 'تذاكر مفتوحة' }).click(); await page.waitForLoadState('networkidle');
+  expect(page.url().includes('/admin/tickets'), 'بطاقة «تذاكر مفتوحة» في نظرة عامة تفتح التذاكر');
+  await page.goto(BASE + '/admin');
+}
 await shot(page, 'admin-home');
 await page.goto(BASE + '/admin/orders?status=paid'); expect(await has(page, orderCode), 'الطلب المدفوع بماي باي يظهر في قائمة "مدفوع"');
 await page.goto(BASE + '/admin/orders/' + orderCode);
@@ -849,9 +858,9 @@ expect(await page.locator('.shipsel label.on').textContent().then(t => t.include
 expect(await page.locator('input[name=code]').evaluate(el => el.form?.getAttribute('action')) === '/cart/coupon', 'حقل الكوبون في صفحة الدفع ينتمي لنموذج الكوبون لا لنموذج الطلب');
 await page.fill('.coupon-box input[name=code]', 'NOPE' + String(Date.now()).slice(-4)); await page.click('.coupon-box button:has-text("تطبيق")'); await page.waitForLoadState('networkidle');
 expect(new URL(page.url()).pathname === '/checkout' && !/DL-\d{4}/.test(page.url()) && await page.locator('.coupon-box .flash.err').isVisible(), '«تطبيق» الكوبون في صفحة الدفع يعود للدفع برسالة، ولا يُنشئ طلبًا');
-await page.check('.shipsel input[value=air]'); await page.waitForLoadState('networkidle');
+await Promise.all([page.waitForNavigation(), page.check('.shipsel input[value=air]')]); await page.waitForLoadState('networkidle');
 expect(new URL(page.url()).pathname === '/checkout' && (await page.locator('.shipsel label.on').textContent()).includes('جوي'), 'تغيير طريقة الشحن في صفحة الدفع يبقى في الدفع ويُحفظ');
-await page.check('.shipsel input[value=sea]'); await page.waitForLoadState('networkidle');
+await Promise.all([page.waitForNavigation(), page.check('.shipsel input[value=sea]')]); await page.waitForLoadState('networkidle');
 await page.check('input[value=mypay_sadad]');
 await page.click('button:has-text("تأكيد الطلب")'); await page.waitForLoadState('networkidle');
 const seaOrder = page.url().match(/DL-\d{4}-\d{6}/);
@@ -2424,6 +2433,7 @@ await mp.screenshot({ path: `${OUT}/${String(++n).padStart(2, '0')}-mobile-order
     await login(page, '0920000000', 'partner123'); await page.goto(BASE + '/partner');
     const paidAfter = await numIn(page.locator('.pd-money tr', { hasText: 'ما دفعته هدهد لكم' }).locator('td').nth(1));
     expect(Math.abs(paidAfter - paidBefore - 125.5) < 0.01, `الدفعة تظهر في «الحساب بيننا» عند الشريك (${paidBefore} ⟵ ${paidAfter})`);
+    expect(!/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(await page.locator('.side').innerText() + await page.locator('.pd-actions').innerText()) && await page.locator('.side a svg.si').count() === 10 && await page.locator('.pd-tile .pd-ic svg.si').count() >= 8, 'لوحة الشريك: القائمة والإجراءات والبطاقات بأيقونات خطّية بلا إيموجي');
     // بطاقة المرحلة تفتح طلبات تلك المرحلة وحدها
     await page.locator('.pd-bar', { hasText: 'وصل مخزن الصين' }).click(); await page.waitForLoadState('networkidle');
     expect(page.url().includes('status=at_warehouse') && await has(page, 'الطلبات: وصل مخزن الصين'), 'شريط المرحلة يفتح طلباتها وحدها');
@@ -2589,8 +2599,32 @@ await mp.screenshot({ path: `${OUT}/${String(++n).padStart(2, '0')}-mobile-order
   await page.goto(BASE + `/track?code=${tr.code}&phone=0000`);
   expect(await has(page, 'لم نجد طلبًا بهذا الرقم وهذا الهاتف'), 'رقم هاتف خاطئ لا يكشف الطلب');
   expect(await page.locator('.hdr-strip a[href="/track"]').count() === 1, 'رابط «تتبّع طلبك» في شريط الترويسة');
+  // صفحة التتبّع بالتصميم الجديد: البطاقة التوضيحية موسومة «مثال» ولا تظهر مع طلب حقيقي، وبطاقات المساعدة تعمل
+  await page.goto(BASE + '/track');
+  expect(await page.locator('.trk-card.demo .trk-demo').isVisible() && (await page.locator('.trk-demo').textContent()).includes('مثال'), 'بطاقة التتبّع بلا رقم موسومة «مثال توضيحي»');
+  expect(await page.locator('.trk-help a').count() === 3, 'تحت التتبّع ثلاث بطاقات مساعدة');
+  await page.locator('.trk-help a', { hasText: 'متى يصل طلبي' }).click(); await page.waitForLoadState('networkidle');
+  expect(page.url().endsWith('/pages/shipping'), '«متى يصل طلبي؟» يفتح معلومات الشحن');
+  await page.goto(BASE + `/track?code=${tr.code}&phone=${tr.p}`);
+  expect(await page.locator('.trk-demo').count() === 0 && await page.locator('.trk-to').count() === 1, 'الطلب الحقيقي بلا وسم «مثال» ومعه مدينة التوصيل');
+  // الدخول والتسجيل بالتصميم الجديد: لوحة المزايا، الكوبون الترحيبي من القاعدة، وزر إظهار كلمة المرور
+  {
+    const lp = await (await browser.newContext({ locale: 'ar' })).newPage();
+    await lp.goto(BASE + '/login');
+    expect(await lp.locator('.auth-brand li').count() === 4 && await lp.locator('.auth-card .fld svg.si').count() >= 2, 'صفحة الدخول: لوحة المزايا وحقول بأيقونات');
+    const wOn = await lp.locator('.auth-gift').count();
+    expect(wOn === 1 ? (await lp.locator('.auth-gift').textContent()).includes('WELCOME10') : true, 'سطر الكوبون الترحيبي يسمّي كوبونًا مفعّلًا فعلًا');
+    await lp.fill('input[name=password]', 'abc123'); await lp.click('[data-pw-eye]');
+    expect(await lp.locator('input[name=password]').getAttribute('type') === 'text', 'زر العين يُظهر كلمة المرور');
+    await lp.click('[data-pw-eye]'); expect(await lp.locator('input[name=password]').getAttribute('type') === 'password', 'ونقرة ثانية تخفيها');
+    await lp.click('a:has-text("أنشئ حسابًا")'); await lp.waitForLoadState('networkidle');
+    expect(new URL(lp.url()).pathname === '/register' && await lp.locator('.auth-card input[name=name]').isVisible(), '«أنشئ حسابًا» يفتح التسجيل بالتصميم نفسه');
+    await lp.click('.auth-alt a'); await lp.waitForLoadState('networkidle');
+    expect(new URL(lp.url()).pathname === '/login', '«سجّل الدخول» من التسجيل يعود للدخول');
+    await lp.context().close();
+  }
   const tm = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, locale: 'ar' }); const tmp = await tm.newPage();
-  for (const u of ['/how', `/track?code=${tr.code}&phone=${tr.p}`]) { await tmp.goto(BASE + u); const sw = await tmp.evaluate(() => document.documentElement.scrollWidth); expect(sw <= 391, `${u.split('?')[0]} في الجوال بلا تمرير أفقي (${sw})`); }
+  for (const u of ['/how', `/track?code=${tr.code}&phone=${tr.p}`, '/track', '/login', '/register']) { await tmp.goto(BASE + u); const sw = await tmp.evaluate(() => document.documentElement.scrollWidth); expect(sw <= 391, `${u.split('?')[0]} في الجوال بلا تمرير أفقي (${sw})`); }
   await tm.close();
 }
 

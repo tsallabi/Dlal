@@ -3,6 +3,7 @@ import { Hono } from 'hono';
 import type { Env } from '../types';
 import { shell } from './admin-ops';
 import { Flash } from '../views/layout';
+import { Ic } from '../views/icons';
 import { fmt, timeAgo, notify } from '../lib/db';
 import { requireRole } from '../lib/auth';
 import { requirePerm, logActivity } from '../lib/perm';
@@ -75,22 +76,22 @@ an.get('/analytics', async (c) => {
       <Flash msg={c.req.query('ok') ? 'أُرسل التذكير ✓' : undefined} />
       <div class="inline" style="gap:6px">{tabs}<small style="color:#888;margin-inline-start:8px">الروبوتات وحسابات الموظفين والشركاء لا تُحسب.</small></div>
       <div class="pd-tiles">
-        <a class="pd-tile"><i class="pd-ic">👣</i><b>{t.v ?? 0}</b><span>زائر</span><small>{t.pv ?? 0} صفحة · {pct(t.m ?? 0, t.v ?? 0)} من الجوال</small></a>
-        <a class="pd-tile"><i class="pd-ic">👤</i><b>{t.u ?? 0}</b><span>زبون مسجّل زار</span></a>
-        <a class="pd-tile" href="#abandoned"><i class="pd-ic">🛒</i><b>{ab.length}</b><span>سلة متروكة</span><small>بضاعة في السلة بلا طلب</small></a>
-        <a class="pd-tile warn" href="#unpaid"><i class="pd-ic">💳</i><b>{upN}</b><span>بدأ الدفع ولم يُكمله</span><small>طلب بانتظار الدفع</small></a>
-        <a class="pd-tile ok"><i class="pd-ic">✅</i><b>{o.paid ?? 0}</b><span>اشترى ودفع</span><small>{fmt(o.v ?? 0)} في {perAr}</small></a>
-        <a class={`pd-tile ${(errs.results.length) ? 'bad' : ''}`} href="#errors"><i class="pd-ic">⚠️</i><b>{(errs.results as any[]).reduce((a, e) => a + e.n, 0)}</b><span>مشكلة واجهت الزوار</span><small>صفحات مفقودة وأخطاء</small></a>
+        <a class="pd-tile"><i class="pd-ic"><Ic n="steps" s={24} /></i><b>{t.v ?? 0}</b><span>زائر</span><small>{t.pv ?? 0} صفحة · {pct(t.m ?? 0, t.v ?? 0)} من الجوال</small></a>
+        <a class="pd-tile"><i class="pd-ic"><Ic n="user" s={24} /></i><b>{t.u ?? 0}</b><span>زبون مسجّل زار</span></a>
+        <a class="pd-tile" href="#abandoned"><i class="pd-ic"><Ic n="cart" s={24} /></i><b>{ab.length}</b><span>سلة متروكة</span><small>بضاعة في السلة بلا طلب</small></a>
+        <a class="pd-tile warn" href="#unpaid"><i class="pd-ic"><Ic n="card" s={24} /></i><b>{upN}</b><span>بدأ الدفع ولم يُكمله</span><small>طلب بانتظار الدفع</small></a>
+        <a class="pd-tile ok"><i class="pd-ic"><Ic n="check" s={24} /></i><b>{o.paid ?? 0}</b><span>اشترى ودفع</span><small>{fmt(o.v ?? 0)} في {perAr}</small></a>
+        <a class={`pd-tile ${(errs.results.length) ? 'bad' : ''}`} href="#errors"><i class="pd-ic"><Ic n="alert" s={24} /></i><b>{(errs.results as any[]).reduce((a, e) => a + e.n, 0)}</b><span>مشكلة واجهت الزوار</span><small>صفحات مفقودة وأخطاء</small></a>
       </div>
 
       <div class="pd-grid">
-        <div class="card-box"><h3>🛒 مسار الشراء — {perAr}</h3>
+        <div class="card-box"><h3><Ic n="cart" s={18} /> مسار الشراء — {perAr}</h3>
           <div class="pd-bars">{steps.map((s, i) => (
             <div class="pd-bar an-fun" title={`${s.l}: ${s.n}`}><span class="pd-bl">{s.l}</span><span class="pd-bt"><i style={`width:${s.n ? Math.min(100, Math.max(3, Math.round(s.n / Math.max(1, steps[0].n) * 100))) : 0}%`}></i></span><b>{s.n}</b>
               {i > 0 && <small class="an-conv">{pct(s.n, steps[i - 1].n)} من السابقة</small>}</div>))}</div>
           <p class="pd-note">كل خطوة تُعدّ زوّارًا مختلفين لا زيارات. «أنشؤوا طلبًا» و«دفعوا» من الطلبات نفسها.</p>
         </div>
-        <div class="card-box"><h3>🌍 من أين يزوروننا</h3>
+        <div class="card-box"><h3><Ic n="globe" s={18} /> من أين يزوروننا</h3>
           <Bars rows={(countries.results as any[]).map(r => ({ l: countryAr(r.k), n: r.n }))} />
           <h4 style="margin:12px 0 6px">المدن</h4>
           <Bars rows={(cities.results as any[]).map(r => ({ l: cityAr(r.k), sub: r.country && r.country !== 'LY' ? `(${countryAr(r.country)})` : '', n: r.n }))} />
@@ -98,22 +99,22 @@ an.get('/analytics', async (c) => {
       </div>
 
       <div class="pd-grid">
-        <div class="card-box"><h3>❤ اهتماماتهم: الأقسام</h3><Bars rows={(cats.results as any[]).map(r => ({ l: r.t ?? r.k, n: r.n, href: `/c/${r.k}` }))} /></div>
-        <div class="card-box"><h3>👀 أكثر المنتجات مشاهدة</h3><Bars rows={(prods.results as any[]).map(r => ({ l: String(r.t ?? r.k).slice(0, 48), sub: r.carts ? `· 🛒${r.carts}` : '', n: r.n, href: `/p/${r.k}` }))} /></div>
+        <div class="card-box"><h3><Ic n="heart" s={18} /> اهتماماتهم: الأقسام</h3><Bars rows={(cats.results as any[]).map(r => ({ l: r.t ?? r.k, n: r.n, href: `/c/${r.k}` }))} /></div>
+        <div class="card-box"><h3><Ic n="eye" s={18} /> أكثر المنتجات مشاهدة</h3><Bars rows={(prods.results as any[]).map(r => ({ l: String(r.t ?? r.k).slice(0, 48), sub: r.carts ? `· 🛒${r.carts}` : '', n: r.n, href: `/p/${r.k}` }))} /></div>
       </div>
 
       <div class="pd-grid">
-        <div class="card-box"><h3>🔎 ماذا يبحثون عنه</h3><Bars rows={(searches.results as any[]).map(r => ({ l: r.k, sub: r.res === 0 ? '· بلا نتائج' : '', n: r.n, href: `/search?q=${encodeURIComponent(r.k)}` }))} /></div>
-        <div class="card-box"><h3>🚫 بحثوا ولم يجدوا — بضاعة مطلوبة لا نملكها</h3><Bars rows={(zero.results as any[]).map(r => ({ l: r.k, n: r.n, href: `/search?q=${encodeURIComponent(r.k)}` }))} /></div>
+        <div class="card-box"><h3><Ic n="search" s={18} /> ماذا يبحثون عنه</h3><Bars rows={(searches.results as any[]).map(r => ({ l: r.k, sub: r.res === 0 ? '· بلا نتائج' : '', n: r.n, href: `/search?q=${encodeURIComponent(r.k)}` }))} /></div>
+        <div class="card-box"><h3><Ic n="ban" s={18} /> بحثوا ولم يجدوا — بضاعة مطلوبة لا نملكها</h3><Bars rows={(zero.results as any[]).map(r => ({ l: r.k, n: r.n, href: `/search?q=${encodeURIComponent(r.k)}` }))} /></div>
       </div>
 
-      <div class="card-box" id="errors"><h3>⚠ مشاكل واجهت الزوار</h3>
+      <div class="card-box" id="errors"><h3><Ic n="alert" s={18} /> مشاكل واجهت الزوار</h3>
         {errs.results.length === 0 ? <p class="pd-empty">لا مشاكل مسجّلة في هذه الفترة ✓</p> :
           <div class="tbl-wrap"><table class="tbl"><tr><th>المشكلة</th><th>الصفحة</th><th>مرات</th><th>زوار</th><th>آخرها</th></tr>
             {(errs.results as any[]).map(e => <tr><td>{e.k}</td><td dir="ltr"><a href={e.path}>{e.path}</a></td><td>{e.n}</td><td>{e.who}</td><td>{timeAgo(e.last)}</td></tr>)}</table></div>}
       </div>
 
-      <div class="card-box" id="abandoned"><h3>🛒 سلال متروكة ({ab.length}) — ذكّرهم</h3>
+      <div class="card-box" id="abandoned"><h3><Ic n="cart" s={18} /> سلال متروكة ({ab.length}) — ذكّرهم</h3>
         <p class="pd-note" style="margin-top:0">زبائن في سلتهم بضاعة ولم يطلبوا بعد آخر إضافة. «إشعار» يظهر له في الموقع، و«واتساب» يفتح محادثة برسالة جاهزة. ولإعلانات ميتا: البكسل يسجّل AddToCart وPurchase — أنشئ جمهورًا مخصّصًا «أضافوا للسلة ولم يشتروا خلال 7 أيام».</p>
         {ab.length === 0 ? <p class="pd-empty">لا سلال متروكة.</p> :
           <div class="tbl-wrap"><table class="tbl"><tr><th>الزبون</th><th>المدينة</th><th>في السلة</th><th>القيمة</th><th>آخر إضافة</th><th>تذكير</th></tr>
@@ -123,7 +124,7 @@ an.get('/analytics', async (c) => {
                 {r.reminded && <small>ذُكّر {timeAgo(r.reminded)}</small>}</td></tr>)}</table></div>}
       </div>
 
-      <div class="card-box" id="unpaid"><h3>💳 بدأ الدفع ولم يُكمله ({upN}){upN > up.length ? ` — الأحدث ${up.length}` : ''}</h3>
+      <div class="card-box" id="unpaid"><h3><Ic n="card" s={18} /> بدأ الدفع ولم يُكمله ({upN}){upN > up.length ? ` — الأحدث ${up.length}` : ''}</h3>
         {up.length === 0 ? <p class="pd-empty">لا طلبات معلّقة.</p> :
           <div class="tbl-wrap"><table class="tbl"><tr><th>الطلب</th><th>الزبون</th><th>المبلغ</th><th>الطريقة</th><th>منذ</th><th>تذكير</th></tr>
             {up.map(r => <tr><td><a href={`/admin/orders/${r.code}`}>{r.code}</a></td><td>{r.name}<br /><small dir="ltr">{r.phone}</small></td><td>{fmt(r.total_lyd)}</td><td>{r.payment_method}</td><td>{timeAgo(r.created_at)}</td>
@@ -132,7 +133,7 @@ an.get('/analytics', async (c) => {
                 {r.reminded && <small>ذُكّر {timeAgo(r.reminded)}</small>}</td></tr>)}</table></div>}
       </div>
 
-      <div class="card-box"><h3>👣 آخر الزوار</h3>
+      <div class="card-box"><h3><Ic n="steps" s={18} /> آخر الزوار</h3>
         <div class="tbl-wrap"><table class="tbl"><tr><th>الزائر</th><th>من</th><th>الجهاز</th><th>صفحات</th><th>أبعد خطوة</th><th>آخر نشاط</th></tr>
           {(recent.results as any[]).map(v => <tr><td><a href={`/admin/analytics/v/${v.vid}`}>{v.name ?? 'زائر'}</a></td><td>{cityAr(v.city)} · {countryAr(v.country)}</td><td>{v.device === 'm' ? '📱' : '💻'}</td><td>{v.pages}</td>
             <td>{v.paid ? <span class="status green">دفع</span> : v.chk ? <span class="status gray">صفحة الدفع</span> : v.carts ? <span class="status gray">أضاف للسلة</span> : 'تصفّح'}{v.errs ? <small class="pd-red"> · {v.errs} مشكلة</small> : null}</td><td>{timeAgo(v.last)}</td></tr>)}
