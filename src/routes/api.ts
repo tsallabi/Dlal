@@ -67,10 +67,13 @@ api.get('/import/queue', async (c) => {
   // بهذا تُنجز الإضافة المجانية ركام الإثراء بينما تبقى حصة الـAPI لفحص المخزون والأسعار.
   const THIN = `((SELECT COUNT(*) FROM product_images i WHERE i.product_id=p.id) <= 1
        OR (SELECT COUNT(*) FROM variants v WHERE v.product_id=p.id) = 0 OR p.weight_g IS NULL)`;
+  // ذو الصورة الواحدة أولًا داخل الناقص (طلب صاحب المشروع ٢٦/٠٩/٢٦): صورة واحدة يراها الزبون فورًا
+  // في البطاقة وصفحة المنتج، أما الوزن فلا يراه. كانت 4,231 منتجًا نشطًا بصورة واحدة تتزاحم مع 8,915 بلا وزن.
+  const ONE = `((SELECT COUNT(*) FROM product_images i WHERE i.product_id=p.id) <= 1)`;
   const { results } = await c.env.DB.prepare(`SELECT p.source_offer_id FROM products p
      WHERE p.status IN ('active','draft') AND p.source='1688'
        AND p.source_offer_id GLOB '[0-9]*' AND length(p.source_offer_id)>=9
-     ORDER BY (${THIN} AND p.enrich_tries < 3) DESC, (p.status='draft') DESC, p.enrich_tries ASC,
+     ORDER BY (${THIN} AND p.enrich_tries < 3) DESC, (p.status='draft') DESC, (${ONE} AND p.enrich_tries < 3) DESC, p.enrich_tries ASC,
               (p.last_checked_at IS NULL) DESC, p.last_checked_at ASC, (p.sales*10+p.views) DESC LIMIT 300`).all<{ source_offer_id: string }>();
   // بداية دفعة: الإضافة تأخذ من الطابور بقدر حدّ مهمة الإثراء (max_new)
   const job = await c.env.DB.prepare("SELECT id,max_new FROM crawl_jobs WHERE type='stock' AND runner IN ('any','extension') ORDER BY active DESC,id LIMIT 1").first<{ id: number; max_new: number | null }>();

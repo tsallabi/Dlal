@@ -17,7 +17,8 @@ const NOISE = [
 export function tokens(title: string): Set<string> {
   let t = (title || '').toLowerCase();
   for (const r of NOISE) t = t.replace(r, ' ');
-  t = t.replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  // التشكيل (الشدّة وأخواتها) علامات لا حروف: كانت «مصوّرة» تنقسم «مصو» و«رة» فيزيد عدد الكلمات ويختلّ حكم التوأم
+  t = t.replace(/\p{M}+/gu, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
   const out = new Set<string>();
   for (const part of t.split(/\s+/)) {
     if (!part) continue;

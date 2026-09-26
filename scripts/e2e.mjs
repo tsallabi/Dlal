@@ -1439,6 +1439,7 @@ const dressOpt = await page.locator('form[action$="/import/json"] select[name=ca
 await page.selectOption('form[action$="/import/json"] select[name=category_id]', dressOpt);
 const arOffer = '69' + String(Date.now()).slice(-10);
 const fullOffer = '67' + String(Date.now()).slice(-10);
+const multiOffer = '66' + String(Date.now()).slice(-10);
 await page.fill('form[action$="/import/json"] textarea[name=json]', JSON.stringify([{
   offerId: cnOffer, url: `https://detail.1688.com/offer/${cnOffer}.html`, title: cnTitle,
   priceCny: 42, images: ['https://cbu01.alicdn.com/img/ibank/test.jpg'], minQty: 1, inStock: true,
@@ -1454,10 +1455,15 @@ await page.fill('form[action$="/import/json"] textarea[name=json]', JSON.stringi
   priceCny: 60, images: ['https://cbu01.alicdn.com/img/ibank/f1.jpg', 'https://cbu01.alicdn.com/img/ibank/f2.jpg', 'https://cbu01.alicdn.com/img/ibank/f3.jpg'],
   minQty: 1, inStock: true, weightG: 500,
   variants: [{ color: 'أزرق', size: 'L', inStock: true }],
+}, {
+  // ناقص الوزن والمقاسات لكن صوره ثلاث: يأتي بعد ذي الصورة الواحدة (الصورة يراها الزبون، الوزن لا)
+  offerId: multiOffer, url: `https://detail.1688.com/offer/${multiOffer}.html`, title: `قطعة مصورة ${multiOffer}`,
+  priceCny: 58, images: ['https://cbu01.alicdn.com/img/ibank/m1.jpg', 'https://cbu01.alicdn.com/img/ibank/m2.jpg', 'https://cbu01.alicdn.com/img/ibank/m3.jpg'],
+  minQty: 1, inStock: true,
 }]));
 await page.click('form[action$="/import/json"] button:has-text("استيراد")');
 await page.waitForLoadState('networkidle');
-expect(page.url().includes('imported=3'), 'الأدمن يستورد ثلاثة منتجات من لصق JSON');
+expect(page.url().includes('imported=4'), 'الأدمن يستورد أربعة منتجات من لصق JSON');
 // ---------- طابور الإضافة المجانية: الناقص أولًا ----------
 // الإضافة تقرأ صفحة 1688 من متصفح المالك بلا أي تكلفة، فيجب أن تُنفق وقتها على ما ينقصه
 // صور/مقاسات/وزن لا على منتج مكتمل. هذا ما يُنجز ركام الإثراء بلا انتظار حصة المزوّد.
@@ -1470,6 +1476,9 @@ expect(qids.length > 0, `طابور الإضافة يعيد منتجات للف�
 const iThin = qids.indexOf(arOffer), iFull = qids.indexOf(fullOffer);
 expect(iThin >= 0, 'المنتج الناقص موجود في طابور الإضافة');
 expect(iFull < 0 || iThin < iFull, `الناقص يسبق المكتمل في الطابور (ناقص ${iThin} · مكتمل ${iFull})`);
+const iMulti = qids.indexOf(multiOffer);
+// الطابور 300 فقط، وقد يملؤه ذوو الصورة الواحدة المتراكمون محليًا فيخرج ذو الصور الثلاث منه — وهذا هو المقصود
+expect(iMulti < 0 || iThin < iMulti, `ذو الصورة الواحدة يسبق ناقص الوزن ذا الصور (صورة واحدة ${iThin} · ثلاث صور ${iMulti})`);
 // ---------- الاستئناف: منتج تعذّر إثراؤه يُترك ويُنتقل لما بعده، ولا يُعاد إلى رأس الطابور ----------
 // بلا هذا يبقى المنتج الذي لا تعطي صفحته وزنًا على الرأس أبدًا، فتدور الإضافة عليه 40 ساعة
 // ولا تصل إلى بقية الكتالوج — نفس الفخّ الذي أحرق حصة المزوّد.
