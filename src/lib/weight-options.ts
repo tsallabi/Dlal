@@ -13,7 +13,7 @@ type Prod = { id: number; source_price_cny: number; weight_g: number | null; vol
 
 // المرشّحون: عنوان أو خيار فيه وحدة وزن. أنماط ثابتة قصيرة (D1 يرفض LIKE فوق 50 بايتًا)
 const HAS_W = (col: string) => `(${col} LIKE '%كجم%' OR ${col} LIKE '%كغ%' OR ${col} LIKE '%كيلو%' OR ${col} LIKE '%kg%' OR ${col} LIKE '%公斤%' OR ${col} LIKE '%千克%' OR ${col} LIKE '%جرام%' OR ${col} LIKE '%غرام%' OR ${col} LIKE '%克%')`;
-const APPAREL_SQL = "('dresses','abayas','tops','lingerie','hijab','kids','shoes')";
+const APPAREL_SQL = "('dresses','abayas','tops','lingerie','hijab','kids','shoes','bottoms','outerwear','men','sportswear')";
 
 export async function syncWeightOptions(db: D1Database, s: Settings, cats: Cat[], p: Prod): Promise<number> {
   const cat = cats.find(x => x.id === p.category_id);

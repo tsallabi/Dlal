@@ -640,8 +640,11 @@ ops.get('/crawler', async (c) => {
           قرأت الإضافة {gains?.pages} صفحة ولم تجد فيها رابط منتج آخر واحدًا: صفحة المنتج في 1688 لا تعرض التوصيات لزائر غير مسجّل. الاكتشاف المجاني لا يعمل بهذا الطريق — جلب منتجات جديدة يبقى عبر مزوّد API أو زر الاستيراد يدويًا.</p>}
         <p class="disc-q" style="font-size:13px;margin:0 0 8px">في الطابور: <b>{(disc?.pending ?? 0).toLocaleString('en-US')}</b> ينتظر · أُضيف {(disc?.imported ?? 0).toLocaleString('en-US')} · مكرّر أو مرفوض {(disc?.skipped ?? 0).toLocaleString('en-US')} · تعذّرت قراءته {(disc?.failed ?? 0).toLocaleString('en-US')}</p>
         <form method="post" action="/admin/crawler/discover" class="inline" style="gap:8px;align-items:center"><label style="margin:0">منتجات جديدة في كل دفعة</label>
-          <input type="number" name="per" value={String(perBatch)} min="0" max="100" style="width:80px" /><button class="btn sm">حفظ</button>
-          <small style="color:#666">0 = إيقاف الاستيراد (تبقى الروابط تُجمع). كل منتج صفحة إضافية بإيقاع بشري ≈ 15 ثانية؛ يتطلب الإضافة 1.7.0.</small></form>
+          <input type="number" name="per" value={String(perBatch)} min="0" max="100" style="width:80px" />
+          <label style="margin:0;display:inline-flex;gap:6px;align-items:center"><input type="checkbox" name="focus" value="1" checked={(s.discover_focus ?? '1') !== '0'} /> الأزياء والجمال أولًا (منافسة شي إن وتيمو)</label>
+          <button class="btn sm">حفظ</button>
+          <small style="color:#666">0 = إيقاف الاستيراد (تبقى الروابط تُجمع). كل منتج صفحة إضافية بإيقاع بشري ≈ 15 ثانية؛ يتطلب الإضافة 1.7.0.
+            «الأزياء أولًا»: الروابط المكتشفة في أقسام الأزياء والجمال والأطفال تُستورد قبل الأدوات والسيارات، وتُثرى صفحاتها أولًا فتأتي توصياتها من جنسها.</small></form>
       </div>
       <div class="kpis">
         <div class="kpi"><b class={online ? 'ok' : ''} style={online ? 'color:#1a9c5b' : 'color:#d3262b'}>{online ? 'متصلة' : 'غير متصلة'}</b><span>آخر اتصال: {seen} {s.crawler_version ? `· v${s.crawler_version}` : ''}</span></div>
@@ -705,8 +708,12 @@ ops.get('/crawler/live', async (c) => c.html(<LiveCard l={await liveState(c.env.
 ops.post('/crawler/discover', async (c) => {
   const f = await c.req.parseBody(); const db = c.env.DB;
   const per = Math.max(0, Math.min(100, parseInt(String(f.per ?? '')) || 0));
-  await db.prepare("INSERT INTO settings(key,value,updated_at) VALUES('discover_per_batch',?,datetime('now')) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=datetime('now')").bind(String(per)).run();
-  await logActivity(db, c.get('user')!.id, 'crawler.discover', String(per));
+  const focus = f.focus ? '1' : '0';
+  await db.batch([
+    db.prepare("INSERT INTO settings(key,value,updated_at) VALUES('discover_per_batch',?,datetime('now')) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=datetime('now')").bind(String(per)),
+    db.prepare("INSERT INTO settings(key,value,updated_at) VALUES('discover_focus',?,datetime('now')) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=datetime('now')").bind(focus),
+  ]);
+  await logActivity(db, c.get('user')!.id, 'crawler.discover', `${per} · focus=${focus}`);
   return c.redirect('/admin/crawler?ok=1#discover');
 });
 ops.post('/crawler/new', async (c) => {

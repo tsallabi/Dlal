@@ -8,6 +8,7 @@ import { Flash } from '../views/layout';
 import { getCategories, PRODUCT_SELECT, fmt, imgUrl, timeAgo, latinDigits, realWa, notify, likePat } from '../lib/db';
 import type { ProductRow } from '../lib/db';
 import { classifyModesty } from '../lib/modesty';
+import { guessCategory } from '../lib/categorize';
 import { fingerprint, sameProduct } from '../lib/dedupe';
 import { loadSettings, computePrice } from '../lib/pricing';
 import { requireRole } from '../lib/auth';
@@ -283,7 +284,10 @@ export async function importProducts(db: D1Database, arr: any[], categoryId: num
     const fp = fingerprint(srcTitle);
     const twin = peers.find((x: any) => String(x.source_offer_id) !== offerId && sameProduct(x.t, srcTitle)) ?? null;
     const lingerieId = cats.find(x => x.slug === 'lingerie')?.id ?? null;
-    const targetCat = mod.intimate && lingerieId ? lingerieId : categoryId;
+    // أقسام شي إن (بناطيل، جاكيتات، رجالي، رياضي): العنوان يقرّر لا قسم الصفحة التي وُجد فيها الرابط ولا كلمة البحث
+    const guessed = guessCategory([it.title, titleAr, it.titleEn], cats.find(x => x.id === categoryId)?.slug ?? null);
+    const guessedId = guessed ? cats.find(x => x.slug === guessed)?.id ?? null : null;
+    const targetCat = mod.intimate && lingerieId ? lingerieId : (guessedId ?? categoryId);
     const homeOk = mod.homeOk && targetCat !== lingerieId ? 1 : 0;
     const ex = await db.prepare("SELECT id,category_id,weight_g,volume_cm3,min_qty FROM products WHERE source='1688' AND source_offer_id=?").bind(offerId).first<{ id: number; category_id: number | null; weight_g: number | null; volume_cm3: number | null; min_qty: number | null }>();
     // منتج موجود: يُسعَّر بقسمه هو ووزنه المحفوظ، لا بقسم المهمة التي فحصته
@@ -346,6 +350,12 @@ export async function importProducts(db: D1Database, arr: any[], categoryId: num
       if (got) enriched++;
       if (mod.intimate && lingerieId && ex.category_id !== lingerieId) await db.prepare('UPDATE products SET category_id=?,home_ok=0 WHERE id=?').bind(lingerieId, ex.id).run();
       else if (!homeOk) await db.prepare('UPDATE products SET home_ok=0 WHERE id=?').bind(ex.id).run();
+      // منتج قائم في قسم خاطئ (تنورة في «فساتين»): مرور الإثراء عليه يصحّحه بعنوانه
+      if (!mod.intimate) {
+        const mv = guessCategory([it.title, titleAr, it.titleEn], cats.find(x => x.id === ex.category_id)?.slug ?? null);
+        const mvId = mv ? cats.find(x => x.slug === mv)?.id : undefined;
+        if (mvId && mvId !== ex.category_id) await db.prepare('UPDATE products SET category_id=? WHERE id=?').bind(mvId, ex.id).run();
+      }
       updated++; continue;
     }
     if (!ex && twin) {

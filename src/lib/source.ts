@@ -103,7 +103,7 @@ export function estWeightG(estG: number | null | undefined, cny: number): number
 // يُرفض: المدى («40-50 كغ») والحمولة والسعة ووزن الجسم («يتحمل 20 كجم»، «适合100斤»)، و克 بلا رقم قبله
 // (夹克 جاكيت، 马克笔 قلم، 克米特 كرسي)، و斤 كله (في الملابس وزن لابسها). وأقسام الملابس لا يُقرأ عنوانها أصلًا:
 // «140 جرام» فيها وزن القماش للمتر، و«50-70 كجم» وزن من يلبسها.
-const APPAREL = new Set(['dresses', 'abayas', 'tops', 'lingerie', 'hijab', 'kids', 'shoes']);
+const APPAREL = new Set(['dresses', 'abayas', 'tops', 'lingerie', 'hijab', 'kids', 'shoes', 'bottoms', 'outerwear', 'men', 'sportswear']);
 const W_UNIT = /(\d+(?:\.\d+)?)\s*(公斤|千克|kgs?|كيلو\s?(?:غرام|جرام)|كيلوغرام|كيلوجرام|كجم|كغ|كيلو|克|g|grams?|جرام|غرام|جم|غ)(?![a-z؀-ۿ])/gi;
 const W_NOT = /(تتحمل|يتحمل|تحمل|حمولة|سعة|حتى|لوزن|للوزن|وزن الجسم|للأوزان|承重|载重|负重|适合|体重|load|capacity|up to|max|bearing|holds?)\s*$/i;
 function weightsIn(s: string): number[] {

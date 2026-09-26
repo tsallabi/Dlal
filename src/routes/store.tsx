@@ -689,7 +689,7 @@ store.get('/p/:slug', async (c) => {
   const sizes = [...new Set(vars.results.map(v => v.size).filter(noCJK))] as string[];
   const images = imgs.results.length ? imgs.results.map(i => i.url) : ['/placeholder.svg'];
   const off = p.compare_price_lyd && p.compare_price_lyd > p.price_lyd ? Math.round((1 - p.price_lyd / p.compare_price_lyd) * 100) : 0;
-  const isClothing = ['dresses', 'abayas', 'tops', 'kids'].includes(p.cat_slug ?? '');
+  const isClothing = ['dresses', 'abayas', 'tops', 'kids', 'bottoms', 'outerwear', 'men', 'sportswear'].includes(p.cat_slug ?? '');
   const fitTotal = fit.results.reduce((a, r) => a + r.n, 0);
   const fitPct = (k: string) => fitTotal ? Math.round((fit.results.find(r => r.size_fit === k)?.n ?? 0) / fitTotal * 100) : 0;
   const s = await loadSettings(db);

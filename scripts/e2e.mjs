@@ -1864,6 +1864,47 @@ expect(!(qOff.fresh || []).length, 'وبـ0 لا تستلم الإضافة من�
 await page.fill('#discover input[name=per]', perBefore); await page.click('#discover button'); await page.waitForLoadState('networkidle');
 expect((await page.locator('#discover input[name=per]').inputValue()) === perBefore, `أُعيد العدد كما كان (${perBefore})`);
 await extCall('/api/crawl/discover/fail', { offerId: d2.replace(/^82/, '83') }); await extCall('/api/crawl/discover/fail', { offerId: d2.replace(/^82/, '83') });
+// ---------- أقسام شي إن وتيمو (٢٦/٠٩/٢٦): البناطيل والجاكيتات والرجالي والرياضي، والأزياء أولًا في الجلب المجاني ----------
+// طلب صاحب المشروع: «اجلب السلع التي يتوفر شبيهها في شي إن وتيمو». كانت التنانير تدخل «فساتين» والجاكيتات «بلوزات».
+for (const sl of ['bottoms', 'outerwear', 'men', 'sportswear']) {
+  const r = await page.request.get(BASE + '/c/' + sl);
+  expect(r.status() === 200, `صفحة القسم الجديد /c/${sl} تفتح (${r.status()})`);
+}
+// العنوان يقرّر القسم لا صفحة الرابط: تنورة وُجد رابطها في صفحة فستان تدخل «بناطيل وتنانير»
+const dSk = '85' + String(Date.now()).slice(-10);
+const rSk = await extCall('/api/import', { category_id: 1, page_url: 'ext:discover', items: [{ offerId: dSk, url: `https://detail.1688.com/offer/${dSk}.html`, title: `半身裙 ${dSk}`, titleAr: `تنورة ${dSk}`, priceCny: 19,
+  images: ['https://cbu01.alicdn.com/img/ibank/sk1.jpg'], variants: [], weightG: 300, minQty: 1, inStock: true }] });
+expect(rSk.imported === 1, `التنورة المكتشفة في صفحة فستان استُوردت (${rSk.imported})`);
+await page.goto(BASE + '/admin/products?q=' + dSk);
+const skRow = ((await page.locator('table.tbl tr', { hasText: dSk }).first().textContent()) || '').replace(/\s+/g, ' ');
+expect(/بناطيل وتنانير/.test(skRow), `ودخلت قسم «بناطيل وتنانير» لا «فساتين» (${skRow.slice(0, 80)})`);
+// ساعة رجالية تبقى في «إكسسوارات رجالية»: كلمة «رجالي» وحدها لا تنقل إلى ملابس الرجال
+const dWt = '86' + String(Date.now()).slice(-10);
+await extCall('/api/import', { category_id: 19, page_url: 'ext:discover', items: [{ offerId: dWt, url: `https://detail.1688.com/offer/${dWt}.html`, title: `男表 ${dWt}`, titleAr: `ساعة رجالية ${dWt}`, priceCny: 25, images: ['https://cbu01.alicdn.com/img/ibank/wt.jpg'], variants: [], weightG: 100, minQty: 1, inStock: true }] });
+await page.goto(BASE + '/admin/products?q=' + dWt);
+expect(/إكسسوارات رجالية/.test(((await page.locator('table.tbl tr', { hasText: dWt }).first().textContent()) || '')), 'الساعة الرجالية بقيت في «إكسسوارات رجالية»');
+// «الأزياء أولًا»: رابط في قسم الفساتين اكتُشف **بعد** رابط في أدوات البناء يسبقه في دفعة الاستيراد
+const dHw = '87' + String(Date.now()).slice(-10), dFa = '88' + String(Date.now()).slice(-10);
+// الرابط يحمل قسم الصفحة التي وُجد فيها: منتج عدّة (قسم 16) تُوجد فيه الروابط، ثم صفحة فستان (liveOffer، قسم 1)
+const hwId = '89' + String(Date.now()).slice(-10);
+await extCall('/api/import', { category_id: 16, page_url: 'test', items: [{ offerId: hwId, title: `عدّة ${hwId}`, priceCny: 30, images: ['https://cbu01.alicdn.com/img/ibank/hw.jpg'], inStock: true }] });
+await extCall('/api/crawl/discover', { from: hwId, ids: [dHw] });
+await page.waitForTimeout(1100);   // found_at بالثانية: الأزياء تُكتشف بعد الأدوات بثانية
+await extCall('/api/crawl/discover', { from: liveOffer, ids: [dFa] });
+const frF = (await extCall('/api/import/queue?v=' + extManifest.version)).fresh || [];
+const iHw = frF.findIndex(f => f.id === dHw), iFa = frF.findIndex(f => f.id === dFa);
+expect(iFa >= 0 && iHw >= 0, `الرابطان في دفعة الاستيراد (أزياء ${iFa} · أدوات ${iHw})`);
+expect(iFa < iHw, `رابط الفساتين يسبق رابط أدوات البناء رغم أنه اكتُشف بعده (${iFa} < ${iHw})`);
+// إطفاء «الأزياء أولًا» من صفحة الزاحف يعيد الترتيب بالأقدم
+await page.goto(BASE + '/admin/crawler');
+expect(await page.locator('#discover input[name=focus]').isChecked(), 'خيار «الأزياء والجمال أولًا» مفعّل افتراضيًا في بطاقة الاكتشاف');
+await page.uncheck('#discover input[name=focus]'); await page.click('#discover button'); await page.waitForLoadState('networkidle');
+expect(!(await page.locator('#discover input[name=focus]').isChecked()), 'الحفظ يطفئ الخيار');
+const frOff = (await extCall('/api/import/queue?v=' + extManifest.version)).fresh || [];
+expect(frOff.findIndex(f => f.id === dHw) < frOff.findIndex(f => f.id === dFa), 'وبلا الخيار: الأقدم اكتشافًا أولًا (الأدوات قبل الفساتين)');
+await page.check('#discover input[name=focus]'); await page.click('#discover button'); await page.waitForLoadState('networkidle');
+expect(await page.locator('#discover input[name=focus]').isChecked(), 'أُعيد تفعيل الخيار');
+for (const o of [dHw, dFa]) { await extCall('/api/crawl/discover/fail', { offerId: o }); await extCall('/api/crawl/discover/fail', { offerId: o }); }
 await shot(page, 'crawler-discover');
 if (stockJob) await extCall('/api/crawl/report', { job_id: stockJob.id, started_at: new Date().toISOString(), status: 'ok', checked: 0 });
 await page.goto(BASE + '/logout');

@@ -4,6 +4,7 @@ import type { Env } from '../types';
 import { getCategories } from '../lib/db';
 import { syncWeightOptionsBatch } from '../lib/weight-options';
 import { religiousSweep } from '../lib/religious';
+import { categorySweep, FASHION_SLUGS } from '../lib/categorize';
 import { importProducts } from './admin';
 import { classifyModesty } from '../lib/modesty';
 import { fingerprint, sameProduct } from '../lib/dedupe';
@@ -70,10 +71,13 @@ api.get('/import/queue', async (c) => {
   // ذو الصورة الواحدة أولًا داخل الناقص (طلب صاحب المشروع ٢٦/٠٩/٢٦): صورة واحدة يراها الزبون فورًا
   // في البطاقة وصفحة المنتج، أما الوزن فلا يراه. كانت 4,231 منتجًا نشطًا بصورة واحدة تتزاحم مع 8,915 بلا وزن.
   const ONE = `((SELECT COUNT(*) FROM product_images i WHERE i.product_id=p.id) <= 1)`;
+  // وداخل ذوي الصورة الواحدة: الأزياء أولًا حين يكون «الأزياء والجمال أولًا» مفعّلًا — الصفحة التي تُفتح للإثراء هي
+  // التي تُقرأ منها روابط الاكتشاف، وتوصيات صفحة فستان فساتين وتنانير لا مفاتيح ربط
+  const FASH = inSql('p.category_id', await fashionIds(c.env.DB));
   const { results } = await c.env.DB.prepare(`SELECT p.source_offer_id FROM products p
      WHERE p.status IN ('active','draft') AND p.source='1688'
        AND p.source_offer_id GLOB '[0-9]*' AND length(p.source_offer_id)>=9
-     ORDER BY (${THIN} AND p.enrich_tries < 3) DESC, (p.status='draft') DESC, (${ONE} AND p.enrich_tries < 3) DESC, p.enrich_tries ASC,
+     ORDER BY (${THIN} AND p.enrich_tries < 3) DESC, (p.status='draft') DESC, (${ONE} AND p.enrich_tries < 3) DESC, ${FASH} DESC, p.enrich_tries ASC,
               (p.last_checked_at IS NULL) DESC, p.last_checked_at ASC, (p.sales*10+p.views) DESC LIMIT 300`).all<{ source_offer_id: string }>();
   // بداية دفعة: الإضافة تأخذ من الطابور بقدر حدّ مهمة الإثراء (max_new)
   const job = await c.env.DB.prepare("SELECT id,max_new FROM crawl_jobs WHERE type='stock' AND runner IN ('any','extension') ORDER BY active DESC,id LIMIT 1").first<{ id: number; max_new: number | null }>();
@@ -106,11 +110,22 @@ api.get('/crawl/fresh', async (c) => {
   return c.json({ fresh });
 });
 const discoverPer = async (db: D1Database) => Math.max(0, Math.min(100, parseInt((await db.prepare("SELECT value FROM settings WHERE key='discover_per_batch'").first<{ value: string }>())?.value ?? '') || 0));
+// «الأزياء والجمال أولًا» (٢٦/٠٩/٢٦، منافسة شي إن وتيمو): معرّفات أقسام الأزياء إن كان الخيار مفعّلًا، وإلا فارغ.
+// تُكتب أرقامًا حرفية (Number.isInteger) في SQL — لا متغيّرات مربوطة
+export async function fashionIds(db: D1Database): Promise<number[]> {
+  const on = (await db.prepare("SELECT value FROM settings WHERE key='discover_focus'").first<{ value: string }>())?.value ?? '1';
+  if (on === '0') return [];
+  return (await getCategories(db)).filter(c => FASHION_SLUGS.includes(c.slug)).map(c => c.id).filter(Number.isInteger);
+}
+// بلا معرّفات: تعبير ثابت لا رقم — SQLite يقرأ الرقم المجرّد في ORDER BY رقمَ عمود («4th ORDER BY term out of range»)
+const inSql = (col: string, ids: number[]) => ids.length ? `(${col} IN (${ids.join(',')}))` : '(0=1)';
 async function freshOffers(db: D1Database, n: number) {
   if (n <= 0) return [];
+  // طلبات الزبائن أولًا، ثم أقسام الأزياء (توصيات صفحة فستان فساتين وتنانير)، ثم الأقدم اكتشافًا
+  const fash = await fashionIds(db);
   return (await db.prepare(`SELECT d.offer_id id,d.category_id FROM discovered_offers d
      WHERE d.status='new' AND d.tries < 2 AND NOT EXISTS (SELECT 1 FROM products p WHERE p.source='1688' AND p.source_offer_id=d.offer_id)
-     ORDER BY (d.from_offer='request') DESC, d.tries, d.found_at LIMIT ?`).bind(n).all<{ id: string; category_id: number | null }>()).results;
+     ORDER BY (d.from_offer='request') DESC, ${inSql('d.category_id', fash)} DESC, d.tries, d.found_at LIMIT ?`).bind(n).all<{ id: string; category_id: number | null }>()).results;
 }
 
 api.post('/import/check', async (c) => {
@@ -260,9 +275,11 @@ api.post('/source/reprice', async (c) => {
   // ثم فروق الخيارات الموزونة لما أُعيد تسعيره («دمبل 1 كجم و 5 كجم»)
   const wopt = await syncWeightOptionsBatch(db, await loadSettings(db), await getCategories(db), 150);
   const relig = await religiousSweep(db);
+  // وتصنيف الرف بالعنوان إلى أقسام شي إن الجديدة (بناطيل، جاكيتات، رجالي، رياضي) — دفعة كبيرة هنا لتُملأ الأقسام يوم نشرها
+  const catsw = await categorySweep(db, await getCategories(db), 4000);
   const left = await db.prepare('SELECT COUNT(*) n FROM products WHERE price_sea_lyd IS NULL').first<{ n: number }>();
   const lastId = results.length ? results[results.length - 1].id : after;
-  return c.json({ ok: true, repriced: results.length, last_id: lastId, missing_sea_left: left?.n ?? 0, weight_options: wopt, religious_hidden: relig.hidden.length, religious_sample: relig.hidden.slice(0, 40) });
+  return c.json({ ok: true, repriced: results.length, last_id: lastId, missing_sea_left: left?.n ?? 0, weight_options: wopt, religious_hidden: relig.hidden.length, religious_sample: relig.hidden.slice(0, 40), category_sweep: catsw });
 });
 
 // فحص منطق الحشمة والبصمة والشحن على الكود الحقيقي (scripts/logic-test)
