@@ -17,17 +17,17 @@ const GARMENT = /衬衫|T恤|裤|外套|夹克|卫衣|毛衣|西装|短袖|长�
 
 const RULES: { slug: string; re: RegExp; need?: RegExp; not?: RegExp }[] = [
   // ملابس رياضية: كلمة رياضة + ملبس («运动鞋» حذاء لا ملبس، و«运动内衣» تحكمها الحشمة قبلنا)
-  { slug: 'sportswear', re: /瑜伽服|瑜伽裤|健身服|运动套装|运动裤|运动短裤|速干|骑行服|运动T恤|运动卫衣|运动上衣|运动背心|ملابس رياضية|بدلة رياضية|طقم رياضي|بنطال رياضي|ليقنز رياضي|ليغنز رياضي|تيشيرت رياضي|شورت رياضي|بلوزة رياضية|(بدلة|طقم|بنطال|ليقنز|ليغنز|ملابس|تيشيرت|بلوزة) (ال)?يو[غج]ا|\b(sportswear|activewear|tracksuit|yoga (pants|set|leggings|top|suit)|gym (set|wear|leggings|shorts)|running (shorts|tights|top)|quick[- ]dry)\b/i,
+  { slug: 'sportswear', re: /瑜伽服|瑜伽裤|健身服|运动套装|运动裤|运动短裤|速干(T恤|衣|裤|运动|上衣)|骑行服|运动T恤|运动卫衣|运动上衣|运动背心|ملابس رياضية|بدلة رياضية|طقم رياضي|بنطال رياضي|ليقنز رياضي|ليغنز رياضي|تيشيرت رياضي|شورت رياضي|بلوزة رياضية|(بدلة|طقم|بنطال|ليقنز|ليغنز|ملابس|تيشيرت|بلوزة) (ال)?يو[غج]ا|\b(sportswear|activewear|tracksuit|yoga (pants|set|leggings|top|suit)|gym (set|wear|leggings|shorts)|running (shorts|tights|top)|quick[- ]dry)\b/i,
     // معدّات لا ملابس: سجادة يوغا، شريط مقاومة، حبل قفز، دمبل، واقي ركبة، كوب شيكر
-    not: /鞋|حذاء|\bshoes?\b|袜|جورب|\bsocks?\b|水壶|水杯|قارورة|كوب|\bbottle\b|瑜伽垫|垫|弹力带|阻力带|发带|头带|跳绳|哑铃|壶铃|杠铃|护膝|护腕|护具|器材|泡沫轴|健身床|سجادة|حصيرة|شريط|حبل|دمبل|أوزان|حماية|واقي|دعامة|مطاطية|عمود|سرير|أسطوانة|\b(mat|band|rope|dumbbell|kettlebell|roller|guard|brace|shaker)\b/i },
+    not: /鞋|حذاء|\bshoes?\b|袜|جورب|\bsocks?\b|腰带|皮带|裤带|حزام|\bbelt\b|连衣裙|فستان|\bdress\b|浴袍|روب|\bbathrobe\b|水壶|水杯|قارورة|كوب|\bbottle\b|瑜伽垫|垫|弹力带|阻力带|发带|头带|跳绳|哑铃|壶铃|杠铃|护膝|护腕|护具|器材|泡沫轴|健身床|سجادة|حصيرة|شريط|حبل|دمبل|أوزان|حماية|واقي|دعامة|مطاطية|عمود|سرير|أسطوانة|\b(mat|band|rope|dumbbell|kettlebell|roller|guard|brace|shaker)\b/i },
   // ملابس رجالية: «رجالي» + ملبس (الساعة والحزام والمحفظة تبقى في «إكسسوارات رجالية»)
   // «男裤腰带» حزام و«哑铃男士套装» دمبل: كلمة الملبس داخل اسم إكسسوار أو عدّة لا تنقل
-  { slug: 'men', re: /男士|男装|男款|男式|رجالي|للرجال|\bmen'?s?\b|\bmale\b/i, need: GARMENT, not: /鞋|حذاء|\bshoes?\b|男童|女|腰带|皮带|裤带|手表|腕表|钱包|领带|背包|眼镜|墨镜|剃须|刮胡|哑铃|器材|护具|护膝|护腕|水壶|手机|ساعة|حزام|محفظة|ربطة عنق|حقيبة|نظارة|شفرة|دمبل|\b(watch|belt|wallet|backpack|bag|dumbbell|razor|glasses)\b/i },
+  { slug: 'men', re: /男士|男装|男款|男式|رجالي|للرجال|\bmen'?s?\b|\bmale\b/i, need: GARMENT, not: /鞋|حذاء|\bshoes?\b|男童|女|腰带|皮带|裤带|手表|腕表|钱包|领带|背包|眼镜|墨镜|剃须|刮胡|哑铃|器材|护具|护膝|护腕|水壶|手机|毛衣链|项链|围巾|围脖|领巾|丝巾|头带|发带|ساعة|حزام|محفظة|ربطة عنق|حقيبة|نظارة|شفرة|دمبل|سلسلة|وشاح|منديل|عصابة|حزمة|\b(watch|belt|wallet|backpack|bag|dumbbell|razor|glasses|necklace|chain|scarf|headband|women|female|ladies|unisex)\b/i },
   // جاكيتات ومعاطف («开衫» الكارديغان الطويل في العبايات يبقى: نستثني ما فيه 长款 من قسم العبايات في المنطق أدناه)
   // «开衫» وحدها تعني أيضًا قميصًا مفتوح الأزرار وشالًا؛ نشترطها مع «针织/外套» ونستثني القمصان
-  { slug: 'outerwear', re: /外套|夹克|大衣|风衣|羽绒服|棉服|棉衣|皮衣|西装外套|针织开衫|开衫外套|毛衣开衫|جاكيت|جاكت|معطف|كارديغان|كارديجان|بليزر|بلايزر|بلازر|\b(jacket|coat|cardigan|blazer|trench|parka|windbreaker|puffer|overcoat|outerwear)\b/i,
+  { slug: 'outerwear', re: /外套|夹克|大衣|风衣|羽绒服|棉服|棉衣|皮衣|西装外套|开衫外套|جاكيت|جاكت|معطف|كارديغان|كارديجان|بليزر|بلايزر|بلازر|\b(jacket|coat|cardigan|blazer|trench|parka|windbreaker|puffer|overcoat|outerwear)\b/i,
     // «配大衣内搭» فستان يُلبس تحت المعطف، و«披肩/袖套/斗篷» شال وأكمام وعباءة، و«سترة» وحدها تأتي في ترجمات الفساتين
-    not: /毛衣链|衬衫|衬衣|连衣裙|连衣|长裙|裙子|裙|内搭|披肩|袖套|斗篷|罩衫|فستان|شال|كم سترة|سترة نجاة|救生|\blife (jacket|vest)\b|\bcase\b|\bdress\b|حافظة|غطاء/i },
+    not: /毛衣链|胸针|胸花|别针|衬衫|衬衣|连衣裙|连衣|长裙|裙子|裙|内搭|披肩|袖套|斗篷|罩衫|فستان|شال|دبوس|\b(brooch|pin)\b|كم سترة|سترة نجاة|救生|\blife (jacket|vest)\b|\bcase\b|\bdress\b|حافظة|غطاء/i },
   // بناطيل وتنانير («连衣裙» فستان و«长裙» فستان طويل/عباية يبقيان، و«内裤» تحكمها الحشمة، و«裙子» تنورة)
   { slug: 'bottoms', re: /半身裙|短裙|百褶裙|牛仔裙|包臀裙|A字裙|伞裙|牛仔裤|阔腿裤|打底裤|短裤|休闲裤|西裤|西装裤|工装裤|哈伦裤|直筒裤|喇叭裤|瑜伽裤|长裤|بنطال|بنطلون|بناطيل|تنورة|تنانير|شورت|ليقنز|ليغنز|ليجنز|\b(pants|trousers|jeans|skirt|shorts|leggings|culottes|joggers|palazzo)\b/i,
     // «配裙子» يُلبس مع تنورة، و«裤子腰间配饰» حزام، و«打底衫/上衣/T恤» بلوزة وإن ذُكرت التنورة معها
@@ -35,7 +35,9 @@ const RULES: { slug: string; re: RegExp; need?: RegExp; not?: RegExp }[] = [
 ];
 
 // قسم العودة لما لم تعد قاعدته تطابقه: المعدّات إلى أدوات الرياضة، والباقي إلى القسم الذي كان يُدخَل فيه غالبًا
-const FALLBACK: Record<string, string> = { sportswear: 'sports', bottoms: 'dresses', outerwear: 'tops', men: 'men-acc' };
+const FALLBACK: Record<string, string> = { sportswear: 'tops', bottoms: 'dresses', outerwear: 'tops', men: 'men-acc' };
+// ما خرج من «ملابس رياضية» وهو معدّة (سجادة، حبل، دمبل) يعود إلى أدوات الرياضة لا البلوزات
+const GEAR = /垫|绳|哑铃|壶铃|杠铃|护膝|护腕|护具|器材|泡沫轴|健身床|弹力带|阻力带|水壶|水杯|سجادة|حصيرة|حبل|دمبل|أوزان|واقي|حماية|دعامة|مطاطية|عمود|سرير|أسطوانة|كوب|شريط/i;
 export function ruleMatches(slug: string, texts: (string | null | undefined)[]): boolean {
   const t = texts.filter(Boolean).join(' · ');
   const r = RULES.find(x => x.slug === slug);
@@ -81,7 +83,7 @@ export async function categorySweep(db: D1Database, cats: CatLite[], limit = 150
     const cur = byId.get(r.category_id) ?? null;
     let to = guessCategory([r.title_src, r.title_ar], cur);
     // ما نُقل إلى قسم جديد بقاعدة سابقة ولم تعد قاعدته تطابقه (سجادة يوغا في «ملابس رياضية») يعود إلى القسم الأصل الشائع
-    if (!to && cur && cur in FALLBACK && !ruleMatches(cur, [r.title_src, r.title_ar])) to = FALLBACK[cur];
+    if (!to && cur && cur in FALLBACK && !ruleMatches(cur, [r.title_src, r.title_ar])) to = cur === 'sportswear' && GEAR.test(`${r.title_src ?? ''} ${r.title_ar}`) ? 'sports' : FALLBACK[cur];
     const toId = to ? bySlug.get(to) : undefined;
     if (toId && toId !== r.category_id) moves.set(toId, [...(moves.get(toId) ?? []), r.id]);
   }
