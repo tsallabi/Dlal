@@ -11,7 +11,7 @@ import { classifyModesty } from '../lib/modesty';
 import { fingerprint, sameProduct } from '../lib/dedupe';
 import { loadSettings, computePrice } from '../lib/pricing';
 import { requireRole } from '../lib/auth';
-import { attrValue, notRetail, kindOf, plausibleWeightG, MAX_WEIGHT_G, estWeightG, titleWeightG } from '../lib/source';
+import { attrValue, notRetail, kindOf, plausibleWeightG, MAX_WEIGHT_G, estWeightG, titleWeightG, religiousMark } from '../lib/source';
 import { junkAttr } from '../lib/attr-en';  // الشظيّة تُحذف قبل الترجمة وإلا صارت «غير قابل للإرجاع» لونًا عربيًا
 import { requirePerm, logActivity } from '../lib/perm';
 import { settleLinkRequests, LINK_SOURCES, LINK_STATUS } from '../lib/link-requests';
@@ -290,6 +290,8 @@ export async function importProducts(db: D1Database, arr: any[], categoryId: num
     // (إعادة الفحص من مهمة بلا قسم كانت تُنقص السعر لأنها تفترض وزنًا افتراضيًا)
     const useCat = ex ? (cats.find(x => x.id === ex.category_id) ?? cat) : (cats.find(x => x.id === targetCat) ?? cat);
     const estW = useCat?.est_weight_g ?? 300;
+    // رمز ديني غير إسلامي (صليب، بوذا، تميمة، زينة الكريسماس): يدخل مخفيًا ولا يصل الرف — قرار صاحب المشروع ٢٥/٠٩/٢٦
+    const relig = religiousMark(it.title, titleAr);
     // وزن مستحيل (ربطة عنق 40 كغ) لا يُسعَّر به ولا يُحفظ: يُصحَّح غرامات أو يُترك لوزن القسم
     const wIn = it.weightG ? plausibleWeightG(Number(it.weightG), estW, price) : undefined;
     const exW = ex?.weight_g ? plausibleWeightG(ex.weight_g, estW, price) : undefined;
@@ -322,6 +324,7 @@ export async function importProducts(db: D1Database, arr: any[], categoryId: num
       }
       // كل مرور على منتج موجود محاولة إثراء تُعدّ، نجحت أو لم تنجح: بها يتقدّم الطابور ولا يدور
       const upd: string[] = ['enrich_tries=enrich_tries+1', 'wopt_at=NULL']; const binds: any[] = [];
+      if (relig) upd.push("status=CASE WHEN status IN ('active','draft') AND hide_reason IS NULL THEN 'hidden' ELSE status END", "hide_reason=COALESCE(hide_reason,'relig')");
       if ((hasCJK(cur?.title_ar) || !goodTitle(cur?.title_ar)) && !hasCJK(titleAr) && titleAr !== cur?.title_ar && (goodTitle(titleAr) || hasCJK(cur?.title_ar))) { got = true; upd.push('title_ar=?'); binds.push(titleAr.slice(0, 200)); if (hasArabic(titleAr)) upd.push("status=CASE WHEN status='draft' THEN 'active' ELSE status END"); }
       // الإثراء يكتشف الحد الأدنى الحقيقي بعد أن يكون المنتج على الرف. رفعُه وحده لا يكفي:
       // منتج نشط صار حدّه الأدنى قطعتين يُجبر الزبونة، فيجب أن يُخفى في الجملة نفسها.
@@ -356,11 +359,11 @@ export async function importProducts(db: D1Database, arr: any[], categoryId: num
     const ins = await db.prepare(
       // last_checked_at يبقى NULL: المنتج وصل من نتيجة بحث ولم يُفحص تفصيليًا قط، وادّعاء أنه فُحص
       // كان يخفيه عن دورة الإثراء ويجعل «آخر فحص» في اللوحة رقمًا كاذبًا
-      `INSERT OR IGNORE INTO products(source,source_offer_id,source_url,slug,title_ar,title_src,description_ar,category_id,source_price_cny,price_lyd,compare_price_lyd,price_sea_lyd,weight_g,volume_cm3,min_qty,in_stock,status,supplier_name,last_checked_at,sales,rating,home_ok,fingerprint,kind)
-       VALUES('1688',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL,?,?,?,?,?)`,
+      `INSERT OR IGNORE INTO products(source,source_offer_id,source_url,slug,title_ar,title_src,description_ar,category_id,source_price_cny,price_lyd,compare_price_lyd,price_sea_lyd,weight_g,volume_cm3,min_qty,in_stock,status,supplier_name,last_checked_at,sales,rating,home_ok,fingerprint,kind,hide_reason)
+       VALUES('1688',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL,?,?,?,?,?,?)`,
     ).bind(offerId, it.url ?? `https://detail.1688.com/offer/${offerId}.html`, slug, titleAr, it.title ?? null, it.descriptionAr ?? null,
       targetCat, price, pr.total_lyd, Math.random() < 0.4 ? Math.ceil(pr.total_lyd * 1.25 / 5) * 5 : null, prSea.total_lyd, wIn ?? tW ?? null, it.volumeCm3 ?? null,
-      moq, it.inStock === false ? 0 : 1, notRetail(it.title, moq, maxRetail) || (wIn ?? 0) > MAX_WEIGHT_G ? 'hidden' : hasCJK(titleAr) || !hasArabic(titleAr) ? 'draft' : 'active', supplierAr, parseInt(it.sales ?? 0) || 0, 0, homeOk, fp || null, kindOf(it.title)).run();
+      moq, it.inStock === false ? 0 : 1, notRetail(it.title, moq, maxRetail) || (wIn ?? 0) > MAX_WEIGHT_G || relig ? 'hidden' : hasCJK(titleAr) || !hasArabic(titleAr) ? 'draft' : 'active', supplierAr, parseInt(it.sales ?? 0) || 0, 0, homeOk, fp || null, kindOf(it.title), relig ? 'relig' : null).run();
     const pid = ins.meta.last_row_id as number;
     if (!pid || !ins.meta.changes) { skipped++; continue; }   // تجاهل صفّ لم يُدرج (تعارض مع استيراد متزامن)
     const stmts: D1PreparedStatement[] = [];
@@ -381,6 +384,7 @@ const PACK = `(p.title_src LIKE '%\u5305\u88c5%' OR p.title_src LIKE '%\u5370\u5
 // قيمة المتغيّر بعد تنظيف رؤوس الأعمدة؛ null إن لم يبقَ لون ولا مقاس فلا يُدرج المتغيّر
 function asVariant(v: any) {
   const color = attrValue(v?.color), size = attrValue(v?.size);
+  if (religiousMark(color, size, v?.colorEn, v?.sizeEn)) return null;   // خيار «صليب ذهبي» لا يُعرض
   return color || size ? { ...v, color, size } : null;
 }
 
@@ -414,6 +418,8 @@ admin.get('/products', async (c) => {
   if (moq > 1) { where += ' AND p.min_qty >= ?'; binds.push(moq); }
   // ?pack=1 — إعلانات مصانع التغليف والطباعة وOEM: تبيع العلبة الفارغة لا ما في الصورة
   if (c.req.query('pack')) where += ` AND ${PACK}`;
+  // ?relig=1 — ما أُخفي لأنه رمز ديني غير إسلامي: للمراجعة، ومن أُعيد منه يبقى (لا يُكنس ثانية)
+  if (c.req.query('relig')) where += " AND p.hide_reason='relig'";
   // ?broken=1 — ترجمات سليمة نحويًا لكنها ليست ترجمة العنوان (تكرار ملتصق، اسم منتج ضائع،
   // كلمة لا أصل لها في الصيني). تدخل طابور الترجمة تلقائيًا، وهذا الفلتر لمراجعتها بالعين.
   if (c.req.query('broken')) where += ` AND ${BROKEN_SQL}`;
@@ -428,7 +434,7 @@ admin.get('/products', async (c) => {
   const brokenN = (await c.env.DB.prepare(`SELECT COUNT(*) n FROM products WHERE status IN ('active','draft') AND ${BROKEN_SQL}`).first<{ n: number }>())?.n ?? 0;
   const lots = await c.env.DB.prepare(`SELECT
      SUM(p.status='active' AND p.min_qty >= ?) lotsOn, SUM(p.status='hidden' AND p.min_qty >= ?) lotsOff,
-     SUM(p.status='active' AND ${PACK}) packOn, SUM(p.status='hidden' AND ${PACK}) packOff
+     SUM(p.status='active' AND ${PACK}) packOn, SUM(p.status='hidden' AND ${PACK}) packOff, SUM(p.status='hidden' AND p.hide_reason='relig') religOff
      FROM products p`).bind(maxRetail, maxRetail).first<any>();
   return shell(c, 'products', 'المنتجات', (
     <>
@@ -446,6 +452,7 @@ admin.get('/products', async (c) => {
           <b>لوط جملة</b> (أقل طلب {maxRetail} فأكثر): {lots?.lotsOn ?? 0} على الرف · {lots?.lotsOff ?? 0} مخفية — <a href={`/admin/products?moq=${maxRetail}`}>اعرضها</a>
           <br /><b>إعلانات تغليف وطباعة وOEM</b>: {lots?.packOn ?? 0} على الرف · {lots?.packOff ?? 0} مخفية — <a href="/admin/products?pack=1">اعرضها</a>.
           هذه تبيع العلبة الفارغة لا ما يظهر في الصورة، ولهذا أقلّ طلبها بالمئات.
+          <br /><b>رموز دينية غير إسلامية</b> (صليب، بوذا، تمائم، زينة الكريسماس): {lots?.religOff ?? 0} مخفية تلقائيًا — <a href="/admin/products?relig=1">راجعها</a>.
         </p>
         <div class="inline"><label style="margin:0">أقل طلب ≥</label><input type="number" name="min" value={maxRetail} min="2" style="width:80px" />
           <label style="margin:0"><input type="checkbox" name="pack" value="1" checked /> ومعها إعلانات التغليف</label>

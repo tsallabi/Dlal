@@ -9,7 +9,7 @@ import { Grid, ProductCard } from '../views/product-card';
 import { Stars } from '../views/account';
 import { getCategories, PRODUCT_SELECT, fmt, imgUrl, orderCode, timeAgo, notify, realWa, likePat } from '../lib/db';
 import type { ProductRow } from '../lib/db';
-import { KIND_NOTE, estWeightG, type ListingKind } from '../lib/source';
+import { KIND_NOTE, estWeightG, religiousMark, type ListingKind } from '../lib/source';
 import { loadSettings, computePrice, shipRates, seaOn } from '../lib/pricing';
 import { partnerDelivery, pricingPartnerId, mediaResponse, zoneQuote, zoneLabel, courierTrack } from '../lib/partner';
 import { track } from '../lib/track';
@@ -37,17 +37,35 @@ const base = async (c: Context<Env>) => {
 };
 
 // ---------- الرئيسية: بانر ترويجي + بلاطات أقسام دائرية + بطاقتا عروض + شبكة منتجات ----------
+// عيّنة عشوائية: المعرّفات أولًا ثم الصفوف. ORDER BY RANDOM() مع PRODUCT_SELECT مباشرة كان سيحسب صورة كل منتج
+// في الرف قبل الفرز. والمعرّفات تُكتب أرقامًا بعد Number.isInteger (D1 يرفض أكثر من 100 متغيّر مربوط)
+async function pickRandom(db: D1Database, idsSql: string, binds: any[] = []): Promise<ProductRow[]> {
+  const ids = (await db.prepare(idsSql).bind(...binds).all<{ id: number }>()).results.map(r => r.id).filter(Number.isInteger);
+  if (!ids.length) return [];
+  const { results } = await db.prepare(`SELECT ${PRODUCT_SELECT} FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE p.id IN (${ids.join(',')})`).all<ProductRow>();
+  return ids.map(id => results.find(r => r.id === id)).filter(Boolean) as ProductRow[];
+}
+const shuffle = <T,>(a: T[]): T[] => { const b = [...a]; for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } return b; };
+
 store.get('/', async (c) => {
   const db = c.env.DB; const u = c.get('user');
   const b = await base(c);
   // حشمة: الرئيسية من الأقسام العامة فقط؛ الملابس الداخلية والنوم تبقى في قائمة الأقسام تدخلها الزبونة بنفسها
   const publicCats = b.categories.filter(x => x.show_home !== 0);
   const PUB = "p.status='active' AND p.home_ok=1 AND p.in_stock=1";
-  const [banner, cheap, trend, feed, tiles, f, stats] = await Promise.all([
-    db.prepare(`SELECT ${PRODUCT_SELECT} FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE ${PUB} AND p.compare_price_lyd > p.price_lyd ORDER BY (p.compare_price_lyd-p.price_lyd)/p.compare_price_lyd DESC LIMIT 4`).all<ProductRow>(),
-    db.prepare(`SELECT ${PRODUCT_SELECT} FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE ${PUB} ORDER BY p.price_lyd ASC LIMIT 3`).all<ProductRow>(),
-    db.prepare(`SELECT ${PRODUCT_SELECT} FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE ${PUB} ORDER BY p.sales DESC, p.views DESC LIMIT 3`).all<ProductRow>(),
-    db.prepare(`SELECT ${PRODUCT_SELECT} FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE ${PUB} ORDER BY (p.sales*8 + p.views) DESC, p.id DESC LIMIT 40`).all<ProductRow>(),
+  // الرئيسية تتبدّل مع كل زيارة (طلب صاحب المشروع ٢٥/٠٩/٢٦: «منذ أيام أرى نفس الإعلانات»). كان كل قسم مرتّبًا
+  // بالمبيعات ثم المشاهدات، وكل البضاعة تقريبًا 0 و0، فخرجت الأربعون نفسها كل مرة. الآن عيّنة عشوائية في كل طلب:
+  // من الأكثر رواجًا ومن الأحدث ومن الرف كله، بلا ما شاهده الزائر مؤخرًا.
+  const seen = (getCookie(c, 'rv') ?? '').split(',').map(Number).filter(Number.isInteger).slice(0, 30);
+  const notSeen = seen.length ? ` AND p.id NOT IN (${seen.join(',')})` : '';
+  const HOT = '(p.sales*8 + p.views)';
+  const [banner, cheap, trend, hot, fresh, any, tiles, f, stats] = await Promise.all([
+    pickRandom(db, `SELECT id FROM (SELECT p.id FROM products p WHERE ${PUB} AND p.compare_price_lyd > p.price_lyd ORDER BY (p.compare_price_lyd-p.price_lyd)/p.compare_price_lyd DESC LIMIT 40) ORDER BY RANDOM() LIMIT 4`),
+    pickRandom(db, `SELECT id FROM (SELECT p.id FROM products p WHERE ${PUB} ORDER BY p.price_lyd ASC LIMIT 80) ORDER BY RANDOM() LIMIT 3`),
+    pickRandom(db, `SELECT id FROM (SELECT p.id FROM products p WHERE ${PUB} ORDER BY ${HOT} DESC, p.id DESC LIMIT 80) ORDER BY RANDOM() LIMIT 3`),
+    pickRandom(db, `SELECT id FROM (SELECT p.id FROM products p WHERE ${PUB}${notSeen} ORDER BY ${HOT} DESC, p.id DESC LIMIT 400) ORDER BY RANDOM() LIMIT 14`),
+    pickRandom(db, `SELECT id FROM (SELECT p.id FROM products p WHERE ${PUB}${notSeen} ORDER BY p.id DESC LIMIT 600) ORDER BY RANDOM() LIMIT 13`),
+    pickRandom(db, `SELECT p.id FROM products p WHERE ${PUB}${notSeen} ORDER BY RANDOM() LIMIT 16`),
     // صورة حقيقية لكل قسم من أكثر منتجاته مبيعًا — أقرب لشكل البلاطات الدائرية
     db.prepare(`SELECT c.id,c.slug,c.name_ar,c.icon,
         (SELECT i.url FROM products p2 JOIN product_images i ON i.product_id=p2.id
@@ -56,16 +74,21 @@ store.get('/', async (c) => {
     favs(c),
     db.prepare("SELECT (SELECT COUNT(*) FROM products WHERE status='active') p,(SELECT COUNT(*) FROM orders WHERE status='delivered') d,(SELECT COUNT(*) FROM users WHERE role='customer') u").first<any>(),
   ]);
+  // الشبكة: الثلاثة مخلوطة بالتناوب (رائج، جديد، أي شيء) بلا تكرار — أربعون مختلفة في كل زيارة
+  const feedIds = new Set<number>(); const feedItems: ProductRow[] = [];
+  for (let i = 0; feedItems.length < 40 && i < 20; i++) for (const src of [hot, fresh, any]) { const p = src[i]; if (p && !feedIds.has(p.id)) { feedIds.add(p.id); feedItems.push(p); } }
+  const feed = { results: feedItems };
   const recent = await recentlyViewed(c);
   const s = await loadSettings(db);
-  const seaSaving = banner.results.find(p => p.price_sea_lyd && p.price_sea_lyd < p.price_lyd);
-  // طوابق الأقسام: ستة أقسام يظهر لكل منها ثمانية منتجات في شريط أفقي، فالكتالوج الكبير يُتصفَّح لا يُبحث فيه فقط
-  const floorCats = tiles.results.filter((x: any) => x.img).slice(0, 6);
+  const seaSaving = banner.find(p => p.price_sea_lyd && p.price_sea_lyd < p.price_lyd);
+  // طوابق الأقسام: ستة أقسام (تتبدّل بين الزيارات) لكل منها ثمانية منتجات عشوائية من أبرز ثمانين فيه
+  const floorCats = shuffle(tiles.results.filter((x: any) => x.img)).slice(0, 6);
   const floors = await Promise.all(floorCats.map(async (ct: any) => ({
     cat: ct,
-    items: (await db.prepare(`SELECT ${PRODUCT_SELECT} FROM products p LEFT JOIN categories c ON c.id=p.category_id
-        WHERE ${PUB} AND p.category_id=? ORDER BY (p.sales*8+p.views) DESC, p.id DESC LIMIT 8`).bind(ct.id).all<ProductRow>()).results,
+    items: await pickRandom(db, `SELECT id FROM (SELECT p.id FROM products p WHERE ${PUB} AND p.category_id=? ORDER BY ${HOT} DESC, p.id DESC LIMIT 80) ORDER BY RANDOM() LIMIT 8`, [ct.id]),
   })));
+  // ولا تُحفظ الصفحة في ذاكرة المتصفح: الرجوع إليها يأتي بعيّنة جديدة لا بالقديمة
+  c.header('Cache-Control', 'no-store');
   return c.html(
     <Layout {...b}>
       {/* بانر ترويجي عريض: عنوان + منتجات بأسعارها */}
@@ -77,7 +100,7 @@ store.get('/', async (c) => {
           <a class="ph-cta" href="/sale">تسوّق العروض ›</a>
         </div>
         <div class="ph-items">
-          {banner.results.map(p => (
+          {banner.map(p => (
             <a href={`/p/${p.slug}`} class="ph-item">
               <img src={imgUrl(p.image)} alt={p.title_ar} loading="lazy" referrerpolicy="no-referrer" />
               <span class="ph-price">{fmt(p.price_lyd)}</span>
@@ -112,13 +135,13 @@ store.get('/', async (c) => {
       <div class="duo">
         <a class="duo-card" href="/c/all?sort=price_asc">
           <div class="dc-h"><b style="color:#0b8a4b">أرخص الأسعار</b><span>›</span></div>
-          <div class="dc-items">{cheap.results.map(p => (
+          <div class="dc-items">{cheap.map(p => (
             <div class="dc-item"><img src={imgUrl(p.image)} alt={p.title_ar} loading="lazy" referrerpolicy="no-referrer" /><b>{fmt(p.price_lyd)}</b></div>
           ))}</div>
         </a>
         <a class="duo-card" href="/trending">
           <div class="dc-h"><b style="color:#7a3fc4">الأكثر رواجًا</b><span>›</span></div>
-          <div class="dc-items">{trend.results.map(p => (
+          <div class="dc-items">{trend.map(p => (
             <div class="dc-item"><img src={imgUrl(p.image)} alt={p.title_ar} loading="lazy" referrerpolicy="no-referrer" /><b>{fmt(p.price_lyd)}</b></div>
           ))}</div>
         </a>
@@ -660,7 +683,8 @@ store.get('/p/:slug', async (c) => {
   setCookie(c, 'rv', rv.join(','), { path: '/', maxAge: 30 * 86400, sameSite: 'Lax' });
   const recent = await recentlyViewed(c, p.id);
   // نفس القاعدة على صفحة المنتج: لا تُعرض قيمة لم تُترجم بعد
-  const noCJK = (v: any) => v && !/[一-鿿]/.test(String(v));
+  // ولا خيار باسم رمز ديني غير إسلامي («صليب ذهبي») — قرار صاحب المشروع ٢٥/٠٩/٢٦
+  const noCJK = (v: any) => v && !/[一-鿿]/.test(String(v)) && !religiousMark(v);
   const colors = [...new Set(vars.results.map(v => v.color).filter(noCJK))] as string[];
   const sizes = [...new Set(vars.results.map(v => v.size).filter(noCJK))] as string[];
   const images = imgs.results.length ? imgs.results.map(i => i.url) : ['/placeholder.svg'];

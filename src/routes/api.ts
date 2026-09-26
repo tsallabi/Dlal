@@ -3,6 +3,7 @@ import type { Context } from 'hono';
 import type { Env } from '../types';
 import { getCategories } from '../lib/db';
 import { syncWeightOptionsBatch } from '../lib/weight-options';
+import { religiousSweep } from '../lib/religious';
 import { importProducts } from './admin';
 import { classifyModesty } from '../lib/modesty';
 import { fingerprint, sameProduct } from '../lib/dedupe';
@@ -255,9 +256,10 @@ api.post('/source/reprice', async (c) => {
   const results = await repriceRows(db, all ? 'all' : 'missing', limit, after);
   // ثم فروق الخيارات الموزونة لما أُعيد تسعيره («دمبل 1 كجم و 5 كجم»)
   const wopt = await syncWeightOptionsBatch(db, await loadSettings(db), await getCategories(db), 150);
+  const relig = await religiousSweep(db);
   const left = await db.prepare('SELECT COUNT(*) n FROM products WHERE price_sea_lyd IS NULL').first<{ n: number }>();
   const lastId = results.length ? results[results.length - 1].id : after;
-  return c.json({ ok: true, repriced: results.length, last_id: lastId, missing_sea_left: left?.n ?? 0, weight_options: wopt });
+  return c.json({ ok: true, repriced: results.length, last_id: lastId, missing_sea_left: left?.n ?? 0, weight_options: wopt, religious_hidden: relig.hidden.length, religious_sample: relig.hidden.slice(0, 40) });
 });
 
 // فحص منطق الحشمة والبصمة والشحن على الكود الحقيقي (scripts/logic-test)

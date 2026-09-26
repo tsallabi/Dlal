@@ -5,6 +5,7 @@ import analytics from './routes/admin-analytics';
 import { track, pageKind, trackPath, trackable, visitorId } from './lib/track';
 import { cartCount, getCategories } from './lib/db';
 import { syncWeightOptionsBatch } from './lib/weight-options';
+import { religiousSweep } from './lib/religious';
 import store from './routes/store';
 import auth from './routes/auth';
 import admin from './routes/admin';
@@ -140,6 +141,7 @@ export default {
         // طلبات لم تصل API شركة الشحن (خادمها معطّل أو بطيء): تُعاد بمهلة متزايدة
         // صفوف بلا سعر بحري (ترحيل صحّح وزنها، أو استيراد ناقص) تُسعَّر هنا بلا تدخّل
         try { const r = await repriceRows(env.DB, 'missing', 400); if (r.length) console.log('cron repriced', r.length); } catch (e: any) { console.error('cron reprice', e?.message ?? e); }
+        try { const r = await religiousSweep(env.DB); if (r.hidden.length) console.log('cron religious hidden', r.hidden.length); } catch (e: any) { console.error('cron religious', e?.message ?? e); }
         try { const r = await syncWeightOptionsBatch(env.DB, await loadSettings(env.DB), await getCategories(env.DB), 80); if (r.checked) console.log('cron weight options', JSON.stringify(r)); } catch (e: any) { console.error('cron weight options', e?.message ?? e); }
         try { const n = await retryDispatch(env.DB, 'https://hudhude.com'); if (n) console.log('partner dispatch retried', n); } catch (e: any) { console.error('partner dispatch', e?.message ?? e); }
         try { const n = await moveMediaToR2(env.DB, env.MEDIA); if (n) console.log('media moved to R2', n); } catch (e: any) { console.error('media to R2', e?.message ?? e); }

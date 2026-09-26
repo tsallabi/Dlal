@@ -300,8 +300,10 @@ const scrollable = await page.locator('.floor .floor-row').first().evaluate(el =
 expect(scrollable > 50, `شريط الطابق يفيض على شاشة الجوال فيُمرَّر (${scrollable}px)`);
 await page.setViewportSize({ width: 1280, height: 860 });
 await page.goto(BASE + '/'); await page.waitForLoadState('networkidle');
+// الطوابق تتبدّل مع كل زيارة: الرابط يُقرأ من الطابق الأول في هذه الزيارة لا السابقة
+const flHref2 = await fl.locator('.feed-h .all').getAttribute('href');
 await fl.locator('.feed-h .all').click(); await page.waitForLoadState('networkidle');
-expect(page.url().includes(flHref), 'الضغط على «عرض القسم» ينقل فعلًا إلى صفحة القسم');
+expect(page.url().includes(flHref2), 'الضغط على «عرض القسم» ينقل فعلًا إلى صفحة القسم');
 await page.goto(BASE + '/');
 // لا نص صيني أمام الزبونة في أي صفحة تصفّح
 const SHOPPER_PAGES = ['/', '/c/dresses', '/c/bags', '/new', '/sale', '/search?q=%D9%81%D8%B3%D8%AA%D8%A7%D9%86'];
@@ -553,7 +555,7 @@ expect(priceBefore === priceAfter, `سعر المنتج لا يتغير عند �
 {
   const { execFileSync } = await import('node:child_process');
   const dq = (sql) => JSON.parse(execFileSync('npx', ['wrangler', 'd1', 'execute', 'dlal-db', '--local', '-c', 'wrangler.local.toml', '--json', '--command', sql], { stdio: 'pipe' }).toString())[0].results;
-  const tag = String(Date.now()).slice(-7), tie = '97' + tag, tent = '98' + tag, brush = '96' + tag, canopy = '95' + tag, knife = '94' + tag, bell = '93' + tag, jack = '92' + tag, pair = '91' + tag;
+  const tag = String(Date.now()).slice(-7), tie = '97' + tag, tent = '98' + tag, brush = '96' + tag, canopy = '95' + tag, knife = '94' + tag, bell = '93' + tag, jack = '92' + tag, pair = '91' + tag, crossN = '89' + tag, phil = '88' + tag;
   const imp = (items, cat) => ctx.request.post(BASE + '/api/import', { headers: { 'x-import-token': 'dev-import-token' }, data: { category_id: cat, page_url: 'test', items } });
   try {
     const acc = dq("SELECT id FROM categories WHERE slug='accessories'")[0].id, out = dq("SELECT id FROM categories WHERE slug='outdoor'")[0].id;
@@ -602,6 +604,19 @@ expect(priceBefore === priceAfter, `سعر المنتج لا يتغير عند �
     await page.goto(BASE + '/cart');
     expect(await has(page, money(heavy)), `السلة تحسب خيار «5 كغ» بسعره (${money(heavy)}) لا بسعر الأخفّ`);
     dq(`DELETE FROM cart_items WHERE product_id=${pp.id}`);
+    // رموز دينية غير إسلامية (قرار صاحب المشروع ٢٥/٠٩/٢٦): قلادة صليب تدخل مخفية، ومفك صليبي وحقيبة «حزام صليبي» لا
+    const acc2 = dq("SELECT id FROM categories WHERE slug='accessories'")[0].id, tl = dq("SELECT id FROM categories WHERE slug='tools'")[0].id;
+    await imp([{ offerId: crossN, url: `https://detail.1688.com/offer/${crossN}.html`, title: '十字架项链 ' + tag, titleAr: 'قلادة صليب ' + tag, priceCny: 6, images: [], variants: [], inStock: true }], acc2);
+    await imp([{ offerId: phil, url: `https://detail.1688.com/offer/${phil}.html`, title: '十字螺丝刀 ' + tag, titleAr: 'مفك صليبي ' + tag, priceCny: 6, images: [], variants: [], inStock: true }], tl);
+    const [cr] = dq(`SELECT status,hide_reason FROM products WHERE source_offer_id='${crossN}'`), [ph] = dq(`SELECT status FROM products WHERE source_offer_id='${phil}'`);
+    expect(cr.status === 'hidden' && cr.hide_reason === 'relig' && ph.status === 'active', `قلادة الصليب تدخل مخفية (${cr.status}) والمفك الصليبي على الرف (${ph.status})`);
+    // والكنس يُخفي القائم: منتج نشط عُدّل عنوانه إلى «تميمة بوذا»
+    dq(`UPDATE products SET title_ar='تميمة بوذا ' || '${tag}', title_src='佛像 ${tag}' WHERE source_offer_id='${phil}'`);
+    const sw = await (await ctx.request.post(BASE + '/api/source/reprice', { headers: { 'x-import-token': 'dev-import-token' }, data: { limit: 1 } })).json();
+    const [ph2] = dq(`SELECT status,hide_reason FROM products WHERE source_offer_id='${phil}'`);
+    expect(ph2.status === 'hidden' && ph2.hide_reason === 'relig' && sw.religious_hidden >= 1, `الكنس يُخفي منتجًا قائمًا صار عنوانه «تميمة بوذا» (${sw.religious_hidden} في هذه الدفعة)`);
+    await page.goto(BASE + '/search?q=' + encodeURIComponent('صليب ' + tag));
+    expect(!(await has(page, 'قلادة صليب ' + tag)), 'قلادة الصليب لا تظهر في بحث المتجر');
     const [bb] = dq(`SELECT weight_g,price_lyd FROM products WHERE source_offer_id='${brush}'`);
     expect(bb.weight_g === 20 && bb.price_lyd < 30, `فرشاة بـ0.26 يوان «20 كغ» تُحفظ 20 غ (${bb.price_lyd} د.ل لا 1,685)`);
     // وزن مستحيل محفوظ من قبل يُصحَّح عند مرور الإثراء عليه حتى بلا وزن جديد
@@ -619,7 +634,7 @@ expect(priceBefore === priceAfter, `سعر المنتج لا يتغير عند �
     [t] = dq(`SELECT price_lyd,price_sea_lyd FROM products WHERE source_offer_id='${tie}'`);
     expect(rp.repriced >= 1 && t.price_lyd < 100 && t.price_sea_lyd !== null, `إعادة تسعير «الناقص» تعيد الربطة إلى ${t.price_lyd} د.ل`);
   } finally {
-    dq(`DELETE FROM cart_items WHERE product_id IN (SELECT id FROM products WHERE source_offer_id IN ('${tie}','${pair}')); DELETE FROM product_images WHERE product_id IN (SELECT id FROM products WHERE source_offer_id IN ('${tie}','${tent}','${brush}','${canopy}','${knife}','${bell}','${jack}','${pair}')); DELETE FROM variants WHERE product_id IN (SELECT id FROM products WHERE source_offer_id IN ('${tie}','${tent}','${brush}','${canopy}','${knife}','${bell}','${jack}','${pair}')); DELETE FROM products WHERE source_offer_id IN ('${tie}','${tent}','${brush}','${canopy}','${knife}','${bell}','${jack}','${pair}')`);
+    dq(`DELETE FROM cart_items WHERE product_id IN (SELECT id FROM products WHERE source_offer_id IN ('${tie}','${pair}')); DELETE FROM product_images WHERE product_id IN (SELECT id FROM products WHERE source_offer_id IN ('${tie}','${tent}','${brush}','${canopy}','${knife}','${bell}','${jack}','${pair}','${crossN}','${phil}')); DELETE FROM variants WHERE product_id IN (SELECT id FROM products WHERE source_offer_id IN ('${tie}','${tent}','${brush}','${canopy}','${knife}','${bell}','${jack}','${pair}','${crossN}','${phil}')); DELETE FROM products WHERE source_offer_id IN ('${tie}','${tent}','${brush}','${canopy}','${knife}','${bell}','${jack}','${pair}','${crossN}','${phil}')`);
   }
 }
 
@@ -2660,6 +2675,13 @@ await mp.screenshot({ path: `${OUT}/${String(++n).padStart(2, '0')}-mobile-order
   // قرار صاحب المشروع: الرئيسية للبضاعة وحدها، وأقسام أميال في صفحة «كيف يعمل هدهد» (/how)
   await page.goto(BASE + '/logout'); await page.goto(BASE + '/');
   expect(!(await page.locator('.hm-stats, .hm-track, .hm-faq').count()) && await page.locator('.card').count() >= 20, 'الرئيسية تبقى للبضاعة وحدها (لا أقسام تتبّع ولا أسئلة)');
+  // الرئيسية تتبدّل مع كل زيارة (طلب صاحب المشروع ٢٥/٠٩/٢٦): كانت نفس الأربعين أيامًا
+  {
+    const grab = async () => { const r = await page.goto(BASE + '/'); return { ids: await page.locator('.grid > a.card[href^="/p/"]').evaluateAll(as => [...new Set(as.map(a => a.getAttribute('href')))]), cc: r.headers()['cache-control'] }; };
+    const a1 = await grab(), a2 = await grab();
+    const same = a1.ids.filter(x => a2.ids.includes(x)).length;
+    expect(a1.ids.length >= 20 && same < a1.ids.length * 0.6 && a1.cc === 'no-store', `الرئيسية تعرض منتجات مختلفة في الزيارة التالية (${same} مشترك من ${a1.ids.length}) ولا تُحفظ في ذاكرة المتصفح`);
+  }
   await page.click('.hdr-strip a[href="/how"] >> nth=0'); await page.waitForLoadState('networkidle');
   expect(page.url().endsWith('/how'), 'رابط «كيف يعمل هدهد» في الترويسة يفتح صفحته');
   for (const t of ['أربع خطوات فقط', 'تعرف أين طلبك في كل لحظة', 'نصل إلى كل مدينة ليبية', 'كل ما تحتاج معرفته', 'جاهز لطلبك القادم من الصين؟'])

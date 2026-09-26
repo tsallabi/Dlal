@@ -136,6 +136,25 @@ export function labelWeightG(label: string | null | undefined, catSlug: string |
 // اسم خيار مولَّد من العنوان
 export const weightLabel = (g: number) => g >= 1000 ? `${+(g / 1000).toFixed(2)} كغ` : `${g} غ`;
 
+// رموز دينية غير إسلامية لا تُعرض (قرار صاحب المشروع ٢٥/٠٩/٢٦: «البلد مسلم ولا يقبل الزبون أن يرى صليبًا أو بوذا»).
+// كلمات محددة لا عامة، والأشباه مستبعدة بالاسم: «حزام صليبي» حقيبة كروس، «مفك صليب» و«十字批头» رأس فيليبس،
+// «瓷砖十字架» فواصل بلاط، «佛山» مدينة فوشان، «观音莲/滴水观音» أسماء نباتات، «戴姬佛伦» ماركة أحمر شفاه.
+const RELIG_ZH = /十字架|十字项链|十字吊坠|十字耳|十字手链|十字戒|耶稣|基督|圣母|天主教|教堂|圣经|佛像|佛珠|佛祖|佛头|佛牌|如来|弥勒|释迦|菩萨|观世音|观音像|观音吊坠|观音菩萨|罗汉|财神|关公像|神像|貔貅|开光|护身符|平安符|转运珠|八卦|楞严|心经|咒|大卫星|六芒星|五芒星|撒旦|拜佛|圣诞节?(树|老人|装饰|帽|袜|精灵|麋鹿|雪人|主题|印花|图案|挂件|摆件|花环|服)/;
+const RELIG_ZH_NOT = /瓷砖|螺丝|批头|起子|打孔|钻头|十字绣/;
+const RELIG_AR = /(^|[\s،,(])(ال)?صليب(?!ي)|صلبان|بوذا|بوذي|يسوع|السيد المسيح|مريم العذراء|كنيسة|كنائس|قديس|بابا نويل|سانتا كلوز|شجرة (عيد الميلاد|الكريسماس)|كريسماس|نجمة داو?ود|تميمة|تعويذة|شيطان/;
+const RELIG_AR_NOT = /مفك|براغي|بلاط|مثقاب/;
+const RELIG_EN = /\b(crucifix|cross (necklace|pendant|earrings?|bracelet|ring)|rosary|jesus|christian|buddha|buddhist|virgin mary|church|bible|christmas tree|santa claus|pentagram|satan)\b/i;
+export function religiousMark(...titles: (string | null | undefined)[]): string | null {
+  for (const t of titles) {
+    if (!t) continue;
+    const s = String(t);
+    const zh = s.match(RELIG_ZH); if (zh && !RELIG_ZH_NOT.test(s)) return zh[0];
+    const ar = s.match(RELIG_AR); if (ar && !RELIG_AR_NOT.test(s)) return ar[0].trim();
+    const en = s.match(RELIG_EN); if (en) return en[0];
+  }
+  return null;
+}
+
 // طبقة مصدر المنتجات — تُبدَّل دون تغيير باقي النظام
 // اليوم: BrowserImportSource (الموظف يتصفح 1688 ويضغط "استورد")
 // غدًا:  Api1688Source (بعد الحصول على AppKey من open.1688.com)
